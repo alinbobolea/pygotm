@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+
+# uv
+.uv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Taichi
+.ti/
+ti_cache/
+
+# Superpowers (local planning artifacts — not for version control)
+.superpowers/
+
+# Worktrees
+.worktrees/
+worktrees/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# NetCDF / data
+*.nc
+*.hdf5
+gotm-model/
+
+# Logs
+*.log
+
+# Other
+todo.md
+.claude/

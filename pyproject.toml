@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pygotm"
+version = "0.1.0"
+description = "Python reimplementation of GOTM using Taichi — GPU-accelerated 1D ocean turbulence model"
+license = {text = "GPL-2.0"}
+requires-python = ">=3.12"
+dependencies = [
+    "taichi>=1.7.4",
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "xarray>=2024.1",
+    "netcdf4>=1.6",
+    "pyyaml>=6.0",
+    "pandas>=2.2",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "websockets>=12.0",
+    "pydantic>=2.6",
+    "nicegui>=1.4",
+    "plotly>=5.19",
+    "click>=8.1",
+    "rich>=13.7",
+    "python-dotenv>=1.0",
+    "jinja2>=3.1",
+    "gsw>=3.6.0",
+    "dask[distributed]>=2024.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "anyio>=4.3",
+    "httpx>=0.27",
+    "black>=24.0",
+    "ruff>=0.3",
+    "mypy>=1.9",
+    "pre-commit>=3.7",
+]
+
+[project.scripts]
+pygotm = "pygotm.__main__:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pygotm"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "slow: full-run case validation against Fortran GOTM reference (deselect with -m 'not slow')",
+]
+
+[dependency-groups]
+docs = [
+    "sphinx>=8.0",
+    "sphinx-autodoc-typehints>=2.0",
+    "furo>=2024.0",
+    "myst-parser>=4.0",
+]
+dev = [
+    "anyio>=4.13.0",
+    "black>=26.3.1",
+    "httpx>=0.28.1",
+    "mypy>=1.20.0",
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.9",
+]
