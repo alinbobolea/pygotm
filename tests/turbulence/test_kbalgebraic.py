@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, read_field_array
 
 from pygotm.turbulence.kbalgebraic import KBAlgebraicWorkspace, step_kbalgebraic
 from pygotm.turbulence.turbulence import (
@@ -44,10 +43,10 @@ def _prepare_workspace(
         else KBAlgebraicWorkspace(nlev, n_cols=n_cols)
     )
     for col in range(n_cols):
-        fill_field_from_array(ws.tke, tke if tke is not None else state.tke, col=col)
-        fill_field_from_array(ws.eps, eps if eps is not None else state.eps, col=col)
-        fill_field_from_array(ws.kb, kb if kb is not None else state.kb, col=col)
-        fill_field_from_array(ws.Pb, Pb if Pb is not None else state.Pb, col=col)
+        ws.tke[col] = tke if tke is not None else state.tke
+        ws.eps[col] = eps if eps is not None else state.eps
+        ws.kb[col] = kb if kb is not None else state.kb
+        ws.Pb[col] = Pb if Pb is not None else state.Pb
     return ws
 
 
@@ -85,7 +84,7 @@ def _run_step_kbalgebraic(
     )
 
     assert state.kb is not None
-    state.kb[:] = read_field_array(ws.kb)
+    state.kb[:] = ws.kb[0]
     return ws
 
 
@@ -145,7 +144,7 @@ def test_multicolumn_parity_for_identical_columns() -> None:
 
     state = _make_state(nlev)
     single = _run_step_kbalgebraic(state, nlev, tke=tke, eps=eps, Pb=Pb)
-    single_result = read_field_array(single.kb)
+    single_result = single.kb[0]
 
     multi_state = _make_state(nlev)
     multi = _run_step_kbalgebraic(
@@ -159,7 +158,7 @@ def test_multicolumn_parity_for_identical_columns() -> None:
 
     for col in range(3):
         np.testing.assert_allclose(
-            read_field_array(multi.kb, col=col),
+            multi.kb[col],
             single_result,
             rtol=1.0e-12,
         )

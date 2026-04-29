@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, read_field_array
 
 from pygotm.turbulence.alpha_mnb import AlphaMNBWorkspace, step_alpha_mnb
 from pygotm.turbulence.turbulence import (
@@ -55,26 +54,18 @@ def _prepare_workspace(
 
     zeros = np.zeros(nlev + 1, dtype=np.float64)
     for col in range(n_cols):
-        fill_field_from_array(ws.tke, tke if tke is not None else state.tke, col=col)
-        fill_field_from_array(ws.eps, eps if eps is not None else state.eps, col=col)
-        fill_field_from_array(ws.kb, kb if kb is not None else state.kb, col=col)
-        fill_field_from_array(ws.NN, NN if NN is not None else zeros, col=col)
-        fill_field_from_array(ws.SS, SS if SS is not None else zeros, col=col)
-        fill_field_from_array(
-            ws.SSCSTK,
-            SSCSTK if SSCSTK is not None else zeros,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.SSSTK,
-            SSSTK if SSSTK is not None else zeros,
-            col=col,
-        )
-        fill_field_from_array(ws.as_, as_ if as_ is not None else state.as_, col=col)
-        fill_field_from_array(ws.an, an if an is not None else state.an, col=col)
-        fill_field_from_array(ws.at, at if at is not None else state.at, col=col)
-        fill_field_from_array(ws.av, av if av is not None else state.av, col=col)
-        fill_field_from_array(ws.aw, aw if aw is not None else state.aw, col=col)
+        ws.tke[col] = tke if tke is not None else state.tke
+        ws.eps[col] = eps if eps is not None else state.eps
+        ws.kb[col] = kb if kb is not None else state.kb
+        ws.NN[col] = NN if NN is not None else zeros
+        ws.SS[col] = SS if SS is not None else zeros
+        ws.SSCSTK[col] = SSCSTK if SSCSTK is not None else zeros
+        ws.SSSTK[col] = SSSTK if SSSTK is not None else zeros
+        ws.as_[col] = as_ if as_ is not None else state.as_
+        ws.an[col] = an if an is not None else state.an
+        ws.at[col] = at if at is not None else state.at
+        ws.av[col] = av if av is not None else state.av
+        ws.aw[col] = aw if aw is not None else state.aw
     return ws
 
 
@@ -140,11 +131,11 @@ def _run_step_alpha_mnb(
     assert state.at is not None
     assert state.av is not None
     assert state.aw is not None
-    state.as_[:] = read_field_array(ws.as_)
-    state.an[:] = read_field_array(ws.an)
-    state.at[:] = read_field_array(ws.at)
-    state.av[:] = read_field_array(ws.av)
-    state.aw[:] = read_field_array(ws.aw)
+    state.as_[:] = ws.as_[0]
+    state.an[:] = ws.an[0]
+    state.at[:] = ws.at[0]
+    state.av[:] = ws.av[0]
+    state.aw[:] = ws.aw[0]
     return ws
 
 
@@ -257,9 +248,9 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     )
 
     for name in ("as_", "an", "at", "av", "aw"):
-        single_arr = read_field_array(getattr(single, name), col=0)
-        multi_0 = read_field_array(getattr(multi, name), col=0)
-        multi_1 = read_field_array(getattr(multi, name), col=1)
+        single_arr = getattr(single, name)[0]
+        multi_0 = getattr(multi, name)[0]
+        multi_1 = getattr(multi, name)[1]
         np.testing.assert_allclose(multi_0, single_arr, rtol=1.0e-12)
         np.testing.assert_allclose(multi_1, single_arr, rtol=1.0e-12)
 

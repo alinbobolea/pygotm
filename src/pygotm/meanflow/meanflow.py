@@ -282,7 +282,7 @@ class MeanflowState:
         self.runtimeu: float = 0.0
         self.runtimev: float = 0.0
 
-        # Cached Taichi workspaces keyed by translated module name.
+        # Cached Numba workspaces keyed by translated module name.
         # The cache is invalidated when the allocated vertical resolution changes.
         self._kernel_workspaces: dict[str, object] = {}
         self._kernel_nlev: int | None = None

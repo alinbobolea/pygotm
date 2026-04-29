@@ -5,69 +5,15 @@ r"""
 !
 ! !ROUTINE: The non-local, approximate weak-equilibrium stability function\label{sec:cmueB}
 !
-! !INTERFACE:
-!   subroutine cmue_b(nlev)
-!
-! !DESCRIPTION:
-!  This subroutine is used to update the quantities
-!  $c_\mu$, $c'_\mu$ and $\Gamma$, defined in \eq{b13}, from which all turbulent
-!  fluxes can be computed. This done exactly as described in \sect{sec:cmueA}, with
-!  the exception that equilibrium $P+G=\epsilon$ and $P_b = \epsilon_b$ is assumed
-!  in computing the non-linear terms in \eq{NandNb}, leading to the particularly
-!  simple expressions
-!  \begin{equation}
-!    \label{NandNbEq}
-!      {\cal N} = \dfrac{c_1}{2} \comma
-!      {\cal N}_b =  c_{b1}
-!      \point
-!  \end{equation}
-!
-! !USES:
-!   use turbulence, only: an,as,at
-!   use turbulence, only: cmue1,cmue2,gam
-!   use turbulence, only: cm0
-!   use turbulence, only: cc1
-!   use turbulence, only: ct1,ctt
-!   use turbulence, only: a1,a2,a3,a4,a5
-!   use turbulence, only: at1,at2,at3,at4,at5
-!
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!
-!  number of vertical layers
-!   integer, intent(in)       :: nlev
-!
-! !BUGS:
-! Test stage. Do not yet use.
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!-----------------------------------------------------------------------
-! !LOCAL VARIABLES:
-!
-!     integer                 ::   i
-!     REALTYPE                ::   N,Nt
-!     REALTYPE                ::   d0,d1,d2,d3,d4,d5
-!     REALTYPE                ::   n0,n1,n2,n3,nt0,nt1,nt2
-!     REALTYPE                ::   gam0,gam1,gam2
-!     REALTYPE                ::   dCm,nCm,nCmp,nGam,cm3_inv
-!
-!-----------------------------------------------------------------------
-!BOC
-!EOC
-!
 !-----------------------------------------------------------------------
 ! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import numba
+import numpy as np
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = [
     "CmueBWorkspace",
@@ -75,44 +21,48 @@ __all__ = [
 ]
 
 
-class CmueBWorkspace(TaichiFieldCollection):
-    """Taichi fields for the approximate weak-equilibrium stability closure."""
+class CmueBWorkspace(ColumnWorkspace):
+    """Workspace arrays for approximate weak-equilibrium stability functions."""
 
-    as_: ti.Field
-    an: ti.Field
-    at: ti.Field
-    cmue1: ti.Field
-    cmue2: ti.Field
-    gam: ti.Field
+    as_: np.ndarray
+    an: np.ndarray
+    at: np.ndarray
+    cmue1: np.ndarray
+    cmue2: np.ndarray
+    gam: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("as_", "an", "at", "cmue1", "cmue2", "gam"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.as_ = make_column_array(nlev, n_cols=n_cols)
+        self.an = make_column_array(nlev, n_cols=n_cols)
+        self.at = make_column_array(nlev, n_cols=n_cols)
+        self.cmue1 = make_column_array(nlev, n_cols=n_cols)
+        self.cmue2 = make_column_array(nlev, n_cols=n_cols)
+        self.gam = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti_kernel
-def step_cmue_b(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    cm0: ti.f64,
-    cc1: ti.f64,
-    ct1: ti.f64,
-    a1: ti.f64,
-    a2: ti.f64,
-    a3: ti.f64,
-    a5: ti.f64,
-    at1: ti.f64,
-    at2: ti.f64,
-    at3: ti.f64,
-    at4: ti.f64,
-    as_: TemplateArg,
-    an: TemplateArg,
-    at: TemplateArg,
-    cmue1: TemplateArg,
-    cmue2: TemplateArg,
-    gam: TemplateArg,
-):
-    r"""Update the approximate weak-equilibrium stability functions."""
+@numba.njit(cache=True)
+def _step_cmue_b(
+    nlev: int,
+    cm0: float,
+    cc1: float,
+    ct1: float,
+    a1: float,
+    a2: float,
+    a3: float,
+    a5: float,
+    at1: float,
+    at2: float,
+    at3: float,
+    at4: float,
+    as_: np.ndarray,
+    an: np.ndarray,
+    at: np.ndarray,
+    cmue1: np.ndarray,
+    cmue2: np.ndarray,
+    gam: np.ndarray,
+) -> None:
+    r"""Update the approximate weak-equilibrium stability functions (single column)."""
 
     n_val = 0.5 * cc1
     nt_val = ct1
@@ -153,20 +103,49 @@ def step_cmue_b(  # type: ignore[no-untyped-def]
 
     cm3_inv = 1.0 / (cm0 * cm0 * cm0)
 
-    for col in range(n_cols):
-        for i in range(1, nlev):
-            d_cm = (
-                d0
-                + d1 * an[col, i]
-                + d2 * as_[col, i]
-                + d3 * an[col, i] * as_[col, i]
-                + d4 * an[col, i] * an[col, i]
-                + d5 * as_[col, i] * as_[col, i]
-            )
-            n_cm = n0 + n1 * an[col, i] + n2 * as_[col, i] + n3 * at[col, i]
-            n_cmp = nt0 + nt1 * an[col, i] + nt2 * as_[col, i]
-            n_gam = (gam0 + gam1 * an[col, i] + gam2 * as_[col, i]) * at[col, i]
+    for i in range(1, nlev):
+        d_cm = (
+            d0
+            + d1 * an[i]
+            + d2 * as_[i]
+            + d3 * an[i] * as_[i]
+            + d4 * an[i] * an[i]
+            + d5 * as_[i] * as_[i]
+        )
+        n_cm = n0 + n1 * an[i] + n2 * as_[i] + n3 * at[i]
+        n_cmp = nt0 + nt1 * an[i] + nt2 * as_[i]
+        n_gam = (gam0 + gam1 * an[i] + gam2 * as_[i]) * at[i]
 
-            cmue1[col, i] = cm3_inv * n_cm / d_cm
-            cmue2[col, i] = cm3_inv * n_cmp / d_cm
-            gam[col, i] = n_gam / d_cm
+        cmue1[i] = cm3_inv * n_cm / d_cm
+        cmue2[i] = cm3_inv * n_cmp / d_cm
+        gam[i] = n_gam / d_cm
+
+
+@numba.njit(parallel=True, cache=True)
+def step_cmue_b(
+    batch_size: int,
+    nlev: int,
+    cm0: float,
+    cc1: float,
+    ct1: float,
+    a1: float,
+    a2: float,
+    a3: float,
+    a5: float,
+    at1: float,
+    at2: float,
+    at3: float,
+    at4: float,
+    as_: np.ndarray,
+    an: np.ndarray,
+    at: np.ndarray,
+    cmue1: np.ndarray,
+    cmue2: np.ndarray,
+    gam: np.ndarray,
+) -> None:
+    r"""Update the approximate weak-equilibrium stability functions (batch)."""
+    for b in numba.prange(batch_size):
+        _step_cmue_b(
+            nlev, cm0, cc1, ct1, a1, a2, a3, a5, at1, at2, at3, at4,
+            as_[b], an[b], at[b], cmue1[b], cmue2[b], gam[b],
+        )

@@ -1,3 +1,5 @@
 """CVMix interface modules."""
 
-__all__: list[str] = []
+from pygotm.cvmix.gotm_cvmix import CVMixState
+
+__all__ = ["CVMixState"]

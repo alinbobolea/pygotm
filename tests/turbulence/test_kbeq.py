@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, make_equidistant_h, read_field_array
 
 from pygotm.turbulence.kbeq import KBEquationWorkspace, step_kbeq
 from pygotm.turbulence.turbulence import (
@@ -17,6 +16,12 @@ from pygotm.turbulence.turbulence import (
 _NLEV = 12
 _DT = 60.0
 _DEPTH = 24.0
+
+
+def make_equidistant_h(nlev: int, depth: float) -> np.ndarray:
+    h = np.full(nlev + 1, depth / nlev, dtype=np.float64)
+    h[0] = 0.0
+    return h
 
 
 def _zeros(nlev: int = _NLEV) -> np.ndarray:
@@ -57,15 +62,11 @@ def _prepare_workspace(
     )
     profile_h = h if h is not None else make_equidistant_h(nlev, _DEPTH)
     for col in range(n_cols):
-        fill_field_from_array(ws.kb, kb if kb is not None else state.kb, col=col)
-        fill_field_from_array(ws.h, profile_h, col=col)
-        fill_field_from_array(ws.Pb, Pb if Pb is not None else state.Pb, col=col)
-        fill_field_from_array(
-            ws.epsb,
-            epsb if epsb is not None else state.epsb,
-            col=col,
-        )
-        fill_field_from_array(ws.nuh, nuh if nuh is not None else state.nuh, col=col)
+        ws.kb[col] = kb if kb is not None else state.kb
+        ws.h[col] = profile_h
+        ws.Pb[col] = Pb if Pb is not None else state.Pb
+        ws.epsb[col] = epsb if epsb is not None else state.epsb
+        ws.nuh[col] = nuh if nuh is not None else state.nuh
 
     ws.avh.fill(0.0)
     ws.l_sour.fill(0.0)
@@ -128,7 +129,7 @@ def _run_step_kbeq(
     )
 
     assert state.kb is not None
-    state.kb[:] = read_field_array(ws.kb)
+    state.kb[:] = ws.kb[0]
     return ws
 
 
@@ -155,7 +156,7 @@ def test_avh_matches_nuh_everywhere() -> None:
     nuh = np.linspace(1.0e-6, 3.0e-4, nlev + 1)
 
     workspace = _run_step_kbeq(state, nlev, _DT, nuh=nuh)
-    avh = read_field_array(workspace.avh)
+    avh = workspace.avh[0]
 
     np.testing.assert_allclose(avh, nuh, rtol=1.0e-12)
 
@@ -280,9 +281,9 @@ def test_multicolumn_parity_for_identical_columns() -> None:
         n_cols=2,
     )
 
-    single_kb = read_field_array(single.kb, col=0)
-    multi_0 = read_field_array(multi.kb, col=0)
-    multi_1 = read_field_array(multi.kb, col=1)
+    single_kb = single.kb[0]
+    multi_0 = multi.kb[0]
+    multi_1 = multi.kb[1]
     np.testing.assert_allclose(multi_0, single_kb, rtol=1.0e-12)
     np.testing.assert_allclose(multi_1, single_kb, rtol=1.0e-12)
 

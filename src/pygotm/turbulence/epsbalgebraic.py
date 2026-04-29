@@ -5,55 +5,15 @@ r"""
 !
 ! !ROUTINE: The algebraic epsilonb-equation\label{sec:epsbalgebraic}
 !
-! !INTERFACE:
-!   subroutine epsbalgebraic(nlev)
-!
-! !DESCRIPTION:
-! The algebraic equation for $\epsilon_b$, the molecular rate of
-! destruction of buoyancy variance, see \eq{kbeq}, simply assumes a
-! constant time scale ratio $r=c_b$, see \eq{DefR}. From
-! this assumption, it follows immediately that
-! \begin{equation}
-!   \label{epsbAgebraic}
-!     \epsilon_b = \dfrac{1}{c_b} \dfrac{\epsilon}{k} k_b
-!   \point
-! \end{equation}
-!
-! !USES:
-!  use turbulence,  only:     tke,eps,kb,epsb
-!  use turbulence,  only:     ctt,epsb_min
-!
-!  IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!
-! number of vertical layers
-!  integer,  intent(in)                 :: nlev
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!-----------------------------------------------------------------------
-! !LOCAL VARIABLES:
-!  REALTYPE                             :: one_over_ctt
-!  integer                              :: i
-!
-!-----------------------------------------------------------------------
-!BOC
-!
-!  clip at epsb_min
-!EOC
-!
 !-----------------------------------------------------------------------
 ! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import numba
+import numpy as np
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = [
     "EpsBAlgebraicWorkspace",
@@ -61,37 +21,53 @@ __all__ = [
 ]
 
 
-class EpsBAlgebraicWorkspace(TaichiFieldCollection):
-    """Taichi fields for the translated algebraic buoyancy-destruction update."""
+class EpsBAlgebraicWorkspace(ColumnWorkspace):
+    """Workspace arrays for the algebraic buoyancy-destruction closure."""
 
-    tke: ti.Field
-    eps: ti.Field
-    kb: ti.Field
-    epsb: ti.Field
+    tke: np.ndarray
+    eps: np.ndarray
+    kb: np.ndarray
+    epsb: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "eps", "kb", "epsb"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.eps = make_column_array(nlev, n_cols=n_cols)
+        self.kb = make_column_array(nlev, n_cols=n_cols)
+        self.epsb = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti_kernel
-def step_epsbalgebraic(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    ctt: ti.f64,
-    epsb_min: ti.f64,
-    tke: TemplateArg,
-    eps: TemplateArg,
-    kb: TemplateArg,
-    epsb: TemplateArg,
-):
-    r"""Advance the algebraic buoyancy-destruction closure for one or more columns."""
-
+@numba.njit(cache=True)
+def _step_epsbalgebraic(
+    nlev: int,
+    ctt: float,
+    epsb_min: float,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    kb: np.ndarray,
+    epsb: np.ndarray,
+) -> None:
+    r"""Advance the algebraic buoyancy-destruction closure (single column)."""
     one_over_ctt = 1.0 / ctt
 
-    for col in range(n_cols):
-        for i in range(nlev + 1):
-            epsb[col, i] = one_over_ctt * eps[col, i] / tke[col, i] * kb[col, i]
+    for i in range(nlev + 1):
+        epsb[i] = one_over_ctt * eps[i] / tke[i] * kb[i]
 
-            if epsb[col, i] < epsb_min:
-                epsb[col, i] = epsb_min
+        if epsb[i] < epsb_min:
+            epsb[i] = epsb_min
+
+
+@numba.njit(parallel=True, cache=True)
+def step_epsbalgebraic(
+    batch_size: int,
+    nlev: int,
+    ctt: float,
+    epsb_min: float,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    kb: np.ndarray,
+    epsb: np.ndarray,
+) -> None:
+    r"""Advance the algebraic buoyancy-destruction closure (batch)."""
+    for b in numba.prange(batch_size):
+        _step_epsbalgebraic(nlev, ctt, epsb_min, tke[b], eps[b], kb[b], epsb[b])

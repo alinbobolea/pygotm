@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import TracebackType
+from typing import Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,39 +21,11 @@ def _fake_result(name: str) -> CaseResult:
     )
 
 
-def test_run_case_worker_inits_taichi_with_correct_arch(tmp_path: Path) -> None:
-    import taichi as ti
-    from taichi.lang import impl as ti_impl
-
-    init_calls: list[object] = []
-
-    def fake_init(**kwargs: object) -> None:
-        init_calls.append(kwargs.get("arch"))
-
-    mock_runtime = MagicMock()
-    mock_runtime.prog = None
-
-    with patch.object(ti_impl, "get_runtime", return_value=mock_runtime), \
-         patch("taichi.init", side_effect=fake_init), \
-         patch("pygotm.validation.parallel.validate_case", return_value=_fake_result("couette")):
+def test_run_case_worker_validates_case_without_runtime_init(tmp_path: Path) -> None:
+    with patch("pygotm.validation.parallel.validate_case", return_value=_fake_result("couette")) as mock_validate:
         _run_case_worker("couette", tmp_path, "cpu", skip_run=False)
 
-    assert len(init_calls) == 1
-    assert init_calls[0] is ti.cpu
-
-
-def test_run_case_worker_skips_init_when_already_initialised(tmp_path: Path) -> None:
-    from taichi.lang import impl as ti_impl
-
-    mock_runtime = MagicMock()
-    mock_runtime.prog = object()
-
-    with patch.object(ti_impl, "get_runtime", return_value=mock_runtime), \
-         patch("taichi.init") as mock_init, \
-         patch("pygotm.validation.parallel.validate_case", return_value=_fake_result("couette")):
-        _run_case_worker("couette", tmp_path, "cpu", skip_run=False)
-
-    mock_init.assert_not_called()
+    mock_validate.assert_called_once()
 
 
 def test_run_cases_parallel_calls_on_result_for_each_case(tmp_path: Path) -> None:
@@ -109,7 +83,12 @@ def test_run_cases_parallel_clamps_workers_to_case_count(tmp_path: Path) -> None
         def __enter__(self) -> "TrackingCluster":
             return self
 
-        def __exit__(self, *a: object) -> bool:
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: TracebackType | None,
+        ) -> Literal[False]:
             return False
 
     mock_client = MagicMock()

@@ -60,15 +60,11 @@ def _ram_total() -> str:
     return "unknown"
 
 
-def _taichi_version() -> str:
+def _numba_version() -> str:
     try:
-        return importlib.metadata.version("taichi")
+        return importlib.metadata.version("numba")
     except Exception:
-        try:
-            import taichi as ti  # type: ignore[import]
-            return ti.__version__
-        except Exception:
-            return "unavailable"
+        return "unavailable"
 
 
 def _probe_nvidia() -> tuple[bool, int, str]:
@@ -132,7 +128,7 @@ def detect_platform() -> PlatformInfo:
         "cpu_arch": platform.machine(),
         "cpu_model": lscpu.get("cpu_model", platform.processor() or "unknown"),
         "cpu_count": str(cpu_count),
-        "taichi_version": _taichi_version(),
+        "numba_version": _numba_version(),
     }
     for k in ("cores_per_socket", "sockets", "cpu_max_mhz"):
         if k in lscpu:
@@ -145,24 +141,20 @@ def detect_platform() -> PlatformInfo:
 
     has_cuda, n_cuda, cuda_info = _probe_nvidia()
     if has_cuda:
-        available_archs.append("cuda")
         gpu_count += n_cuda
         gpu_info_parts.append(f"CUDA: {cuda_info}")
 
     has_amd, n_amd, amd_info = _probe_amd()
     if has_amd:
-        available_archs.append("amdgpu")
         gpu_count += n_amd
         if amd_info:
             gpu_info_parts.append(f"ROCm: {amd_info}")
 
     if not has_cuda and not has_amd and _probe_vulkan():
-        available_archs.append("vulkan")
         gpu_count = max(gpu_count, 1)
         gpu_info_parts.append("Vulkan")
 
     if sys.platform == "darwin":
-        available_archs.append("metal")
         gpu_count = max(gpu_count, 1)
         gpu_info_parts.append("Metal")
 

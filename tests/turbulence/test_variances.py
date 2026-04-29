@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, read_field_array
 from turbulence_model_analysis_reference import configure_second_order_state
 
 from pygotm.turbulence.turbulence import (
@@ -70,14 +69,14 @@ def _run_step(
 ) -> VariancesWorkspace:
     workspace = VariancesWorkspace(_NLEV, n_cols=n_cols)
     for col in range(n_cols):
-        fill_field_from_array(workspace.tke, tke, col=col)
-        fill_field_from_array(workspace.eps, eps, col=col)
-        fill_field_from_array(workspace.P, P, col=col)
-        fill_field_from_array(workspace.B, B, col=col)
-        fill_field_from_array(workspace.Px, Px, col=col)
-        fill_field_from_array(workspace.num, num, col=col)
-        fill_field_from_array(workspace.SSU, SSU, col=col)
-        fill_field_from_array(workspace.SSV, SSV, col=col)
+        workspace.tke[col] = tke
+        workspace.eps[col] = eps
+        workspace.P[col] = P
+        workspace.B[col] = B
+        workspace.Px[col] = Px
+        workspace.num[col] = num
+        workspace.SSU[col] = SSU
+        workspace.SSV[col] = SSV
 
     step_variances(
         n_cols,
@@ -145,15 +144,9 @@ def test_matches_reference_translation() -> None:
         SSV=SSV,
     )
 
-    np.testing.assert_allclose(
-        read_field_array(workspace.uu), expected[0], rtol=1.0e-12
-    )
-    np.testing.assert_allclose(
-        read_field_array(workspace.vv), expected[1], rtol=1.0e-12
-    )
-    np.testing.assert_allclose(
-        read_field_array(workspace.ww), expected[2], rtol=1.0e-12
-    )
+    np.testing.assert_allclose(workspace.uu[0], expected[0], rtol=1.0e-12)
+    np.testing.assert_allclose(workspace.vv[0], expected[1], rtol=1.0e-12)
+    np.testing.assert_allclose(workspace.ww[0], expected[2], rtol=1.0e-12)
 
 
 def test_variances_remain_positive_for_physically_valid_inputs() -> None:
@@ -180,7 +173,7 @@ def test_variances_remain_positive_for_physically_valid_inputs() -> None:
     )
 
     for name in ("uu", "vv", "ww"):
-        assert np.all(read_field_array(getattr(workspace, name)) > 0.0)
+        assert np.all(getattr(workspace, name)[0] > 0.0)
 
 
 def test_multicolumn_parity_for_identical_columns() -> None:
@@ -219,12 +212,41 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     )
 
     for name in ("uu", "vv", "ww"):
-        expected = read_field_array(getattr(single, name))
+        expected = getattr(single, name)[0]
         for col in range(2):
-            np.testing.assert_allclose(
-                read_field_array(getattr(multi, name), col=col),
-                expected,
-            )
+            np.testing.assert_allclose(getattr(multi, name)[col], expected)
+
+
+def test_zero_eps_uses_isotropic_variance_limit() -> None:
+    state = _make_state()
+    tke = np.linspace(0.0, 4.0e-4, _NLEV + 1)
+    eps = np.full(_NLEV + 1, 4.0e-6)
+    eps[::2] = 0.0
+    P = np.full(_NLEV + 1, 2.0e-6)
+    B = np.full(_NLEV + 1, -5.0e-7)
+    Px = np.full(_NLEV + 1, 1.0e-7)
+    num = np.full(_NLEV + 1, 2.5e-4)
+    SSU = np.full(_NLEV + 1, 3.0e-4)
+    SSV = np.full(_NLEV + 1, 2.0e-4)
+
+    workspace = _run_step(
+        state,
+        tke=tke,
+        eps=eps,
+        P=P,
+        B=B,
+        Px=Px,
+        num=num,
+        SSU=SSU,
+        SSV=SSV,
+    )
+
+    expected = 2.0 / 3.0 * tke[::2]
+    np.testing.assert_allclose(workspace.uu[0, ::2], expected)
+    np.testing.assert_allclose(workspace.vv[0, ::2], expected)
+    np.testing.assert_allclose(workspace.ww[0, ::2], expected)
+    for name in ("uu", "vv", "ww"):
+        assert np.isfinite(getattr(workspace, name)).all()
 
 
 def test_no_nan_or_inf_for_valid_inputs() -> None:
@@ -251,4 +273,4 @@ def test_no_nan_or_inf_for_valid_inputs() -> None:
     )
 
     for name in ("uu", "vv", "ww"):
-        assert np.isfinite(read_field_array(getattr(workspace, name))).all()
+        assert np.isfinite(getattr(workspace, name)).all()

@@ -25,9 +25,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import taichi as ti
 
-from pygotm.meanflow.coriolis import coriolis, step_coriolis
+from pygotm.meanflow.coriolis import coriolis, step_coriolis_batch
 from pygotm.meanflow.meanflow import MeanflowState, init_meanflow, post_init_meanflow
 from pygotm.meanflow.updategrid import updategrid
 
@@ -399,17 +398,17 @@ def test_no_nan_inf_large_coriolis() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7. Multi-column parity — step_coriolis (Taichi) == coriolis (numpy)
+# 7. Batch parity — step_coriolis_batch == coriolis (single column)
 # ---------------------------------------------------------------------------
 
 
-def test_taichi_single_col_matches_numpy() -> None:
-    """step_coriolis with n_cols=1 produces the same result as coriolis()."""
+def test_batch_single_col_matches_numpy() -> None:
+    """step_coriolis_batch with batch_size=1 matches coriolis()."""
     nlev = _NLEV
     dt = _DT
     cori_val = 7.3e-5
+    n_cols = 1
 
-    # --- numpy reference ---
     state_np = _make_state(cori=cori_val)
     rng = np.random.default_rng(99)
     u_init = np.zeros(nlev + 1)
@@ -422,41 +421,25 @@ def test_taichi_single_col_matches_numpy() -> None:
     state_np.v[:] = v_init
     coriolis(state_np, nlev, dt)
 
-    # --- Taichi kernel ---
-    u_ti = ti.field(ti.f64, shape=(1, nlev + 1))
-    v_ti = ti.field(ti.f64, shape=(1, nlev + 1))
-    usprof_ti = ti.field(ti.f64, shape=(1, nlev + 1))
-    vsprof_ti = ti.field(ti.f64, shape=(1, nlev + 1))
-
-    for k in range(nlev + 1):
-        u_ti[0, k] = u_init[k]
-        v_ti[0, k] = v_init[k]
-        usprof_ti[0, k] = 0.0
-        vsprof_ti[0, k] = 0.0
-
     omega = cori_val * dt
-    step_coriolis(
-        1,
-        nlev,
-        math.cos(omega),
-        math.sin(omega),
-        u_ti,
-        v_ti,
-        usprof_ti,
-        vsprof_ti,
-    )
+    u_b = np.tile(u_init, (n_cols, 1))
+    v_b = np.tile(v_init, (n_cols, 1))
+    usprof_b = np.zeros((n_cols, nlev + 1))
+    vsprof_b = np.zeros((n_cols, nlev + 1))
 
-    u_out = np.array([u_ti[0, k] for k in range(nlev + 1)])
-    v_out = np.array([v_ti[0, k] for k in range(nlev + 1)])
+    step_coriolis_batch(
+        n_cols, nlev, math.cos(omega), math.sin(omega),
+        u_b, v_b, usprof_b, vsprof_b,
+    )
 
     assert state_np.u is not None
     assert state_np.v is not None
-    np.testing.assert_allclose(u_out[1:nlev + 1], state_np.u[1:nlev + 1], rtol=1e-14)
-    np.testing.assert_allclose(v_out[1:nlev + 1], state_np.v[1:nlev + 1], rtol=1e-14)
+    np.testing.assert_allclose(u_b[0, 1:nlev + 1], state_np.u[1:nlev + 1], rtol=1e-14)
+    np.testing.assert_allclose(v_b[0, 1:nlev + 1], state_np.v[1:nlev + 1], rtol=1e-14)
 
 
-def test_taichi_multi_col_uniform() -> None:
-    """step_coriolis with n_cols=3 identical columns all give identical results."""
+def test_batch_multi_col_uniform() -> None:
+    """step_coriolis_batch with batch_size=3 identical columns gives identical results."""
     nlev = _NLEV
     dt = _DT
     cori_val = 1e-4
@@ -468,35 +451,17 @@ def test_taichi_multi_col_uniform() -> None:
     u_init[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
     v_init[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
 
-    u_ti = ti.field(ti.f64, shape=(n_cols, nlev + 1))
-    v_ti = ti.field(ti.f64, shape=(n_cols, nlev + 1))
-    usprof_ti = ti.field(ti.f64, shape=(n_cols, nlev + 1))
-    vsprof_ti = ti.field(ti.f64, shape=(n_cols, nlev + 1))
-
-    for col in range(n_cols):
-        for k in range(nlev + 1):
-            u_ti[col, k] = u_init[k]
-            v_ti[col, k] = v_init[k]
-            usprof_ti[col, k] = 0.0
-            vsprof_ti[col, k] = 0.0
-
     omega = cori_val * dt
-    step_coriolis(
-        n_cols,
-        nlev,
-        math.cos(omega),
-        math.sin(omega),
-        u_ti,
-        v_ti,
-        usprof_ti,
-        vsprof_ti,
+    u_b = np.tile(u_init, (n_cols, 1))
+    v_b = np.tile(v_init, (n_cols, 1))
+    usprof_b = np.zeros((n_cols, nlev + 1))
+    vsprof_b = np.zeros((n_cols, nlev + 1))
+
+    step_coriolis_batch(
+        n_cols, nlev, math.cos(omega), math.sin(omega),
+        u_b, v_b, usprof_b, vsprof_b,
     )
 
-    u_col0 = np.array([u_ti[0, k] for k in range(nlev + 1)])
-    v_col0 = np.array([v_ti[0, k] for k in range(nlev + 1)])
-
     for col in range(1, n_cols):
-        u_col = np.array([u_ti[col, k] for k in range(nlev + 1)])
-        v_col = np.array([v_ti[col, k] for k in range(nlev + 1)])
-        np.testing.assert_array_equal(u_col, u_col0)
-        np.testing.assert_array_equal(v_col, v_col0)
+        np.testing.assert_array_equal(u_b[col], u_b[0])
+        np.testing.assert_array_equal(v_b[col], v_b[0])

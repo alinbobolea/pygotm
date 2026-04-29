@@ -107,69 +107,74 @@ r"""!-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import numba
+import numpy as np
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = [
+    "TridiagonalBatchWorkspace",
     "TridiagonalWorkspace",
     "clean_tridiagonal",
     "init_tridiagonal",
     "tridiagonal",
-    "tridiagonal_column",
 ]
 
 
-class TridiagonalWorkspace(TaichiFieldCollection):
-    """Allocate GOTM-style tridiagonal coefficients and work arrays."""
+class TridiagonalWorkspace(ColumnWorkspace):
+    """Single-column tridiagonal workspace — arrays shape (nlev+1,)."""
 
-    au: ti.Field
-    bu: ti.Field
-    cu: ti.Field
-    du: ti.Field
-    ru: ti.Field
-    qu: ti.Field
-
-    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("au", "bu", "cu", "du", "ru", "qu"))
-
-    def clear(self) -> None:
-        """Drop references to the allocated Taichi fields."""
-
-        for name in tuple(self._fields):
-            delattr(self, name)
-        self._fields.clear()
+    def __init__(self, nlev: int) -> None:
+        super().__init__(nlev)
+        shape = (nlev + 1,)
+        self.au = np.zeros(shape, dtype=np.float64)
+        self.bu = np.zeros(shape, dtype=np.float64)
+        self.cu = np.zeros(shape, dtype=np.float64)
+        self.du = np.zeros(shape, dtype=np.float64)
+        self.ru = np.zeros(shape, dtype=np.float64)
+        self.qu = np.zeros(shape, dtype=np.float64)
 
 
-def init_tridiagonal(
-    nlev: int,
-    *,
-    n_cols: int | None = None,
-) -> TridiagonalWorkspace:
+class TridiagonalBatchWorkspace(ColumnWorkspace):
+    """Batch tridiagonal workspace — arrays shape (batch_size, nlev+1)."""
+
+    def __init__(self, nlev: int, batch_size: int) -> None:
+        super().__init__(nlev, n_cols=batch_size)
+        shape = (batch_size, nlev + 1)
+        self.au = np.zeros(shape, dtype=np.float64)
+        self.bu = np.zeros(shape, dtype=np.float64)
+        self.cu = np.zeros(shape, dtype=np.float64)
+        self.du = np.zeros(shape, dtype=np.float64)
+        self.ru = np.zeros(shape, dtype=np.float64)
+        self.qu = np.zeros(shape, dtype=np.float64)
+
+
+def init_tridiagonal(nlev: int) -> TridiagonalWorkspace:
     """Allocate the tridiagonal coefficients and Thomas work arrays."""
-
-    return TridiagonalWorkspace(nlev=nlev, n_cols=n_cols)
+    return TridiagonalWorkspace(nlev=nlev)
 
 
 def clean_tridiagonal(workspace: TridiagonalWorkspace) -> None:
-    """Release Python references to the allocated Taichi fields."""
-
-    workspace.clear()
+    """No-op — NumPy workspaces are garbage-collected normally."""
 
 
-@ti.func
-def tridiagonal(  # type: ignore[no-untyped-def]
-    au,
-    bu,
-    cu,
-    du,
-    ru,
-    qu,
-    value,
-    fi,
-    lt,
-):
+# Suppress the unused import warning: make_column_array is re-exported for
+# callers that previously used it via this module.
+_ = make_column_array
+
+
+@numba.njit(cache=True)
+def tridiagonal(
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+    value: np.ndarray,
+    fi: int,
+    lt: int,
+) -> None:
     r"""! !IROUTINE: Simplified Gaussian elimination
 !
 ! !DESCRIPTION:
@@ -198,46 +203,3 @@ def tridiagonal(  # type: ignore[no-untyped-def]
         value[fi] = qu[fi]
         for i in range(fi + 1, lt + 1):
             value[i] = qu[i] - ru[i] * value[i - 1]
-
-
-@ti.func
-def tridiagonal_column(  # type: ignore[no-untyped-def]
-    col,
-    au,
-    bu,
-    cu,
-    du,
-    ru,
-    qu,
-    value,
-    fi,
-    lt,
-):
-    r"""! !IROUTINE: Simplified Gaussian elimination
-!
-! !DESCRIPTION:
-! A linear equation with tridiagonal matrix structure is solved here. The main
-! diagonal is stored on {\tt bu}, the upper diagonal on {\tt au}, and the
-! lower diagonal on {\tt cu}, the right hand side is stored on {\tt du}.
-! The method used here is the simplified Gauss elimination, also called
-! \emph{Thomas algorithm}.
-    """
-
-    if fi == lt:
-        value[col, fi] = du[col, fi] / bu[col, fi]
-    else:
-        ru[col, lt] = au[col, lt] / bu[col, lt]
-        qu[col, lt] = du[col, lt] / bu[col, lt]
-
-        for offset in range(lt - fi - 1):
-            i = lt - 1 - offset
-            denominator = bu[col, i] - cu[col, i] * ru[col, i + 1]
-            ru[col, i] = au[col, i] / denominator
-            qu[col, i] = (du[col, i] - cu[col, i] * qu[col, i + 1]) / denominator
-
-        denominator = bu[col, fi] - cu[col, fi] * ru[col, fi + 1]
-        qu[col, fi] = (du[col, fi] - cu[col, fi] * qu[col, fi + 1]) / denominator
-
-        value[col, fi] = qu[col, fi]
-        for i in range(fi + 1, lt + 1):
-            value[col, i] = qu[col, i] - ru[col, i] * value[col, i - 1]

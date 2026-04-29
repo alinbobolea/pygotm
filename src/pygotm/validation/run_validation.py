@@ -2,8 +2,7 @@
 
 Workflow:
   1. Detect platform (CPU count, GPU availability)
-  2. Initialise Taichi with the selected backend
-  3. Warm up: compile all kernels once via the couette case
+  2. Warm up Numba kernels once before timed runs
   4. Run validation cases in parallel via Dask (dashboard at --dashboard-port)
   5. Compare each run against Fortran reference NetCDF
   6. Write validation/results.json + validation/report.html
@@ -13,7 +12,6 @@ Usage
     uv run python -m pygotm.validation.run_validation
     uv run python -m pygotm.validation.run_validation --cases couette,channel
     uv run python -m pygotm.validation.run_validation --all
-    uv run python -m pygotm.validation.run_validation --device cuda --all
     uv run python -m pygotm.validation.run_validation --no-run
     uv run python -m pygotm.validation.run_validation --workers 4
     uv run python -m pygotm.validation.run_validation --dashboard-port 8788
@@ -37,7 +35,7 @@ from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
 from pygotm.validation.report import CaseResult, Report, render_html, save_json
 from pygotm.validation.runner import validate_case
-from pygotm.validation.warmup import warm_taichi_kernels
+from pygotm.validation.warmup import trigger_numba_jit
 
 ALL_CASES: tuple[str, ...] = REFERENCE_CASE_NAMES
 DEFAULT_CASES: tuple[str, ...] = ("couette", "channel", "entrainment")
@@ -190,7 +188,7 @@ def _make_on_result(
 )
 @click.option(
     "--device", default=None, metavar="ARCH",
-    help="Execution backend: cpu, cuda, vulkan, metal, amdgpu. Default: cpu.",
+    help="Execution backend label. Numba validation currently supports cpu.",
 )
 @click.option(
     "--workers", default=None, type=int, metavar="N",
@@ -211,7 +209,7 @@ def _make_on_result(
 )
 @click.option(
     "--no-warmup", "skip_warmup", is_flag=True,
-    help="Skip the Taichi kernel warm-up step.",
+    help="Skip the Numba kernel warm-up step.",
 )
 @click.option("--rtol", default=RTOL, show_default=True, type=float)
 @click.option("--atol", default=ATOL, show_default=True, type=float)
@@ -228,8 +226,6 @@ def cli(
     atol: float,
 ) -> None:
     """Run pyGOTM validation and produce JSON + HTML report."""
-    import taichi as ti
-
     # 1. Detect platform
     platform_info = detect_platform()
     arch_choices = platform_info.available_archs
@@ -250,10 +246,6 @@ def cli(
         raise SystemExit(1)
     print(f"  Execution backend: {selected_arch}")
 
-    # 2. Initialise Taichi
-    arch = getattr(ti, selected_arch)
-    ti.init(arch=arch, default_fp=ti.f64, offline_cache=True)
-
     # 3. Build case list
     if run_all:
         case_list = list(ALL_CASES)
@@ -266,10 +258,10 @@ def cli(
     print(f"  Cases ({len(case_list)}): {', '.join(case_list)}")
     print("=" * 60)
 
-    # 4. Warm up Taichi kernels
+    # 4. Warm up Numba kernels
     if not skip_run and not skip_warmup:
-        print("  Warming up Taichi kernels (couette) ...", end=" ", flush=True)
-        warmup_elapsed = warm_taichi_kernels(selected_arch, runs_dir)
+        print("  Warming up Numba kernels ...", end=" ", flush=True)
+        warmup_elapsed = trigger_numba_jit()
         print(f"done ({_fmt_time(warmup_elapsed)})")
     elif skip_warmup:
         print("  Skipping warm-up (--no-warmup)")

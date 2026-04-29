@@ -2,12 +2,13 @@
 
 ## Mission
 Convert the General Ocean Turbulence Model (GOTM, Fortran 90) into a modern,
-GPU-accelerated Python platform. Serve oceanographers, limnologists, and aquaculture
-site assessors through a browser-based SaaS product — no Fortran compiler needed.
+Numba-accelerated Python platform. Serve oceanographers, limnologists, and
+aquaculture site assessors through a browser-based SaaS product — no Fortran
+compiler needed.
 
 ## Product Scope
 - Single-column 1D ocean/lake turbulence model (pure vertical)
-- Multi-column GPU mode: thousands of independent columns solved in parallel (Taichi)
+- Multi-column parallel mode: thousands of independent columns solved in parallel via Dask (scales from laptop to cluster to cloud)
 - Multiple turbulence closures: k-epsilon, GLS, k-omega, Mellor-Yamada 2.5, KPP
 - Surface forcing: COARE bulk fluxes (Fairall), Kondo 1975, solar absorption (Jerlov)
 - GOTM-compatible YAML config format (direct import of all 22 official test cases)
@@ -21,6 +22,10 @@ site assessors through a browser-based SaaS product — no Fortran compiler need
 - Horizontal advection / 3D dynamics (post-single-column, requires external 3D driver)
 
 ## Design Philosophy
+0. **Taichi is not used.** The codebase uses Numba for all computational
+   acceleration. No `import taichi` is permitted anywhere in `src/` or `tests/`.
+   `src/pygotm/fields.py` and `src/pygotm/taichi_typing.py` must be deleted.
+   `taichi` must not appear in `pyproject.toml` dependencies.
 1. **Scientific accuracy is non-negotiable.** Every kernel must validate against
    Fortran GOTM using the range-aware combined tolerance:
    `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 1e-6×|b|`
@@ -31,20 +36,40 @@ site assessors through a browser-based SaaS product — no Fortran compiler need
    reproducible from its YAML config. No hidden state.
 3. **The kernel is the product.** The API and UI are wrappers. Keep `pygotm/src/`
    pure (no I/O, no web concerns).
-4. **Double precision everywhere.** Use `ti.f64` throughout — GOTM uses REAL(8).
-   Never downcast to f32 without a documented, tested justification.
-5. **Parallelism is horizontal, not vertical.** Each vertical column (nlev ≈ 100)
-   is solved serially (Thomas algorithm is inherently serial). Parallelism comes
-   from solving thousands of independent columns simultaneously on GPU.
+4. **Double precision everywhere.** Use `np.float64` throughout — GOTM uses REAL(8).
+   Never downcast to float32 without a documented, tested justification.
+5. **Parallelism is horizontal, not vertical, and operates at two levels.**
+   Each vertical column (nlev ≈ 100) is solved serially (Thomas algorithm is
+   inherently serial). Parallelism is achieved at two independent, composable levels:
+   - **Numba level — within a batch:** a Dask task receives a contiguous block of
+     columns (the *batch*). A `@numba.njit(parallel=True)` batch kernel processes
+     all columns in the batch simultaneously using `numba.prange`, exploiting every
+     available CPU thread on the worker node.
+   - **Dask level — across batches:** `driver_multi.py` partitions N total columns
+     into batches and submits each batch as an independent Dask `delayed` task.
+     Dask distributes batches across available workers — a local thread pool on a
+     laptop, multiprocessing on a workstation, a SLURM/PBS cluster, or a cloud
+     cluster — with no code changes required.
+   The tunable `batch_size` parameter (default: 16) balances Dask scheduling
+   overhead (too small → many tiny tasks) against load-balancing granularity
+   (too large → coarse distribution). A batch of 16 columns on an 8-core worker
+   gives two `prange` iterations per thread, which is a good starting point.
 6. **Fail loudly on science errors.** If a field goes NaN or violates physical
    bounds, raise immediately with a diagnostic message. Never silently continue.
 
 ## Performance Goals
 | Scenario | Target |
 |----------|--------|
-| Single column, 1 year simulation (dt=3600s) | < 5 seconds CPU |
-| 10,000 columns, 1 year (GPU) | < 60 seconds |
+| Single column, 1 year simulation (dt=3600s) | ≈ Fortran GOTM wall-clock time |
+| 10,000 columns, 1 year (Dask, 8-core workstation) | linear scaling from single-column time |
 | Browser UI: case setup → first result | < 2 minutes |
+
+The primary single-column performance target is **parity with compiled Fortran GOTM**.
+Numba JIT compilation (with `cache=True`) should close the gap to within 2–5× of
+Fortran on a warm run; the goal is to reach ≈1× on the hot path for common cases
+(couette, entrainment, channel). Multi-column throughput scales linearly with the
+number of Dask workers — no code changes are required to move from a laptop to a
+cluster.
 
 ---
 
@@ -217,8 +242,9 @@ tests/<module>/test_<file>.py
 Each `src/pygotm/<module>/<file>.py` must:
 1. Begin with a module docstring that reproduces **all Fortran comments** from the
    corresponding `.F90` file verbatim (as a triple-quoted string).
-2. Declare Taichi fields at module scope or inside the module's `init()` function
-   (never inside `@ti.func` or `@ti.kernel`).
+2. Allocate NumPy arrays at module scope or inside the module's `init()` function
+   (never inside `@numba.njit` functions — arrays are always allocated in Python
+   and passed as arguments into kernels).
 3. Export a clean public API via `__all__`.
 
 ### FORTRAN comment preservation
@@ -244,93 +270,229 @@ def stratification(...):
 ```
 
 ### Data types
-| Fortran | Taichi | Python |
-|---------|--------|--------|
-| `REAL(kind=rk)` / `REAL(8)` / `DOUBLE PRECISION` | `ti.f64` | `float` |
-| `REAL(4)` | `ti.f32` | `float` |
-| `INTEGER` | `ti.i32` | `int` |
-| `LOGICAL` | `ti.i32` (0/1 in kernels) | `bool` |
+| Fortran | NumPy dtype | Python scalar |
+|---------|-------------|---------------|
+| `REAL(kind=rk)` / `REAL(8)` / `DOUBLE PRECISION` | `np.float64` | `float` |
+| `REAL(4)` | `np.float32` | `float` |
+| `INTEGER` | `np.int32` / Python `int` | `int` |
+| `LOGICAL` | Python `bool` (`int` inside kernels) | `bool` |
 
-### Taichi usage philosophy
-Leverage Taichi to the **maximum beneficial extent** — wherever it provides
-computational speedup across a wide range of devices (CPU SIMD, GPU, Metal, Vulkan).
+### Numba usage philosophy
+Use Numba to the **maximum beneficial extent** — wherever it eliminates Python
+interpreter overhead for hot numerical loops.
 
-**Use Taichi when:**
-- The operation is a hot loop over vertical levels or horizontal columns (parallelisable).
-- The computation is pure math with no Python I/O or object allocation.
-- The function will be called millions of times per simulation (time-stepping, per-column physics).
+**Use `@numba.njit` when:**
+- The operation is a hot loop over vertical levels or horizontal columns.
+- The computation is pure math with scalars and pre-allocated NumPy arrays.
+- The function will be called millions of times per simulation.
 
-**Do NOT use Taichi when:**
-- The operation is inherently serial with complex Python control flow (config parsing, I/O).
-- The function is called once (init, cleanup, diagnostics).
-- Taichi overhead (kernel launch, JIT compile) would dominate for tiny one-shot operations.
+**Use `@numba.njit(parallel=True, cache=True)` for batch entry points only:**
+- A *batch kernel* receives arrays shaped `(batch_size, nlev+1)` and iterates
+  over `batch_size` with `numba.prange`, running each column's vertical physics
+  in parallel across CPU threads. One batch kernel is written per physics module
+  time-step entry point. The inner vertical loop remains serial (Thomas algorithm).
+- Batch kernels are called exclusively by Dask tasks in `driver_multi.py`.
+  The single-column driver never calls a batch kernel.
 
-The goal is a codebase where the entire physics hot-path is composed of `@ti.func`
-primitives called from `@ti.kernel` entry points — making the multi-column GPU path
-a natural extension with zero algorithmic changes.
+**Do NOT use Numba when:**
+- The operation involves Python objects, dicts, dataclasses, or object arrays.
+- The function is called once (init, cleanup, diagnostics, I/O).
+- Control flow depends on dynamic Python types or conditional imports.
+
+### Numba kernel constraints (non-negotiable)
+The following are hard constraints for any function decorated with `@numba.njit`:
+
+1. **Arrays:** `np.float64`, C-contiguous. Allocate with `np.zeros` or
+   `np.empty(..., dtype=np.float64)`. Never pass object arrays or structured arrays.
+2. **Scalars:** plain Python `int` or `float`. Never pass `np.int64` scalar
+   objects where `int` is expected; use `int(x)` at the call boundary if needed.
+3. **No dicts inside kernels.** All per-kernel state must be passed as arrays or
+   scalars. If you need a "struct of arrays", allocate each array separately and
+   pass them individually.
+4. **No dataclasses inside kernels.** Workspace dataclasses live in Python scope;
+   only their constituent `np.ndarray` members are passed into kernels.
+5. **No object arrays.** Arrays of Python objects (`dtype=object`) are forbidden.
+   Use separate typed arrays.
+6. **No pandas/xarray inside kernels.** All time-series or gridded inputs must
+   be extracted to plain `np.ndarray` before entering the inner loop.
+7. **Fixed shapes where possible.** Declare arrays with `nlev + 1` (e.g., 101)
+   rather than dynamic sizes, to allow Numba to infer types at first call.
 
 ### Subroutine classification
-| Fortran role | Taichi decorator | Notes |
+| Fortran role | Numba decorator | Notes |
 |---|---|---|
-| Pure computation, no I/O | `@ti.func` | Called from `@ti.kernel` only |
-| Time-stepping entry point | `@ti.kernel` | One per physics module |
-| I/O / init / finalize | Plain Python method | On driver class |
+| Pure computation, no I/O | `@numba.njit(cache=True)` | Called from single-column or batch entry points |
+| Single-column time-step entry point | `@numba.njit(cache=True)` | Arrays `(nlev+1,)`; called by `driver.py` |
+| Batch time-step entry point | `@numba.njit(parallel=True, cache=True)` | Arrays `(batch_size, nlev+1)`; `numba.prange(batch_size)` over columns; called by Dask tasks |
+| I/O / init / finalize | Plain Python method | On driver class; never `@njit` |
 
-### Array mapping
-- Single-column: `REAL(rk), DIMENSION(0:nlev) :: u` → `u = ti.field(ti.f64, shape=nlev+1)`
-- Multi-column: `REAL(rk), DIMENSION(0:nlev) :: u` → `u = ti.field(ti.f64, shape=(n_cols, nlev+1))`
-- All fields declared in `src/pygotm/<module>/<module>_variables.py`
+### Array allocation and layout
+- **Single-column:** `REAL(rk), DIMENSION(0:nlev) :: u` →
+  `u = np.zeros(nlev + 1, dtype=np.float64)` — shape `(nlev+1,)`.
+  Used by all single-column `@numba.njit(cache=True)` kernels and by `driver.py`.
+
+- **Batch (per Dask task):** `REAL(rk), DIMENSION(0:nlev) :: u` →
+  `u = np.zeros((batch_size, nlev + 1), dtype=np.float64)` — shape `(batch_size, nlev+1)`.
+  Used by batch `@numba.njit(parallel=True, cache=True)` kernels only.
+  - Row index = column within the batch (`b`). Column index = vertical level (`k`).
+  - `u[b, k]` is the value at batch column `b`, level `k`.
+  - C-contiguous layout: `u[b, :]` is contiguous in memory — optimal for the
+    serial vertical sweep (Thomas algorithm) within each `prange` thread.
+
+- Single-column and batch kernels are **two distinct functions**. The batch kernel
+  loops over `batch_size` with `prange` and calls the single-column kernel (or
+  inlines its logic) for each column `b`.
+- All arrays allocated in `src/pygotm/<module>/<module>_variables.py` and passed
+  explicitly into every kernel call.
+
+### Workspace pattern
+Physics modules own their work arrays as plain Python objects. Each workspace
+class holds `np.ndarray` attributes; only those arrays are passed into `@njit`
+functions. Two variants exist — single-column (used by `driver.py`) and batch
+(used by Dask tasks in `driver_multi.py`):
+
+```python
+class TridiagonalWorkspace:
+    """Single-column workspace — shape (nlev+1,) per array."""
+    def __init__(self, nlev: int) -> None:
+        shape = (nlev + 1,)
+        self.au = np.zeros(shape, dtype=np.float64)
+        self.bu = np.zeros(shape, dtype=np.float64)
+        self.cu = np.zeros(shape, dtype=np.float64)
+        self.du = np.zeros(shape, dtype=np.float64)
+        self.ru = np.zeros(shape, dtype=np.float64)
+        self.qu = np.zeros(shape, dtype=np.float64)
+
+
+class TridiagonalBatchWorkspace:
+    """Batch workspace — shape (batch_size, nlev+1) per array."""
+    def __init__(self, nlev: int, batch_size: int) -> None:
+        shape = (batch_size, nlev + 1)
+        self.au = np.zeros(shape, dtype=np.float64)
+        self.bu = np.zeros(shape, dtype=np.float64)
+        self.cu = np.zeros(shape, dtype=np.float64)
+        self.du = np.zeros(shape, dtype=np.float64)
+        self.ru = np.zeros(shape, dtype=np.float64)
+        self.qu = np.zeros(shape, dtype=np.float64)
+```
 
 ### Implicit solver pattern (Crank-Nicolson)
 ```python
-# Fortran:                          # Taichi:
-# a(k) = -...                       a_x[k] = -...
-# c(k) = -...                       c_x[k] = -...
-# b(k) = 1 - a(k) - c(k) + ...     b_x[k] = 1 - a_x[k] - c_x[k] + ...
-# r(k) = ...                        r_x[k] = ...
-# CALL Thomas(a,b,c,r,x,nlev)       solve_tridiagonal(a_x,b_x,c_x,r_x,x_field,nlev)
+# Fortran:                          # Numba (single column):
+# a(k) = -...                       au[k] = -...
+# c(k) = -...                       cu[k] = -...
+# b(k) = 1 - a(k) - c(k) + ...     bu[k] = 1 - au[k] - cu[k] + ...
+# r(k) = ...                        du[k] = ...
+# CALL Thomas(a,b,c,r,x,nlev)       tridiagonal(au,bu,cu,du,ru,qu,y,1,nlev)
 ```
 
 ### Math function mapping
-| Fortran | Taichi |
-|---------|--------|
-| `SQRT(x)` | `ti.sqrt(x)` |
-| `ABS(x)` | `ti.abs(x)` |
-| `MAX(a,b)` | `ti.max(a,b)` |
-| `MIN(a,b)` | `ti.min(a,b)` |
-| `EXP(x)` | `ti.exp(x)` |
-| `LOG(x)` | `ti.log(x)` |
-| `TANH(x)` | `ti.tanh(x)` |
-| `SIGN(a,b)` | `ti.math.sign(b) * ti.abs(a)` |
+| Fortran | Python / Numba |
+|---------|----------------|
+| `SQRT(x)` | `math.sqrt(x)` |
+| `ABS(x)` | `abs(x)` |
+| `MAX(a,b)` | `max(a,b)` |
+| `MIN(a,b)` | `min(a,b)` |
+| `EXP(x)` | `math.exp(x)` |
+| `LOG(x)` | `math.log(x)` |
+| `TANH(x)` | `math.tanh(x)` |
+| `SIGN(a,b)` | `math.copysign(abs(a), b)` |
 
-### Multi-column (GPU) parallelism
-For any `@ti.kernel` that advances a prognostic variable, add a column index `col`
-as the outermost parallel loop axis. The vertical loop over `k` is sequential
-(Thomas algorithm). Example:
+Inside `@numba.njit` functions, import `math` at module level and use its
+scalar functions. Avoid calling `np.*` scalar functions inside `@njit` — they
+add overhead that Numba cannot eliminate. Use `math.*` for scalars, array
+operations only on pre-allocated arrays.
 
+### Two-level parallelism pattern
+
+#### Level 1 — Single-column kernel (no parallelism, used by `driver.py`)
 ```python
-@ti.kernel
-def step_uequation(n_cols: ti.i32, nlev: ti.i32, dt: ti.f64):
-    for col in range(n_cols):           # parallel across GPU threads
-        for k in range(1, nlev):        # serial — Thomas algorithm
-            ...
+@numba.njit(cache=True)
+def step_uequation(
+    nlev: int,
+    dt: float,
+    u: np.ndarray,      # shape (nlev+1,), float64, C-contiguous
+    nu_u: np.ndarray,   # shape (nlev+1,), float64, C-contiguous
+    # ... other 1-D arrays
+) -> None:
+    for k in range(1, nlev):    # serial — Thomas algorithm
+        ...
 ```
+
+#### Level 2 — Batch kernel (Numba prange, called by Dask tasks)
+```python
+@numba.njit(parallel=True, cache=True)
+def step_uequation_batch(
+    batch_size: int,
+    nlev: int,
+    dt: float,
+    u: np.ndarray,      # shape (batch_size, nlev+1), float64, C-contiguous
+    nu_u: np.ndarray,   # shape (batch_size, nlev+1), float64, C-contiguous
+    # ... other 2-D arrays shaped (batch_size, nlev+1)
+) -> None:
+    for b in numba.prange(batch_size):  # parallel across CPU threads
+        step_uequation(nlev, dt, u[b], nu_u[b], ...)  # serial vertical physics
+```
+
+#### Level 3 — Dask dispatch (in `driver_multi.py`)
+```python
+def run_batch(col_indices, config, batch_size):
+    """Dask task: run batch_size columns and return their results."""
+    # allocate batch arrays, fill with per-column forcing, call batch kernels
+    ...
+
+futures = [
+    dask.delayed(run_batch)(cols, config, batch_size)
+    for cols in chunked(all_columns, batch_size)
+]
+results = dask.compute(*futures)
+```
+
+The batch kernel is the only place `numba.prange` appears. The single-column
+kernel is a clean, testable unit that also serves as the building block inside
+each `prange` iteration.
 
 ---
 
-## Execution Lessons from Option A
-Apply these rules to every remaining phase:
+## Execution Lessons
+Apply these rules to every migration step:
 
-- Keep one production physics path per hot module: Taichi workspace + `@ti.kernel` only. Do not keep NumPy shadow solvers for tridiagonal, diffusion, or time-stepping code. Single-column runs must use the same kernel with `n_cols=1`.
-- Keep a Python reference function only when it is thin, stateless, and solver-free. If it duplicates solver logic, remove it after migration.
-- Test kernels directly. Use shared Taichi fixtures/helpers, compare against analytic or reference results, and always add multi-column parity with `n_cols=1` plus at least one `n_cols>1` identical-column case.
-- Fix interface and sign-convention mismatches before migration. Preserve Fortran argument lists and saved state exactly; concrete examples already encountered are `temperature(..., wflux, hflux, ...)`, the atmospheric `hflux` sign convention, and friction's first-call `u_taub`/`u_taubo` behavior.
-- For strict typing on the current stack (`Taichi 1.7.4`, `Python 3.13`, `mypy` strict), do not annotate checked kernels directly with raw `ti.template()` or `ti.types.ndarray()`. Use the local typing bridge in `pygotm.taichi_typing` (`TemplateArg`, `NdarrayArg`, `ti_kernel`) for all source and test kernels.
-- In modules that declare `@ti.kernel` or `@ti.func`, do not use `from __future__ import annotations`; Taichi needs real annotations at import time. Also do not write `-> None` on `@ti.kernel`; void kernels must omit the return annotation on this stack.
-- Keep Taichi runtime ownership suite-safe in tests. A test-local fixture may call `ti.reset()` only if it also restores `ti.init()` before later files run; otherwise full-suite `pytest` will fail even when targeted test files pass.
-- Protect stack-specific Taichi constraints with regression tests. Keep explicit checks that forbid postponed annotations in Taichi callable modules and forbid `-> None` on `@ti.kernel`.
-- Run validation pytest passes with `-W error::RuntimeWarning` so upstream binary-compatibility issues, numerical warnings, and import-time runtime warnings fail loudly instead of being buried in otherwise green runs. Investigate and fix the warning source or add a narrow, justified filter only when the upstream condition is understood.
-- End each migration step with a validation gate: targeted tests for touched files, full `uv run pytest -W error::RuntimeWarning`, relevant `uv run mypy` passes (`src/` and touched `tests/`), and explicit checks that deleted APIs and dual-path residue are gone.
+- Keep one production physics path per hot module: pre-allocated NumPy workspace
+  arrays + `@numba.njit`. Do not keep Python fallback solvers for tridiagonal,
+  diffusion, or time-stepping code.
+- Each hot physics module exposes exactly two kernel entry points: a single-column
+  kernel (`@numba.njit(cache=True)`, arrays `(nlev+1,)`) and a batch kernel
+  (`@numba.njit(parallel=True, cache=True)`, arrays `(batch_size, nlev+1)`). The
+  batch kernel calls the single-column kernel inside `numba.prange`. Do not
+  proliferate additional entry-point variants.
+- Keep a Python reference function only when it is thin, stateless, and
+  solver-free. If it duplicates solver logic, remove it after migration.
+- Test single-column kernels directly with `(nlev+1,)` arrays. Test batch kernels
+  with `batch_size=2` identical columns and assert both columns equal the
+  single-column result.
+- Fix interface and sign-convention mismatches before migration. Preserve Fortran
+  argument lists and saved state exactly; known issues include `temperature(...,
+  wflux, hflux, ...)`, the atmospheric `hflux` sign convention, and friction's
+  first-call `u_taub`/`u_taubo` behavior.
+- Never use `from __future__ import annotations` in files that contain
+  `@numba.njit` functions; Numba needs real annotations at function-call time for
+  its type-inference. (This was also a Taichi constraint.)
+- No global mutable state inside `@numba.njit`. All state (fields, counters,
+  flags) must flow in as arguments and out as modified arrays or return values.
+- Protect Numba-specific constraints with regression tests. Keep explicit checks
+  that forbid postponed annotations in Numba-callable modules.
+- Run validation pytest passes with `-W error::RuntimeWarning` so numerical
+  warnings fail loudly instead of being buried in otherwise green runs.
+- End each migration step with a validation gate: targeted tests for touched
+  files, full `uv run pytest -W error::RuntimeWarning`, `uv run mypy src/` and
+  touched `tests/`, and explicit checks that deleted Taichi APIs are gone.
+- Delete `src/pygotm/fields.py` (Taichi field collections) and
+  `src/pygotm/taichi_typing.py` once no module imports them. Replace their roles
+  with plain NumPy workspace classes (no base class needed).
+- Replace Taichi kernel warmup in `validation/warmup.py` with a Numba AOT
+  trigger: call each single-column kernel once with `nlev=5` arrays, and each
+  batch kernel once with `batch_size=2, nlev=5` arrays, before the timed
+  validation sweep.
 
 ---
 
@@ -340,26 +502,31 @@ Translate files in dependency order (utilities first, physics last, drivers last
 Each phase must be fully tested and validated before the next phase begins.
 
 ### Phase 0 — Infrastructure (no Fortran translation)
-0.1 Create `src/pygotm/` directory tree mirroring `gotm-model/code/src/`  
-0.2 Add `__init__.py` files to each package  
-0.3 Create `src/pygotm/fields.py` — base class for Taichi field collections  
-0.4 Create `src/pygotm/constants.py` — physical constants with source citations  
-0.5 Create `tests/` directory tree mirroring `src/pygotm/`  
-0.6 Verify `uv run pytest` passes (empty test suite)
+0.1 Replace `taichi` dependency with `numba>=0.59` in `pyproject.toml`  
+0.2 Delete `src/pygotm/fields.py` and `src/pygotm/taichi_typing.py`  
+0.3 Create `src/pygotm/arrays.py` — `make_column_array(nlev)` factory returning
+    a C-contiguous `np.float64` array of shape `(nlev+1,)` for single-column use,
+    and `make_batch_array(nlev, batch_size)` returning shape `(batch_size, nlev+1)`
+    for batch kernel use  
+0.4 Update `src/pygotm/constants.py` — remove `ti.*` references, keep physical
+    constants as plain Python `float` with source citations  
+0.5 Replace Taichi kernel warmup in `validation/warmup.py` with a Numba AOT
+    trigger (run each kernel once with minimal test inputs to force JIT compile)  
+0.6 Verify `uv run pytest` passes (empty/smoke test suite)
 
 ### Phase 1 — Utilities (`util/`)
-Translate in order:
+Migrate in order:
 
-1.1 `tridiagonal.py` — Thomas algorithm (`@ti.func`, single- and multi-column)  
+1.1 `tridiagonal.py` — Thomas algorithm (`@numba.njit`, single- and multi-column)  
 1.2 `diff_center.py` — diffusion on cell centers  
 1.3 `diff_face.py` — diffusion on cell faces  
 1.4 `adv_center.py` — centered advection scheme  
-1.5 `density.py` — UNESCO seawater EOS (critical: validate constants against UNESCO 1983)  
+1.5 `density.py` — UNESCO seawater EOS (validate constants against UNESCO 1983)  
 1.6 `convert_fluxes.py` — unit conversions  
 1.7 `gridinterpol.py` — vertical grid interpolation  
 1.8 `lagrange.py` — Lagrange interpolation  
 1.9 `ode_solvers.py` + `ode_solvers_template.py` — ODE integrators  
-1.10 `time.py` — time utilities (Python datetime wrappers; no Taichi needed)  
+1.10 `time.py` — time utilities (Python datetime wrappers; no Numba needed)  
 1.11 `util.py` — miscellaneous helpers  
 1.12 `compilation.py`, `gotm_version.py` — metadata stubs  
 
@@ -367,7 +534,7 @@ Translate in order:
 boundary values (k=0, k=nlev), and known analytic solutions where available.
 
 ### Phase 2 — Meanflow (`meanflow/`)
-2.1 `meanflow.py` — state fields and dispatcher  
+2.1 `meanflow.py` — state arrays and dispatcher  
 2.2 `updategrid.py` — z-level update  
 2.3 `shear.py` — shear production M²  
 2.4 `stratification.py` — N², buoyancy flux  
@@ -385,10 +552,10 @@ boundary values (k=0, k=nlev), and known analytic solutions where available.
 (e.g., Couette flow for U-momentum, linear stratification for N²).
 
 ### Phase 3 — Turbulence (`turbulence/`)
-3.1 `turbulence.py` — state fields and dispatcher  
+3.1 `turbulence.py` — state arrays and dispatcher  
 3.2 `production.py` — shear and buoyancy production  
 3.3 `tkeeq.py` — TKE equation (k-epsilon base)  
-3.4 `dissipationeq.F90` → `dissipationeq.py` — epsilon equation  
+3.4 `dissipationeq.py` — epsilon equation  
 3.5 `kbeq.py` — TKE (alternative form)  
 3.6 `lengthscaleeq.py` — length-scale equation  
 3.7 `genericeq.py` — GLS generic equation  
@@ -409,7 +576,7 @@ boundary values (k=0, k=nlev), and known analytic solutions where available.
 tabulated values from the source paper.
 
 ### Phase 4 — Air-Sea (`airsea/`)
-4.1 `airsea_variables.py` — state fields  
+4.1 `airsea_variables.py` — state arrays  
 4.2 `humidity.py` — specific/relative humidity conversions  
 4.3 `solar_zenith_angle.py` — solar geometry  
 4.4 `albedo_water.py` — surface albedo  
@@ -444,10 +611,21 @@ solar irradiance at specific lat/lon/time.
     field to Fortran GOTM output using the range-aware combined tolerance
     (`max(1e-7×ref_range, 1e-12) + 1e-6×|b|`), produce `validation/report.html`  
 
-### Phase 8 — Multi-Column Driver
-8.1 `src/pygotm/driver_multi.py` — GotmDriverMulti (n_cols on GPU)  
-8.2 Extend all Phase 1–4 kernels with column-parallel outer loop  
-8.3 Benchmark: 10,000 columns × 1 year on GPU, target < 60 s  
+### Phase 8 — Multi-Column Driver (Dask + Numba batch)
+8.1 Add batch entry points to all Phase 1–4 hot kernels: for each
+    single-column `@numba.njit(cache=True)` time-step function, add a
+    corresponding `@numba.njit(parallel=True, cache=True)` batch variant that
+    loops over `batch_size` with `numba.prange` and delegates to the
+    single-column function  
+8.2 `src/pygotm/driver_multi.py` — `GotmDriverMulti`:
+    - accepts N column configs and a configurable `batch_size` (default 16)
+    - partitions columns into batches of `batch_size`
+    - submits each batch as a `dask.delayed` task calling the batch kernels
+    - collects and assembles results from all completed tasks  
+8.3 Verify Dask portability: run on `LocalCluster` (threads and processes),
+    confirm identical results to single-column `driver.py`  
+8.4 Benchmark: 10,000 columns × 1 year on an 8-core workstation, confirm
+    near-linear scaling relative to single-column wall-clock time  
 
 ### Phase 9 — API and UI (post-physics)
 9.1 `api/` — FastAPI endpoints  
@@ -472,11 +650,12 @@ Every translated Python file must have a corresponding test file. Tests must:
 4. **Analytic verification** — where analytic solutions exist, assert rtol ≤ 1e-10
 5. **Boundary conditions** — test k=0 and k=nlev explicitly
 6. **Edge cases** — zero gradient, neutral stratification, maximum/minimum values
-7. **Multi-column parity** — single-column and multi-column (n_cols=1) give identical results
+7. **Batch parity** — running two identical columns through the batch kernel gives bit-identical results to the single-column kernel
 8. **NaN / Inf guard** — assert no NaN or Inf in outputs for any valid input set
 
 Test files must NOT depend on integration state; all inputs are constructed
-explicitly in each test function.
+explicitly in each test function. No `ti.init()` fixture is needed — NumPy
+arrays are available immediately.
 
 ### Integration tests (`tests/integration/`)
 After Phase 7, run each of the 22 GOTM reference cases:
@@ -547,9 +726,10 @@ FAIL the validation if any variable does not satisfy the pass criterion.
 ---
 
 ## Architecture Principles
-- `src/pygotm/` — pure Taichi physics, mirrors `gotm-model/code/src/` folder structure
-- `src/pygotm/driver.py` — orchestrates time loop, calls kernels, writes output (single column)
-- `src/pygotm/driver_multi.py` — multi-column GPU driver
+- `src/pygotm/` — pure Numba physics, mirrors `gotm-model/code/src/` folder structure
+- `src/pygotm/arrays.py` — NumPy array factory helpers (`make_column_array`)
+- `src/pygotm/driver.py` — single-column time loop; calls single-column `@numba.njit` kernels with `(nlev+1,)` arrays; target: ≈ Fortran GOTM wall-clock time
+- `src/pygotm/driver_multi.py` — partitions N columns into batches, submits each batch as a Dask `delayed` task calling `@numba.njit(parallel=True)` batch kernels; scales from laptop to cluster unchanged
 - `src/pygotm/config.py` — Pydantic models + YAML deserialization
 - `api/` — FastAPI, depends on pygotm package only
 - `ui/` — NiceGUI, depends on api/ via HTTP (not directly on pygotm)
@@ -558,11 +738,11 @@ FAIL the validation if any variable does not satisfy the pass criterion.
 ---
 
 ## Coding Standards
-- Python 3.12+, Pydantic v2, FastAPI, NiceGUI, Taichi ≥ 1.7.4
+- Python 3.12+, Pydantic v2, FastAPI, NiceGUI, Numba ≥ 0.59, NumPy ≥ 1.26
 - `uv` for all package management (never pip)
 - `uv run ruff format .` + `uv run black .` before commits
 - `uv run mypy src/` must pass (strict mode)
-- `uv run mypy tests/` must pass when changing test helpers, Taichi test kernels, or typing infrastructure
+- `uv run mypy tests/` must pass when changing test helpers or typing infrastructure
 - `uv run pytest` must pass before any commit
 - Line length: 88 chars maximum
 - Type hints on all public functions and methods

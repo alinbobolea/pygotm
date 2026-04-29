@@ -180,15 +180,17 @@ r"""
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import math
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+import numba
+import numpy as np
+
+from pygotm.arrays import ColumnWorkspace, make_column_array
 from pygotm.turbulence.turbulence import Dirichlet as _DIRICHLET
 from pygotm.turbulence.turbulence import Neumann as _NEUMANN
 from pygotm.turbulence.turbulence import injection as _INJECTION
 from pygotm.turbulence.turbulence import logarithmic as _LOGARITHMIC
-from pygotm.util.diff_face import diff_face_column
+from pygotm.util.diff_face import diff_face
 
 __all__ = [
     "GenericEquationWorkspace",
@@ -198,337 +200,403 @@ __all__ = [
 _CNPAR: float = 1.0
 
 
-class GenericEquationWorkspace(TaichiFieldCollection):
-    """Taichi fields for the translated generic-psi equation."""
+class GenericEquationWorkspace(ColumnWorkspace):
+    """Workspace arrays for the translated generic-psi equation."""
 
-    tke: ti.Field
-    tkeo: ti.Field
-    eps: ti.Field
-    L: ti.Field
-    h: ti.Field
-    NN: ti.Field
-    SS: ti.Field
-    P: ti.Field
-    B: ti.Field
-    Px: ti.Field
-    PSTK: ti.Field
-    num: ti.Field
-    u_taus: ti.Field
-    u_taub: ti.Field
-    z0s: ti.Field
-    z0b: ti.Field
-    psi: ti.Field
-    avh: ti.Field
-    l_sour: ti.Field
-    q_sour: ti.Field
-    au: ti.Field
-    bu: ti.Field
-    cu: ti.Field
-    du: ti.Field
-    ru: ti.Field
-    qu: ti.Field
+    tke: np.ndarray
+    tkeo: np.ndarray
+    eps: np.ndarray
+    L: np.ndarray
+    h: np.ndarray
+    NN: np.ndarray
+    SS: np.ndarray
+    P: np.ndarray
+    B: np.ndarray
+    Px: np.ndarray
+    PSTK: np.ndarray
+    num: np.ndarray
+    u_taus: np.ndarray
+    u_taub: np.ndarray
+    z0s: np.ndarray
+    z0b: np.ndarray
+    psi: np.ndarray
+    avh: np.ndarray
+    l_sour: np.ndarray
+    q_sour: np.ndarray
+    au: np.ndarray
+    bu: np.ndarray
+    cu: np.ndarray
+    du: np.ndarray
+    ru: np.ndarray
+    qu: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "tkeo", "eps", "L", "h", "NN", "SS"))
-        self.allocate_many(("P", "B", "Px", "PSTK", "num"))
-        self.allocate_many(("u_taus", "u_taub", "z0s", "z0b"))
-        self.allocate_many(("psi", "avh", "l_sour", "q_sour"))
-        self.allocate_many(("au", "bu", "cu", "du", "ru", "qu"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.tkeo = make_column_array(nlev, n_cols=n_cols)
+        self.eps = make_column_array(nlev, n_cols=n_cols)
+        self.L = make_column_array(nlev, n_cols=n_cols)
+        self.h = make_column_array(nlev, n_cols=n_cols)
+        self.NN = make_column_array(nlev, n_cols=n_cols)
+        self.SS = make_column_array(nlev, n_cols=n_cols)
+        self.P = make_column_array(nlev, n_cols=n_cols)
+        self.B = make_column_array(nlev, n_cols=n_cols)
+        self.Px = make_column_array(nlev, n_cols=n_cols)
+        self.PSTK = make_column_array(nlev, n_cols=n_cols)
+        self.num = make_column_array(nlev, n_cols=n_cols)
+        self.u_taus = make_column_array(nlev, n_cols=n_cols)
+        self.u_taub = make_column_array(nlev, n_cols=n_cols)
+        self.z0s = make_column_array(nlev, n_cols=n_cols)
+        self.z0b = make_column_array(nlev, n_cols=n_cols)
+        self.psi = make_column_array(nlev, n_cols=n_cols)
+        self.avh = make_column_array(nlev, n_cols=n_cols)
+        self.l_sour = make_column_array(nlev, n_cols=n_cols)
+        self.q_sour = make_column_array(nlev, n_cols=n_cols)
+        self.au = make_column_array(nlev, n_cols=n_cols)
+        self.bu = make_column_array(nlev, n_cols=n_cols)
+        self.cu = make_column_array(nlev, n_cols=n_cols)
+        self.du = make_column_array(nlev, n_cols=n_cols)
+        self.ru = make_column_array(nlev, n_cols=n_cols)
+        self.qu = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti.func
-def _fk_craig(u_tau, eta):  # type: ignore[no-untyped-def]
+@numba.njit(cache=True)
+def _fk_craig(u_tau: float, eta: float) -> float:
     return eta * u_tau**3
 
 
-@ti.func
-def _psi_bc_value(  # type: ignore[no-untyped-def]
-    bc,
-    type_,
-    zi,
-    ki,
-    z0,
-    u_tau,
-    cm0,
-    kappa,
-    sig_k,
-    cmsf,
-    cw,
-    gen_m,
-    gen_n,
-    gen_p,
-    sig_psi,
-    gen_alpha,
-    gen_l,
-):
+@numba.njit(cache=True)
+def _psi_bc_value(
+    bc: int,
+    type_: int,
+    zi: float,
+    ki: float,
+    z0: float,
+    u_tau: float,
+    cm0: float,
+    kappa: float,
+    sig_k: float,
+    cmsf: float,
+    cw: float,
+    gen_m: float,
+    gen_n: float,
+    gen_p: float,
+    sig_psi: float,
+    gen_alpha: float,
+    gen_l: float,
+) -> float:
     value = 0.0
 
     if type_ == _LOGARITHMIC:
         if bc == _DIRICHLET:
             value = (
-                ti.pow(cm0, gen_p)
-                * ti.pow(kappa, gen_n)
-                * ti.pow(ki, gen_m)
-                * ti.pow(zi + z0, gen_n)
+                cm0**gen_p
+                * kappa**gen_n
+                * ki**gen_m
+                * (zi + z0) ** gen_n
             )
         else:
             value = (
                 -gen_n
-                * ti.pow(cm0, gen_p + 1.0)
-                * ti.pow(kappa, gen_n + 1.0)
+                * cm0 ** (gen_p + 1.0)
+                * kappa ** (gen_n + 1.0)
                 / sig_psi
-                * ti.pow(ki, gen_m + 0.5)
-                * ti.pow(zi + z0, gen_n)
+                * ki ** (gen_m + 0.5)
+                * (zi + z0) ** gen_n
             )
 
     if type_ == _INJECTION:
         f_k = _fk_craig(u_tau, cw)
-        capital_k = ti.pow(
-            -sig_k * f_k / (cmsf * gen_alpha * gen_l),
-            2.0 / 3.0,
-        ) / ti.pow(z0, gen_alpha)
+        capital_k = ((-sig_k * f_k / (cmsf * gen_alpha * gen_l)) ** (2.0 / 3.0)) / (
+            z0**gen_alpha
+        )
 
         if bc == _DIRICHLET:
             value = (
-                ti.pow(cm0, gen_p)
-                * ti.pow(capital_k, gen_m)
-                * ti.pow(gen_l, gen_n)
-                * ti.pow(zi + z0, gen_m * gen_alpha + gen_n)
+                cm0**gen_p
+                * capital_k**gen_m
+                * gen_l**gen_n
+                * (zi + z0) ** (gen_m * gen_alpha + gen_n)
             )
         else:
             value = (
                 -(gen_m * gen_alpha + gen_n)
                 * cmsf
-                * ti.pow(cm0, gen_p)
+                * cm0**gen_p
                 / sig_psi
-                * ti.pow(capital_k, gen_m + 0.5)
-                * ti.pow(gen_l, gen_n + 1.0)
-                * ti.pow(zi + z0, (gen_m + 0.5) * gen_alpha + gen_n)
+                * capital_k ** (gen_m + 0.5)
+                * gen_l ** (gen_n + 1.0)
+                * (zi + z0) ** ((gen_m + 0.5) * gen_alpha + gen_n)
             )
 
     return value
 
 
-@ti_kernel
-def step_genericeq(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    dt: ti.f64,
-    cpsi1: ti.f64,
-    cpsi2: ti.f64,
-    cpsi3plus: ti.f64,
-    cpsi3minus: ti.f64,
-    cpsix: ti.f64,
-    cpsi4: ti.f64,
-    sig_psi: ti.f64,
-    cm0: ti.f64,
-    kappa: ti.f64,
-    cde: ti.f64,
-    galp: ti.f64,
-    length_lim: ti.i32,
-    eps_min: ti.f64,
-    psi_ubc: ti.i32,
-    psi_lbc: ti.i32,
-    ubc_type: ti.i32,
-    lbc_type: ti.i32,
-    sig_k: ti.f64,
-    cmsf: ti.f64,
-    cw: ti.f64,
-    gen_m: ti.f64,
-    gen_n: ti.f64,
-    gen_p: ti.f64,
-    gen_alpha: ti.f64,
-    gen_l: ti.f64,
-    tke: TemplateArg,
-    tkeo: TemplateArg,
-    eps: TemplateArg,
-    L: TemplateArg,
-    h: TemplateArg,
-    NN: TemplateArg,
-    SS: TemplateArg,
-    P: TemplateArg,
-    B: TemplateArg,
-    Px: TemplateArg,
-    PSTK: TemplateArg,
-    num: TemplateArg,
-    u_taus: TemplateArg,
-    u_taub: TemplateArg,
-    z0s: TemplateArg,
-    z0b: TemplateArg,
-    psi: TemplateArg,
-    avh: TemplateArg,
-    l_sour: TemplateArg,
-    q_sour: TemplateArg,
-    au: TemplateArg,
-    bu: TemplateArg,
-    cu: TemplateArg,
-    du: TemplateArg,
-    ru: TemplateArg,
-    qu: TemplateArg,
-):
-    r"""Advance the dynamic generic-psi equation for one or more columns."""
-
+@numba.njit(cache=True)
+def _step_genericeq(
+    nlev: int,
+    dt: float,
+    cpsi1: float,
+    cpsi2: float,
+    cpsi3plus: float,
+    cpsi3minus: float,
+    cpsix: float,
+    cpsi4: float,
+    sig_psi: float,
+    cm0: float,
+    kappa: float,
+    cde: float,
+    galp: float,
+    length_lim: int,
+    eps_min: float,
+    psi_ubc: int,
+    psi_lbc: int,
+    ubc_type: int,
+    lbc_type: int,
+    sig_k: float,
+    cmsf: float,
+    cw: float,
+    gen_m: float,
+    gen_n: float,
+    gen_p: float,
+    gen_alpha: float,
+    gen_l: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    h: np.ndarray,
+    NN: np.ndarray,
+    SS: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    PSTK: np.ndarray,
+    num: np.ndarray,
+    u_taus: float,
+    u_taub: float,
+    z0s: float,
+    z0b: float,
+    psi: np.ndarray,
+    avh: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
+    r"""Advance the dynamic generic-psi equation for a single column."""
     exp1 = 3.0 + gen_p / gen_n
     exp2 = 1.5 + gen_m / gen_n
     exp3 = -1.0 / gen_n
 
-    for col in range(n_cols):
+    for i in range(nlev + 1):
+        psi[i] = cm0**gen_p * tkeo[i] ** gen_m * L[i] ** gen_n
+        avh[i] = 0.0
+        l_sour[i] = 0.0
+        q_sour[i] = 0.0
+
+    for i in range(1, nlev):
+        avh[i] = num[i] / sig_psi
+
+        cpsi3 = cpsi3minus
+        if B[i] > 0.0:
+            cpsi3 = cpsi3plus
+
+        psi_over_tke = psi[i] / tkeo[i]
+        prod = psi_over_tke * (cpsi1 * P[i] + cpsix * Px[i] + cpsi4 * PSTK[i])
+        buoyan = cpsi3 * psi_over_tke * B[i]
+        diss = cpsi2 * psi_over_tke * eps[i]
+
+        if prod + buoyan > 0.0:
+            q_sour[i] = prod + buoyan
+            l_sour[i] = -diss / psi[i]
+        else:
+            q_sour[i] = prod
+            l_sour[i] = -(diss - buoyan) / psi[i]
+
+    ki = tke[nlev - 1]
+    pos_bc = h[nlev]
+    if psi_ubc == _NEUMANN:
+        pos_bc = 0.5 * h[nlev]
+    diff_psi_up = _psi_bc_value(
+        psi_ubc, ubc_type, pos_bc, ki, z0s, u_taus,
+        cm0, kappa, sig_k, cmsf, cw,
+        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+    )
+
+    ki = tke[1]
+    pos_bc = h[1]
+    if psi_lbc == _NEUMANN:
+        pos_bc = 0.5 * h[1]
+    diff_psi_down = _psi_bc_value(
+        psi_lbc, lbc_type, pos_bc, ki, z0b, u_taub,
+        cm0, kappa, sig_k, cmsf, cw,
+        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+    )
+
+    diff_face(
+        nlev,
+        dt,
+        _CNPAR,
+        h,
+        psi_ubc,
+        psi_lbc,
+        diff_psi_up,
+        diff_psi_down,
+        avh,
+        l_sour,
+        q_sour,
+        psi,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+    )
+
+    psi[nlev] = _psi_bc_value(
+        _DIRICHLET, ubc_type, z0s, tke[nlev], z0s, u_taus,
+        cm0, kappa, sig_k, cmsf, cw,
+        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+    )
+    psi[0] = _psi_bc_value(
+        _DIRICHLET, lbc_type, z0b, tke[0], z0b, u_taub,
+        cm0, kappa, sig_k, cmsf, cw,
+        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+    )
+
+    for i in range(nlev + 1):
+        eps[i] = cm0**exp1 * tke[i] ** exp2 * psi[i] ** exp3
+        if eps[i] < eps_min:
+            eps[i] = eps_min
+
+    if length_lim != 0:
         for i in range(nlev + 1):
-            psi[col, i] = (
-                ti.pow(cm0, gen_p)
-                * ti.pow(tkeo[col, i], gen_m)
-                * ti.pow(L[col, i], gen_n)
-            )
-            avh[col, i] = 0.0
-            l_sour[col, i] = 0.0
-            q_sour[col, i] = 0.0
+            nn_pos = 0.5 * (NN[i] + abs(NN[i]))
+            epslim = cde / math.sqrt(2.0) / galp * tke[i] * math.sqrt(nn_pos)
+            if eps[i] < epslim:
+                eps[i] = epslim
 
-        for i in range(1, nlev):
-            avh[col, i] = num[col, i] / sig_psi
+    for i in range(nlev + 1):
+        L[i] = cde * math.sqrt(tke[i] ** 3) / eps[i]
 
-            cpsi3 = cpsi3minus
-            if B[col, i] > 0.0:
-                cpsi3 = cpsi3plus
 
-            psi_over_tke = psi[col, i] / tkeo[col, i]
-            prod = psi_over_tke * (
-                cpsi1 * P[col, i] + cpsix * Px[col, i] + cpsi4 * PSTK[col, i]
-            )
-            buoyan = cpsi3 * psi_over_tke * B[col, i]
-            diss = cpsi2 * psi_over_tke * eps[col, i]
-
-            if prod + buoyan > 0.0:
-                q_sour[col, i] = prod + buoyan
-                l_sour[col, i] = -diss / psi[col, i]
-            else:
-                q_sour[col, i] = prod
-                l_sour[col, i] = -(diss - buoyan) / psi[col, i]
-
-        ki = tke[col, nlev - 1]
-        pos_bc = h[col, nlev]
-        if psi_ubc == _NEUMANN:
-            pos_bc = 0.5 * h[col, nlev]
-        diff_psi_up = _psi_bc_value(
-            psi_ubc,
-            ubc_type,
-            pos_bc,
-            ki,
-            z0s[col, 0],
-            u_taus[col, 0],
-            cm0,
-            kappa,
-            sig_k,
-            cmsf,
-            cw,
-            gen_m,
-            gen_n,
-            gen_p,
-            sig_psi,
-            gen_alpha,
-            gen_l,
-        )
-
-        ki = tke[col, 1]
-        pos_bc = h[col, 1]
-        if psi_lbc == _NEUMANN:
-            pos_bc = 0.5 * h[col, 1]
-        diff_psi_down = _psi_bc_value(
-            psi_lbc,
-            lbc_type,
-            pos_bc,
-            ki,
-            z0b[col, 0],
-            u_taub[col, 0],
-            cm0,
-            kappa,
-            sig_k,
-            cmsf,
-            cw,
-            gen_m,
-            gen_n,
-            gen_p,
-            sig_psi,
-            gen_alpha,
-            gen_l,
-        )
-
-        diff_face_column(
-            col,
+@numba.njit(parallel=True, cache=True)
+def step_genericeq(
+    batch_size: int,
+    nlev: int,
+    dt: float,
+    cpsi1: float,
+    cpsi2: float,
+    cpsi3plus: float,
+    cpsi3minus: float,
+    cpsix: float,
+    cpsi4: float,
+    sig_psi: float,
+    cm0: float,
+    kappa: float,
+    cde: float,
+    galp: float,
+    length_lim: int,
+    eps_min: float,
+    psi_ubc: int,
+    psi_lbc: int,
+    ubc_type: int,
+    lbc_type: int,
+    sig_k: float,
+    cmsf: float,
+    cw: float,
+    gen_m: float,
+    gen_n: float,
+    gen_p: float,
+    gen_alpha: float,
+    gen_l: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    h: np.ndarray,
+    NN: np.ndarray,
+    SS: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    PSTK: np.ndarray,
+    num: np.ndarray,
+    u_taus: np.ndarray,
+    u_taub: np.ndarray,
+    z0s: np.ndarray,
+    z0b: np.ndarray,
+    psi: np.ndarray,
+    avh: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
+    r"""Advance the dynamic generic-psi equation for one or more columns."""
+    for b in numba.prange(batch_size):
+        _step_genericeq(
             nlev,
             dt,
-            _CNPAR,
-            h,
+            cpsi1,
+            cpsi2,
+            cpsi3plus,
+            cpsi3minus,
+            cpsix,
+            cpsi4,
+            sig_psi,
+            cm0,
+            kappa,
+            cde,
+            galp,
+            length_lim,
+            eps_min,
             psi_ubc,
             psi_lbc,
-            diff_psi_up,
-            diff_psi_down,
-            avh,
-            l_sour,
-            q_sour,
-            psi,
-            au,
-            bu,
-            cu,
-            du,
-            ru,
-            qu,
-        )
-
-        psi[col, nlev] = _psi_bc_value(
-            _DIRICHLET,
             ubc_type,
-            z0s[col, 0],
-            tke[col, nlev],
-            z0s[col, 0],
-            u_taus[col, 0],
-            cm0,
-            kappa,
-            sig_k,
-            cmsf,
-            cw,
-            gen_m,
-            gen_n,
-            gen_p,
-            sig_psi,
-            gen_alpha,
-            gen_l,
-        )
-        psi[col, 0] = _psi_bc_value(
-            _DIRICHLET,
             lbc_type,
-            z0b[col, 0],
-            tke[col, 0],
-            z0b[col, 0],
-            u_taub[col, 0],
-            cm0,
-            kappa,
             sig_k,
             cmsf,
             cw,
             gen_m,
             gen_n,
             gen_p,
-            sig_psi,
             gen_alpha,
             gen_l,
+            tke[b],
+            tkeo[b],
+            eps[b],
+            L[b],
+            h[b],
+            NN[b],
+            SS[b],
+            P[b],
+            B[b],
+            Px[b],
+            PSTK[b],
+            num[b],
+            u_taus[b, 0],
+            u_taub[b, 0],
+            z0s[b, 0],
+            z0b[b, 0],
+            psi[b],
+            avh[b],
+            l_sour[b],
+            q_sour[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
         )
-
-        for i in range(nlev + 1):
-            eps[col, i] = (
-                ti.pow(cm0, exp1)
-                * ti.pow(tke[col, i], exp2)
-                * ti.pow(psi[col, i], exp3)
-            )
-            if eps[col, i] < eps_min:
-                eps[col, i] = eps_min
-
-        if length_lim != 0:
-            for i in range(nlev + 1):
-                nn_pos = 0.5 * (NN[col, i] + ti.abs(NN[col, i]))
-                epslim = cde / ti.sqrt(2.0) / galp * tke[col, i] * ti.sqrt(nn_pos)
-                if eps[col, i] < epslim:
-                    eps[col, i] = epslim
-
-        for i in range(nlev + 1):
-            L[col, i] = cde * ti.sqrt(tke[col, i] ** 3) / eps[col, i]

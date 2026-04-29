@@ -1,3 +1,3 @@
 """Optional physics extensions."""
 
-__all__: list[str] = []
+__all__ = ["seagrass", "sediment"]

@@ -1,8 +1,5 @@
 import numpy as np
-import pytest
-import taichi as ti
 
-from pygotm.taichi_typing import TemplateArg, ti_kernel
 from pygotm.util.adv_center import (
     CENTRAL,
     CONSERVATIVE,
@@ -18,129 +15,34 @@ from pygotm.util.adv_center import (
     UPSTREAM,
     VALUE,
     ZERO_DIVERGENCE,
+    AdvectionBatchWorkspace,
+    AdvectionWorkspace,
     adv_center,
-    adv_center_column,
+    adv_center_batch,
+    clean_adv_center,
     init_adv_center,
 )
 
 
-@ti_kernel
-def adv_center_kernel(  # type: ignore[no-untyped-def]
-    nlev: ti.i32,
-    dt: ti.f64,
-    h: TemplateArg,
-    ho: TemplateArg,
-    ww: TemplateArg,
-    bc_up: ti.i32,
-    bc_down: ti.i32,
-    y_up: ti.f64,
-    y_down: ti.f64,
-    method: ti.i32,
-    mode: ti.i32,
-    y: TemplateArg,
-    cu: TemplateArg,
-):
-    adv_center(
-        nlev,
-        dt,
-        h,
-        ho,
-        ww,
-        bc_up,
-        bc_down,
-        y_up,
-        y_down,
-        method,
-        mode,
-        y,
-        cu,
-    )
-
-
-@ti_kernel
-def adv_center_multi_kernel(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    dt: ti.f64,
-    h: TemplateArg,
-    ho: TemplateArg,
-    ww: TemplateArg,
-    bc_up: ti.i32,
-    bc_down: ti.i32,
-    y_up: ti.f64,
-    y_down: ti.f64,
-    method: ti.i32,
-    mode: ti.i32,
-    y: TemplateArg,
-    cu: TemplateArg,
-):
-    for col in range(n_cols):
-        adv_center_column(
-            col,
-            nlev,
-            dt,
-            h,
-            ho,
-            ww,
-            bc_up,
-            bc_down,
-            y_up,
-            y_down,
-            method,
-            mode,
-            y,
-            cu,
-        )
-
-
-def _field(values: np.ndarray) -> ti.Field:
-    field = ti.field(dtype=ti.f64, shape=values.shape)
-    for index in np.ndindex(values.shape):
-        field[index] = values[index]
-    return field
-
-
-def _adv_reconstruct_reference(
-    scheme: int,
-    cfl: float,
-    fuu: float,
-    fu: float,
-    fd: float,
-) -> float:
-    deltaf = fd - fu
-    deltafu = fu - fuu
-
-    if deltaf * deltafu > 0.0:
-        ratio = deltafu / deltaf
-        if scheme == SUPERBEE:
-            limiter = max(min(2.0 * ratio, 1.0), min(ratio, 2.0))
-        elif scheme == P2_PDM:
-            x = (1.0 / 6.0) * (1.0 - 2.0 * cfl)
-            limiter = (0.5 + x) + (0.5 - x) * ratio
-            limiter = min(2.0 * ratio / (cfl + 1.0e-10), limiter, 2.0 / (1.0 - cfl))
-        elif scheme == SPLMAX13:
-            limiter = min(
-                2.0 * ratio,
-                (1.0 / 3.0) * max(1.0 + 2.0 * ratio, 2.0 + ratio),
-                2.0,
-            )
-        elif scheme == MUSCL:
-            limiter = min(2.0 * ratio, 0.5 * (1.0 + ratio), 2.0)
-        elif scheme == P2:
-            x = (1.0 / 6.0) * (1.0 - 2.0 * cfl)
-            limiter = (0.5 + x) + (0.5 - x) * ratio
-        elif scheme == CENTRAL:
-            limiter = 1.0 / (1.0 - cfl)
-        else:
-            limiter = 0.0
-        return fu + 0.5 * limiter * (1.0 - cfl) * deltaf
-
-    if scheme == P2:
-        x = (1.0 / 6.0) * (1.0 - 2.0 * cfl)
-        return fu + 0.5 * (1.0 - cfl) * ((0.5 + x) * deltaf + (0.5 - x) * deltafu)
-    if scheme == CENTRAL:
-        return 0.5 * (fu + fd)
-    return fu
+def _call_adv_center(
+    nlev: int,
+    dt: float,
+    h: np.ndarray,
+    ho: np.ndarray,
+    ww: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    method: int,
+    mode: int,
+    y: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Call adv_center; return (y_out, cu_out)."""
+    ws = AdvectionWorkspace(nlev)
+    y_out = y.copy()
+    adv_center(nlev, dt, h, ho, ww, bc_up, bc_down, y_up, y_down, method, mode, y_out, ws.cu)
+    return y_out, ws.cu.copy()
 
 
 def _adv_center_reference(
@@ -177,15 +79,7 @@ def _adv_center_reference(
                 y_upstream = updated[k + 2] if k < nlev - 1 else updated[k + 1]
                 y_central = updated[k + 1]
                 y_downstream = updated[k]
-
-            reconstructed = _adv_reconstruct_reference(
-                method,
-                courant,
-                y_upstream,
-                y_central,
-                y_downstream,
-            )
-            cu[k] = ww[k] * reconstructed
+            cu[k] = ww[k] * _adv_reconstruct_ref(method, courant, y_upstream, y_central, y_downstream)
 
         if bc_up == FLUX:
             cu[nlev] = -y_up
@@ -217,16 +111,55 @@ def _adv_center_reference(
     return updated, cu
 
 
-def test_workspace_allocates_flux_field_and_releases_it() -> None:
-    workspace = init_adv_center(6, n_cols=2)
+def _adv_reconstruct_ref(scheme: int, cfl: float, fuu: float, fu: float, fd: float) -> float:
+    deltaf = fd - fu
+    deltafu = fu - fuu
+    if deltaf * deltafu > 0.0:
+        ratio = deltafu / deltaf
+        if scheme == SUPERBEE:
+            limiter = max(min(2.0 * ratio, 1.0), min(ratio, 2.0))
+        elif scheme == P2_PDM:
+            x = (1.0 / 6.0) * (1.0 - 2.0 * cfl)
+            limiter = (0.5 + x) + (0.5 - x) * ratio
+            limiter = min(2.0 * ratio / (cfl + 1.0e-10), limiter, 2.0 / (1.0 - cfl))
+        elif scheme == SPLMAX13:
+            limiter = min(2.0 * ratio, (1.0 / 3.0) * max(1.0 + 2.0 * ratio, 2.0 + ratio), 2.0)
+        elif scheme == MUSCL:
+            limiter = min(2.0 * ratio, 0.5 * (1.0 + ratio), 2.0)
+        elif scheme == P2:
+            x = (1.0 / 6.0) * (1.0 - 2.0 * cfl)
+            limiter = (0.5 + x) + (0.5 - x) * ratio
+        elif scheme == CENTRAL:
+            limiter = 1.0 / (1.0 - cfl)
+        else:
+            limiter = 0.0
+        return fu + 0.5 * limiter * (1.0 - cfl) * deltaf
+    if scheme == P2:
+        x = (1.0 / 6.0) * (1.0 - 2.0 * cfl)
+        return fu + 0.5 * (1.0 - cfl) * ((0.5 + x) * deltaf + (0.5 - x) * deltafu)
+    if scheme == CENTRAL:
+        return 0.5 * (fu + fd)
+    return fu
 
-    assert workspace.cu.shape == (2, 7)
-    assert workspace.names() == ("cu",)
 
-    workspace.clear()
+def test_workspace_construction() -> None:
+    ws = AdvectionWorkspace(6)
+    assert ws.cu.shape == (7,)
+    assert ws.cu.dtype == np.float64
 
-    assert workspace.names() == ()
-    assert not hasattr(workspace, "cu")
+    bws = AdvectionBatchWorkspace(6, batch_size=2)
+    assert bws.cu.shape == (2, 7)
+    assert bws.cu.dtype == np.float64
+
+
+def test_init_adv_center_and_clean() -> None:
+    ws = init_adv_center(5)
+    assert isinstance(ws, AdvectionWorkspace)
+    assert ws.cu.shape == (6,)
+    clean_adv_center(ws)  # must not raise
+
+
+import pytest
 
 
 @pytest.mark.parametrize(
@@ -244,228 +177,106 @@ def test_workspace_allocates_flux_field_and_releases_it() -> None:
         (CENTRAL, 1.0, 1.0, 1.0, 0.2),
     ],
 )
-def test_adv_center_matches_reference_across_limiters(
-    method: int,
-    fuu: float,
-    fu: float,
-    fd: float,
-    cfl: float,
+def test_matches_reference_across_limiters(
+    method: int, fuu: float, fu: float, fd: float, cfl: float,
 ) -> None:
     nlev = 2
     dt = 0.2
     h = np.array([0.0, 1.0, 1.0], dtype=np.float64)
     ho = h.copy()
     speed = np.array([0.0, cfl * 0.5 * (h[1] + h[2]) / dt, 0.0], dtype=np.float64)
-    y = np.array([0.0, fu, fd], dtype=np.float64)
-    y[0] = fuu
+    y = np.array([fuu, fu, fd], dtype=np.float64)
 
-    workspace = init_adv_center(nlev)
-    y_field = _field(y)
-    adv_center_kernel(
-        nlev,
-        dt,
-        _field(h),
-        _field(ho),
-        _field(speed),
-        ZERO_DIVERGENCE,
-        VALUE,
-        0.0,
-        fuu,
-        method,
-        CONSERVATIVE,
-        y_field,
-        workspace.cu,
+    result, _ = _call_adv_center(
+        nlev, dt, h, ho, speed,
+        ZERO_DIVERGENCE, VALUE, 0.0, fuu,
+        method, CONSERVATIVE, y,
     )
-
     expected, _ = _adv_center_reference(
-        nlev,
-        dt,
-        h,
-        speed,
-        ZERO_DIVERGENCE,
-        VALUE,
-        0.0,
-        fuu,
-        method,
-        CONSERVATIVE,
-        y,
+        nlev, dt, h, speed,
+        ZERO_DIVERGENCE, VALUE, 0.0, fuu,
+        method, CONSERVATIVE, y,
     )
-    result = np.array([y_field[i] for i in range(nlev + 1)])
-    assert np.allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
 
 
-def test_adv_center_conservative_split_iterations_match_reference() -> None:
+def test_conservative_split_iterations_match_reference() -> None:
     nlev = 4
     dt = 2.5
     h = np.array([0.0, 1.0, 0.8, 1.1, 0.9], dtype=np.float64)
     ho = np.array([0.0, 1.2, 1.0, 1.0, 0.7], dtype=np.float64)
     ww = np.array([0.0, 1.2, -1.4, 0.8, 0.2], dtype=np.float64)
     y = np.array([0.0, 1.0, 0.4, 1.6, 0.8], dtype=np.float64)
-    y_up = 0.15
-    y_down = -0.1
+    y_up, y_down = 0.15, -0.1
 
-    workspace = init_adv_center(nlev)
-    y_field = _field(y)
-    adv_center_kernel(
-        nlev,
-        dt,
-        _field(h),
-        _field(ho),
-        _field(ww),
-        FLUX,
-        ONE_SIDED,
-        y_up,
-        y_down,
-        P2_PDM,
-        CONSERVATIVE,
-        y_field,
-        workspace.cu,
+    result, cu_result = _call_adv_center(
+        nlev, dt, h, ho, ww, FLUX, ONE_SIDED, y_up, y_down, P2_PDM, CONSERVATIVE, y,
     )
-
     expected, expected_flux = _adv_center_reference(
-        nlev,
-        dt,
-        h,
-        ww,
-        FLUX,
-        ONE_SIDED,
-        y_up,
-        y_down,
-        P2_PDM,
-        CONSERVATIVE,
-        y,
+        nlev, dt, h, ww, FLUX, ONE_SIDED, y_up, y_down, P2_PDM, CONSERVATIVE, y,
     )
-    result = np.array([y_field[i] for i in range(nlev + 1)])
-    fluxes = np.array([workspace.cu[i] for i in range(nlev + 1)])
-    assert np.allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
-    assert np.allclose(fluxes, expected_flux, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(cu_result, expected_flux, rtol=1e-12, atol=1e-12)
 
 
-def test_adv_center_nonconservative_matches_reference() -> None:
+def test_nonconservative_matches_reference() -> None:
     nlev = 4
     dt = 1.25
     h = np.array([0.0, 1.0, 1.1, 0.9, 1.2], dtype=np.float64)
     ho = np.array([0.0, 0.9, 1.0, 1.2, 1.1], dtype=np.float64)
     ww = np.array([-0.2, -0.4, 0.5, -0.3, 0.1], dtype=np.float64)
     y = np.array([0.0, 0.6, 0.9, 0.2, 0.7], dtype=np.float64)
-    y_up = 1.1
-    y_down = -0.3
+    y_up, y_down = 1.1, -0.3
 
-    workspace = init_adv_center(nlev)
-    y_field = _field(y)
-    adv_center_kernel(
-        nlev,
-        dt,
-        _field(h),
-        _field(ho),
-        _field(ww),
-        VALUE,
-        ZERO_DIVERGENCE,
-        y_up,
-        y_down,
-        MUSCL,
-        NON_CONSERVATIVE,
-        y_field,
-        workspace.cu,
+    result, _ = _call_adv_center(
+        nlev, dt, h, ho, ww, VALUE, ZERO_DIVERGENCE, y_up, y_down, MUSCL, NON_CONSERVATIVE, y,
     )
-
     expected, _ = _adv_center_reference(
-        nlev,
-        dt,
-        h,
-        ww,
-        VALUE,
-        ZERO_DIVERGENCE,
-        y_up,
-        y_down,
-        MUSCL,
-        NON_CONSERVATIVE,
-        y,
+        nlev, dt, h, ww, VALUE, ZERO_DIVERGENCE, y_up, y_down, MUSCL, NON_CONSERVATIVE, y,
     )
-    result = np.array([y_field[i] for i in range(nlev + 1)])
-    assert np.allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
     assert np.isfinite(result[1:]).all()
 
 
-def test_adv_center_multicolumn_ncols_one_matches_single_column() -> None:
+def test_no_nan_inf() -> None:
     nlev = 4
-    dt = 1.0
-    h = np.array([0.0, 1.0, 0.9, 1.1, 1.0], dtype=np.float64)
-    ho = np.array([0.0, 1.0, 0.9, 1.1, 1.0], dtype=np.float64)
-    ww = np.array([0.0, 0.4, -0.2, 0.3, -0.1], dtype=np.float64)
-    y = np.array([0.0, 1.2, 0.8, 0.5, 0.1], dtype=np.float64)
-    y_up = 0.2
-    y_down = -0.05
-
-    single_workspace = init_adv_center(nlev)
-    single_y = _field(y)
-    multi_workspace = init_adv_center(nlev, n_cols=1)
-    multi_y = _field(np.expand_dims(y, axis=0))
-    h_multi = _field(np.expand_dims(h, axis=0))
-    ho_multi = _field(np.expand_dims(ho, axis=0))
-    ww_multi = _field(np.expand_dims(ww, axis=0))
-
-    adv_center_kernel(
-        nlev,
-        dt,
-        _field(h),
-        _field(ho),
-        _field(ww),
-        FLUX,
-        VALUE,
-        y_up,
-        y_down,
-        UPSTREAM,
-        CONSERVATIVE,
-        single_y,
-        single_workspace.cu,
-    )
-    adv_center_multi_kernel(
-        1,
-        nlev,
-        dt,
-        h_multi,
-        ho_multi,
-        ww_multi,
-        FLUX,
-        VALUE,
-        y_up,
-        y_down,
-        UPSTREAM,
-        CONSERVATIVE,
-        multi_y,
-        multi_workspace.cu,
-    )
-
-    single_result = np.array([single_y[i] for i in range(nlev + 1)])
-    multi_result = np.array([multi_y[0, i] for i in range(nlev + 1)])
-    assert np.allclose(multi_result, single_result, rtol=1e-12, atol=1e-12)
-
-
-def test_adv_center_no_nan_inf() -> None:
-    nlev = 4
-    dt = 1.0
     h = np.array([0.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float64)
     ho = h.copy()
     ww = np.array([0.0, 0.3, -0.2, 0.4, -0.1], dtype=np.float64)
     y = np.array([0.0, 1.0, 0.5, 0.8, 0.2], dtype=np.float64)
 
-    workspace = init_adv_center(nlev)
-    y_field = _field(y)
-    adv_center_kernel(
-        nlev,
-        dt,
-        _field(h),
-        _field(ho),
-        _field(ww),
-        FLUX,
-        FLUX,
-        0.0,
-        0.0,
-        UPSTREAM,
-        CONSERVATIVE,
-        y_field,
-        workspace.cu,
+    result, _ = _call_adv_center(
+        nlev, 1.0, h, ho, ww, FLUX, FLUX, 0.0, 0.0, UPSTREAM, CONSERVATIVE, y,
     )
-    result = np.array([y_field[i] for i in range(nlev + 1)])
     assert np.isfinite(result[1:]).all(), "adv_center produced NaN or Inf"
+
+
+def test_batch_parity() -> None:
+    """adv_center_batch with 2 identical columns must match single-column result."""
+    nlev = 4
+    dt = 1.0
+    batch_size = 2
+    h = np.array([0.0, 1.0, 0.9, 1.1, 1.0], dtype=np.float64)
+    ho = h.copy()
+    ww = np.array([0.0, 0.4, -0.2, 0.3, -0.1], dtype=np.float64)
+    y = np.array([0.0, 1.2, 0.8, 0.5, 0.1], dtype=np.float64)
+    y_up, y_down = 0.2, -0.05
+
+    expected, _ = _call_adv_center(
+        nlev, dt, h, ho, ww, FLUX, VALUE, y_up, y_down, UPSTREAM, CONSERVATIVE, y,
+    )
+
+    ws = AdvectionBatchWorkspace(nlev, batch_size)
+    h_b = np.tile(h, (batch_size, 1))
+    ho_b = np.tile(ho, (batch_size, 1))
+    ww_b = np.tile(ww, (batch_size, 1))
+    y_b = np.tile(y, (batch_size, 1))
+
+    adv_center_batch(
+        batch_size, nlev, dt, h_b, ho_b, ww_b,
+        FLUX, VALUE, y_up, y_down,
+        UPSTREAM, CONSERVATIVE, y_b, ws.cu,
+    )
+
+    for b in range(batch_size):
+        np.testing.assert_array_equal(y_b[b], expected)

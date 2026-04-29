@@ -123,7 +123,7 @@ def _hardware_section(hw: dict[str, str]) -> str:
     sockets = hw.get("sockets", "")
     cpu_max_mhz = hw.get("cpu_max_mhz", "")
     ram = hw.get("ram_total", "unknown")
-    taichi = hw.get("taichi_version", "unknown")
+    numba = hw.get("numba_version", "unknown")
     python_ver = hw.get("python_version", "unknown")
     os_platform = hw.get("platform", "unknown")
     gpu_info = hw.get("gpu_info", "")
@@ -148,7 +148,7 @@ def _hardware_section(hw: dict[str, str]) -> str:
         ("Logical CPUs", f"{cpu_count}{core_detail}"),
         ("RAM", ram),
         ("Execution backend", execution_backend),
-        ("Taichi", taichi),
+        ("Numba", numba),
         ("Python", python_ver),
         ("OS", os_platform),
     ]

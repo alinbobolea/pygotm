@@ -42,15 +42,10 @@ def _run_case_worker(
 ) -> CaseResult:
     """Worker function executed in each Dask subprocess.
 
-    Initialises Taichi from the offline kernel cache, then runs and
-    validates a single GOTM case.
+    Runs and validates a single GOTM case. *arch_name* is retained for
+    compatibility with the validation CLI; Numba kernels currently execute on CPU.
     """
-    import taichi as ti
-    from taichi.lang import impl as ti_impl
-
-    arch = getattr(ti, arch_name)
-    if ti_impl.get_runtime().prog is None:
-        ti.init(arch=arch, default_fp=ti.f64, offline_cache=True)
+    _ = arch_name
 
     progress_path = runs_dir / case_name / ".progress"
     on_step = _make_step_writer(progress_path) if not skip_run else None
@@ -79,13 +74,13 @@ def run_cases_parallel(
 
     logging.getLogger("distributed").setLevel(logging.CRITICAL)
 
-    with LocalCluster(
+    with LocalCluster(  # type: ignore[no-untyped-call]
         n_workers=n_workers,
         threads_per_worker=1,
         processes=True,
         silence_logs=logging.CRITICAL,
         dashboard_address=f":{dashboard_port}",
-    ) as cluster, Client(cluster, timeout=120) as client:
+    ) as cluster, Client(cluster, timeout=120) as client:  # type: ignore[no-untyped-call]
 
         print(f"  Dask dashboard : {cluster.dashboard_link}")
 
@@ -102,7 +97,7 @@ def run_cases_parallel(
         }
 
         result_map: dict[str, CaseResult] = {}
-        for future in as_completed(futures):
+        for future in as_completed(futures):  # type: ignore[no-untyped-call]
             case_name = futures[future]
             result = future.result()
             result_map[case_name] = result

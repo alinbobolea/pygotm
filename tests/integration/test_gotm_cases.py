@@ -59,6 +59,24 @@ def test_compare_datasets_squeezes_singleton_lat_lon_dimensions() -> None:
     assert comparison.ok
 
 
+def test_compare_datasets_uses_range_aware_tolerance() -> None:
+    expected = xr.Dataset(
+        {"signal": ("z", np.array([0.0, 100.0], dtype=np.float64))}
+    )
+    within = xr.Dataset(
+        {"signal": ("z", np.array([9.0e-6, 100.0], dtype=np.float64))}
+    )
+    outside = xr.Dataset(
+        {"signal": ("z", np.array([1.1e-5, 100.0], dtype=np.float64))}
+    )
+
+    assert compare_datasets(within, expected, variables=("signal",)).ok
+
+    comparison = compare_datasets(outside, expected, variables=("signal",))
+    assert not comparison.ok
+    assert comparison.failures[0].variable == "signal"
+
+
 def test_run_case_validation_accepts_custom_runner() -> None:
     def runner(case: ValidationCase) -> xr.Dataset:
         return xr.open_dataset(case.reference_path, engine="scipy")

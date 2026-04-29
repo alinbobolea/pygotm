@@ -115,15 +115,17 @@ r"""
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import math
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+import numba
+import numpy as np
+
+from pygotm.arrays import ColumnWorkspace, make_column_array
 from pygotm.turbulence.turbulence import Dirichlet as _DIRICHLET
 from pygotm.turbulence.turbulence import Neumann as _NEUMANN
 from pygotm.turbulence.turbulence import injection as _INJECTION
 from pygotm.turbulence.turbulence import logarithmic as _LOGARITHMIC
-from pygotm.util.diff_face import diff_face_column
+from pygotm.util.diff_face import diff_face
 
 __all__ = [
     "Q2Over2EquationWorkspace",
@@ -134,231 +136,325 @@ _CNPAR: float = 1.0
 _SQRT2: float = 1.4142135623730951
 
 
-class Q2Over2EquationWorkspace(TaichiFieldCollection):
-    """Taichi fields for the translated Mellor-Yamada q2/2 equation."""
+class Q2Over2EquationWorkspace(ColumnWorkspace):
+    """Workspace arrays for the translated Mellor-Yamada q2/2 equation."""
 
-    tke: ti.Field
-    tkeo: ti.Field
-    h: ti.Field
-    P: ti.Field
-    B: ti.Field
-    Px: ti.Field
-    PSTK: ti.Field
-    eps: ti.Field
-    L: ti.Field
-    sq_var: ti.Field
-    avh: ti.Field
-    l_sour: ti.Field
-    q_sour: ti.Field
-    u_taus: ti.Field
-    u_taub: ti.Field
-    z0s: ti.Field
-    z0b: ti.Field
-    au: ti.Field
-    bu: ti.Field
-    cu: ti.Field
-    du: ti.Field
-    ru: ti.Field
-    qu: ti.Field
+    tke: np.ndarray
+    tkeo: np.ndarray
+    h: np.ndarray
+    P: np.ndarray
+    B: np.ndarray
+    Px: np.ndarray
+    PSTK: np.ndarray
+    eps: np.ndarray
+    L: np.ndarray
+    sq_var: np.ndarray
+    avh: np.ndarray
+    l_sour: np.ndarray
+    q_sour: np.ndarray
+    u_taus: np.ndarray
+    u_taub: np.ndarray
+    z0s: np.ndarray
+    z0b: np.ndarray
+    au: np.ndarray
+    bu: np.ndarray
+    cu: np.ndarray
+    du: np.ndarray
+    ru: np.ndarray
+    qu: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "tkeo", "h"))
-        self.allocate_many(("P", "B", "Px", "PSTK", "eps", "L", "sq_var"))
-        self.allocate_many(("avh", "l_sour", "q_sour"))
-        self.allocate_many(("u_taus", "u_taub", "z0s", "z0b"))
-        self.allocate_many(("au", "bu", "cu", "du", "ru", "qu"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.tkeo = make_column_array(nlev, n_cols=n_cols)
+        self.h = make_column_array(nlev, n_cols=n_cols)
+        self.P = make_column_array(nlev, n_cols=n_cols)
+        self.B = make_column_array(nlev, n_cols=n_cols)
+        self.Px = make_column_array(nlev, n_cols=n_cols)
+        self.PSTK = make_column_array(nlev, n_cols=n_cols)
+        self.eps = make_column_array(nlev, n_cols=n_cols)
+        self.L = make_column_array(nlev, n_cols=n_cols)
+        self.sq_var = make_column_array(nlev, n_cols=n_cols)
+        self.avh = make_column_array(nlev, n_cols=n_cols)
+        self.l_sour = make_column_array(nlev, n_cols=n_cols)
+        self.q_sour = make_column_array(nlev, n_cols=n_cols)
+        self.u_taus = make_column_array(nlev, n_cols=n_cols)
+        self.u_taub = make_column_array(nlev, n_cols=n_cols)
+        self.z0s = make_column_array(nlev, n_cols=n_cols)
+        self.z0b = make_column_array(nlev, n_cols=n_cols)
+        self.au = make_column_array(nlev, n_cols=n_cols)
+        self.bu = make_column_array(nlev, n_cols=n_cols)
+        self.cu = make_column_array(nlev, n_cols=n_cols)
+        self.du = make_column_array(nlev, n_cols=n_cols)
+        self.ru = make_column_array(nlev, n_cols=n_cols)
+        self.qu = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti.func
-def _fk_craig(u_tau, eta):  # type: ignore[no-untyped-def]
+@numba.njit(cache=True)
+def _fk_craig(u_tau: float, eta: float) -> float:
     return eta * u_tau**3
 
 
-@ti.func
-def _q2over2_bc_value(  # type: ignore[no-untyped-def]
-    bc,
-    type_,
-    zi,
-    z0,
-    u_tau,
-    b1,
-    sq,
-    cw,
-    gen_alpha,
-    gen_l,
-):
+@numba.njit(cache=True)
+def _q2over2_bc_value(
+    bc: int,
+    type_: int,
+    zi: float,
+    z0: float,
+    u_tau: float,
+    b1: float,
+    sq: float,
+    cw: float,
+    gen_alpha: float,
+    gen_l: float,
+) -> float:
     value = 0.0
 
     if type_ == _LOGARITHMIC:
         if bc == _DIRICHLET:
-            value = u_tau**2 * ti.pow(b1, 2.0 / 3.0) / 2.0
+            value = u_tau**2 * b1 ** (2.0 / 3.0) / 2.0
         else:
             value = 0.0
 
     if type_ == _INJECTION:
         f_k = _fk_craig(u_tau, cw)
-        capital_k = ti.pow(
-            -f_k / (_SQRT2 * sq * gen_alpha * gen_l),
-            2.0 / 3.0,
-        ) / ti.pow(z0, gen_alpha)
+        capital_k = ((-f_k / (_SQRT2 * sq * gen_alpha * gen_l)) ** (2.0 / 3.0)) / (
+            z0**gen_alpha
+        )
 
         if bc == _DIRICHLET:
-            value = capital_k * ti.pow(zi + z0, gen_alpha)
+            value = capital_k * (zi + z0) ** gen_alpha
         else:
             value = (
                 -_SQRT2
                 * sq
-                * ti.pow(capital_k, 1.5)
+                * capital_k**1.5
                 * gen_alpha
                 * gen_l
-                * ti.pow(zi + z0, 1.5 * gen_alpha)
+                * (zi + z0) ** (1.5 * gen_alpha)
             )
 
     return value
 
 
-@ti_kernel
-def step_q2over2eq(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    dt: ti.f64,
-    k_min: ti.f64,
-    b1: ti.f64,
-    k_ubc: ti.i32,
-    k_lbc: ti.i32,
-    ubc_type: ti.i32,
-    lbc_type: ti.i32,
-    sq: ti.f64,
-    cw: ti.f64,
-    gen_alpha: ti.f64,
-    gen_l: ti.f64,
-    tke: TemplateArg,
-    tkeo: TemplateArg,
-    h: TemplateArg,
-    P: TemplateArg,
-    B: TemplateArg,
-    Px: TemplateArg,
-    PSTK: TemplateArg,
-    eps: TemplateArg,
-    L: TemplateArg,
-    sq_var: TemplateArg,
-    avh: TemplateArg,
-    l_sour: TemplateArg,
-    q_sour: TemplateArg,
-    u_taus: TemplateArg,
-    u_taub: TemplateArg,
-    z0s: TemplateArg,
-    z0b: TemplateArg,
-    au: TemplateArg,
-    bu: TemplateArg,
-    cu: TemplateArg,
-    du: TemplateArg,
-    ru: TemplateArg,
-    qu: TemplateArg,
-):
+@numba.njit(cache=True)
+def _step_q2over2eq(
+    nlev: int,
+    dt: float,
+    k_min: float,
+    b1: float,
+    k_ubc: int,
+    k_lbc: int,
+    ubc_type: int,
+    lbc_type: int,
+    sq: float,
+    cw: float,
+    gen_alpha: float,
+    gen_l: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    h: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    PSTK: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    sq_var: np.ndarray,
+    avh: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    u_taus: float,
+    u_taub: float,
+    z0s: float,
+    z0b: float,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
+    r"""Advance the dynamic q2/2-equation for a single column."""
+
+    for i in range(nlev + 1):
+        tkeo[i] = tke[i]
+        avh[i] = 0.0
+        l_sour[i] = 0.0
+        q_sour[i] = 0.0
+
+    for i in range(1, nlev):
+        avh[i] = sq_var[i] * math.sqrt(2.0 * tke[i]) * L[i]
+
+        prod = P[i] + Px[i] + PSTK[i]
+        buoyan = B[i]
+        diss = eps[i]
+
+        if prod + buoyan > 0.0:
+            q_sour[i] = prod + buoyan
+            l_sour[i] = -diss / tke[i]
+        else:
+            q_sour[i] = prod
+            l_sour[i] = -(diss - buoyan) / tke[i]
+
+    pos_bc = h[nlev]
+    if k_ubc == _NEUMANN:
+        pos_bc = 0.5 * h[nlev]
+    diff_k_up = _q2over2_bc_value(
+        k_ubc,
+        ubc_type,
+        pos_bc,
+        z0s,
+        u_taus,
+        b1,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
+    )
+
+    pos_bc = h[1]
+    if k_lbc == _NEUMANN:
+        pos_bc = 0.5 * h[1]
+    diff_k_down = _q2over2_bc_value(
+        k_lbc,
+        lbc_type,
+        pos_bc,
+        z0b,
+        u_taub,
+        b1,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
+    )
+
+    diff_face(
+        nlev,
+        dt,
+        _CNPAR,
+        h,
+        k_ubc,
+        k_lbc,
+        diff_k_up,
+        diff_k_down,
+        avh,
+        l_sour,
+        q_sour,
+        tke,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+    )
+
+    tke[nlev] = _q2over2_bc_value(
+        _DIRICHLET,
+        ubc_type,
+        z0s,
+        z0s,
+        u_taus,
+        b1,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
+    )
+    tke[0] = _q2over2_bc_value(
+        _DIRICHLET,
+        lbc_type,
+        z0b,
+        z0b,
+        u_taub,
+        b1,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
+    )
+
+    for i in range(nlev + 1):
+        if tke[i] < k_min:
+            tke[i] = k_min
+
+
+@numba.njit(parallel=True, cache=True)
+def step_q2over2eq(
+    batch_size: int,
+    nlev: int,
+    dt: float,
+    k_min: float,
+    b1: float,
+    k_ubc: int,
+    k_lbc: int,
+    ubc_type: int,
+    lbc_type: int,
+    sq: float,
+    cw: float,
+    gen_alpha: float,
+    gen_l: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    h: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    PSTK: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    sq_var: np.ndarray,
+    avh: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    u_taus: np.ndarray,
+    u_taub: np.ndarray,
+    z0s: np.ndarray,
+    z0b: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
     r"""Advance the dynamic q2/2-equation for one or more columns."""
-
-    for col in range(n_cols):
-        for i in range(nlev + 1):
-            tkeo[col, i] = tke[col, i]
-            avh[col, i] = 0.0
-            l_sour[col, i] = 0.0
-            q_sour[col, i] = 0.0
-
-        for i in range(1, nlev):
-            avh[col, i] = sq_var[col, i] * ti.sqrt(2.0 * tke[col, i]) * L[col, i]
-
-            prod = P[col, i] + Px[col, i] + PSTK[col, i]
-            buoyan = B[col, i]
-            diss = eps[col, i]
-
-            if prod + buoyan > 0.0:
-                q_sour[col, i] = prod + buoyan
-                l_sour[col, i] = -diss / tke[col, i]
-            else:
-                q_sour[col, i] = prod
-                l_sour[col, i] = -(diss - buoyan) / tke[col, i]
-
-        pos_bc = h[col, nlev]
-        if k_ubc == _NEUMANN:
-            pos_bc = 0.5 * h[col, nlev]
-        diff_k_up = _q2over2_bc_value(
-            k_ubc,
-            ubc_type,
-            pos_bc,
-            z0s[col, 0],
-            u_taus[col, 0],
-            b1,
-            sq,
-            cw,
-            gen_alpha,
-            gen_l,
-        )
-
-        pos_bc = h[col, 1]
-        if k_lbc == _NEUMANN:
-            pos_bc = 0.5 * h[col, 1]
-        diff_k_down = _q2over2_bc_value(
-            k_lbc,
-            lbc_type,
-            pos_bc,
-            z0b[col, 0],
-            u_taub[col, 0],
-            b1,
-            sq,
-            cw,
-            gen_alpha,
-            gen_l,
-        )
-
-        diff_face_column(
-            col,
+    for b in numba.prange(batch_size):
+        _step_q2over2eq(
             nlev,
             dt,
-            _CNPAR,
-            h,
+            k_min,
+            b1,
             k_ubc,
             k_lbc,
-            diff_k_up,
-            diff_k_down,
-            avh,
-            l_sour,
-            q_sour,
-            tke,
-            au,
-            bu,
-            cu,
-            du,
-            ru,
-            qu,
-        )
-
-        tke[col, nlev] = _q2over2_bc_value(
-            _DIRICHLET,
             ubc_type,
-            z0s[col, 0],
-            z0s[col, 0],
-            u_taus[col, 0],
-            b1,
-            sq,
-            cw,
-            gen_alpha,
-            gen_l,
-        )
-        tke[col, 0] = _q2over2_bc_value(
-            _DIRICHLET,
             lbc_type,
-            z0b[col, 0],
-            z0b[col, 0],
-            u_taub[col, 0],
-            b1,
             sq,
             cw,
             gen_alpha,
             gen_l,
+            tke[b],
+            tkeo[b],
+            h[b],
+            P[b],
+            B[b],
+            Px[b],
+            PSTK[b],
+            eps[b],
+            L[b],
+            sq_var[b],
+            avh[b],
+            l_sour[b],
+            q_sour[b],
+            u_taus[b, 0],
+            u_taub[b, 0],
+            z0s[b, 0],
+            z0b[b, 0],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
         )
-
-        for i in range(nlev + 1):
-            if tke[col, i] < k_min:
-                tke[col, i] = k_min

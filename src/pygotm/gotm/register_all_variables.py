@@ -70,9 +70,9 @@ def _input_value_provider(obj: object, attr: str) -> Provider:
     return provider
 
 
-def _scalar_input_provider(input_: object) -> Provider:
+def _scalar_input_provider(input_: Any) -> Provider:
     def provider() -> float:
-        return float(getattr(input_, "value"))
+        return float(input_.value)
 
     return provider
 
@@ -96,6 +96,15 @@ def _constant_array_provider(values: np.ndarray) -> Provider:
 def _constant_float_provider(value: float) -> Provider:
     def provider() -> float:
         return value
+
+    return provider
+
+
+def _array_slice_provider(obj: object, attr: str, start: int, stop: int) -> Provider:
+    def provider() -> np.ndarray:
+        values = getattr(obj, attr)
+        assert isinstance(values, np.ndarray)
+        return values[start:stop]
 
     return provider
 
@@ -224,7 +233,12 @@ def _register_meanflow_variables(nlev: int, meanflow: Any | None) -> None:
         ("T", "Celsius", "conservative temperature", ("z",)),
         ("S", "g/kg", "absolute salinity", ("z",)),
         ("NN", "1/s2", "buoyancy frequency squared", ("zi",)),
-        ("NNT", "1/s2", "temperature contribution to buoyancy frequency squared", ("zi",)),
+        (
+            "NNT",
+            "1/s2",
+            "temperature contribution to buoyancy frequency squared",
+            ("zi",),
+        ),
         ("NNS", "1/s2", "salinity contribution to buoyancy frequency squared", ("zi",)),
         ("SS", "1/s2", "shear frequency squared", ("zi",)),
         ("SSU", "1/s2", "x contribution to shear frequency squared", ("zi",)),
@@ -444,15 +458,32 @@ def _register_diagnostic_variables(diagnostics: Any | None) -> None:
         )
 
 
-def _register_stokes_placeholder_variables(nlev: int) -> None:
-    zero_z = np.zeros(nlev, dtype=np.float64)
-    zero_zi = np.zeros(nlev + 1, dtype=np.float64)
+def _register_stokes_variables(nlev: int, stokes_drift: Any | None = None) -> None:
+    if stokes_drift is None:
+        zero_z = np.zeros(nlev, dtype=np.float64)
+        zero_zi = np.zeros(nlev + 1, dtype=np.float64)
+        us_provider = _constant_array_provider(zero_z)
+        vs_provider = _constant_array_provider(zero_z)
+        dusdz_provider = _constant_array_provider(zero_zi)
+        dvsdz_provider = _constant_array_provider(zero_zi)
+        us0_provider = _constant_float_provider(0.0)
+        vs0_provider = _constant_float_provider(0.0)
+        ds_provider = _constant_float_provider(0.0)
+    else:
+        us_provider = _array_slice_provider(stokes_drift, "usprof", 1, nlev + 1)
+        vs_provider = _array_slice_provider(stokes_drift, "vsprof", 1, nlev + 1)
+        dusdz_provider = _array_attr_provider(stokes_drift, "dusdz")
+        dvsdz_provider = _array_attr_provider(stokes_drift, "dvsdz")
+        us0_provider = _float_attr_provider(stokes_drift, "us0")
+        vs0_provider = _float_attr_provider(stokes_drift, "vs0")
+        ds_provider = _float_attr_provider(stokes_drift, "ds")
+
     for name in ("us", "vs"):
         fm.register(
             name,
             "m/s",
             name,
-            provider=_constant_array_provider(zero_z),
+            provider=us_provider if name == "us" else vs_provider,
             dimensions=("z",),
             category="stokes_drift",
         )
@@ -461,16 +492,20 @@ def _register_stokes_placeholder_variables(nlev: int) -> None:
             name,
             "1/s",
             name,
-            provider=_constant_array_provider(zero_zi),
+            provider=dusdz_provider if name == "dusdz" else dvsdz_provider,
             dimensions=("zi",),
             category="stokes_drift",
         )
-    for name in ("us0", "vs0", "ds"):
+    for name, provider in (
+        ("us0", us0_provider),
+        ("vs0", vs0_provider),
+        ("ds", ds_provider),
+    ):
         fm.register(
             name,
             "m/s" if name != "ds" else "m",
             name,
-            provider=_constant_float_provider(0.0),
+            provider=provider,
             category="stokes_drift",
         )
 
@@ -627,6 +662,7 @@ def do_register_all_variables(
     airsea: Any | None = None,
     density: Any | None = None,
     turbulence: Any | None = None,
+    stokes_drift: Any | None = None,
     surface_inputs: Any | None = None,
     i0_provider: Callable[[], float] | None = None,
 ) -> FieldRegistry:
@@ -646,7 +682,7 @@ def do_register_all_variables(
     _register_observation_variables(nlev, observations)
     _register_turbulence_variables(turbulence)
     _register_diagnostic_variables(diagnostics)
-    _register_stokes_placeholder_variables(nlev)
+    _register_stokes_variables(nlev, stokes_drift)
     return fm
 
 

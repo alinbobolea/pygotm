@@ -13,15 +13,13 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import taichi as ti
-from taichi_helpers import fill_field_from_array, fill_field_scalar, read_field_array
 from type_helpers import ReadyMeanflowState, require_meanflow_state
 
 from pygotm.meanflow.friction import (
     KAPPA,
     FrictionWorkspace,
     friction,
-    step_friction,
+    step_friction_batch,
 )
 from pygotm.meanflow.meanflow import MeanflowState, init_meanflow, post_init_meanflow
 from pygotm.meanflow.updategrid import updategrid
@@ -68,7 +66,7 @@ def _configure_parity_state(state: ReadyMeanflowState, nlev: int) -> None:
     state.v[nlev] = 0.06
 
 
-def _run_step_friction(
+def _run_step_friction_batch(
     state: ReadyMeanflowState,
     nlev: int,
     *,
@@ -76,59 +74,37 @@ def _run_step_friction(
     ty: float,
     plume_type: int,
     first: bool,
-    n_cols: int,
+    batch_size: int,
     rho0: float = _RHO0,
 ) -> FrictionWorkspace:
-    ws = FrictionWorkspace(nlev=nlev, n_cols=n_cols)
-    for col in range(n_cols):
-        fill_field_from_array(ws.h, state.h, col=col)
-        fill_field_from_array(ws.u, state.u, col=col)
-        fill_field_from_array(ws.v, state.v, col=col)
-        fill_field_from_array(ws.drag, state.drag, col=col)
-        fill_field_scalar(ws.z0b, state.z0b, col=col)
-        fill_field_scalar(ws.z0s, state.z0s, col=col)
-        fill_field_scalar(ws.za, state.za, col=col)
-        fill_field_scalar(ws.u_taub, state.u_taub, col=col)
-        fill_field_scalar(ws.u_taubo, state.u_taubo, col=col)
-        fill_field_scalar(ws.u_taus, state.u_taus, col=col)
-        fill_field_scalar(ws.taub, state.taub, col=col)
-        fill_field_scalar(ws.tx, tx, col=col)
-        fill_field_scalar(ws.ty, ty, col=col)
+    ws = FrictionWorkspace(nlev=nlev, batch_size=batch_size)
+    for b in range(batch_size):
+        ws.h[b] = state.h
+        ws.u[b] = state.u
+        ws.v[b] = state.v
+        ws.drag[b] = state.drag
+        ws.z0b[b] = state.z0b
+        ws.z0s[b] = state.z0s
+        ws.za[b] = state.za
+        ws.u_taub[b] = state.u_taub
+        ws.u_taubo[b] = state.u_taubo
+        ws.u_taus[b] = state.u_taus
+        ws.taub[b] = state.taub
+        ws.tx[b] = tx
+        ws.ty[b] = ty
 
-    step_friction(
-        n_cols,
-        nlev,
-        KAPPA,
-        state.avmolu,
-        rho0,
-        state.gravity,
-        state.h0b,
-        state.z0s_min,
-        int(state.charnock),
-        state.charnock_val,
-        int(state.calc_bottom_stress),
-        state.MaxItz0b,
-        plume_type,
-        int(first),
-        ws.h,
-        ws.u,
-        ws.v,
-        ws.drag,
-        ws.z0b,
-        ws.z0s,
-        ws.za,
-        ws.u_taub,
-        ws.u_taubo,
-        ws.u_taus,
-        ws.taub,
-        ws.tx,
-        ws.ty,
+    step_friction_batch(
+        batch_size, nlev,
+        KAPPA, state.avmolu, rho0, state.gravity,
+        state.h0b, state.z0s_min,
+        int(state.charnock), state.charnock_val,
+        int(state.calc_bottom_stress), state.MaxItz0b,
+        plume_type, int(first),
+        ws.h, ws.u, ws.v, ws.drag,
+        ws.z0b, ws.z0s, ws.za, ws.u_taub, ws.u_taubo, ws.u_taus, ws.taub,
+        ws.tx, ws.ty,
     )
     return ws
-
-
-def _read_scalar(field: ti.Field, col: int = 0) -> float:
-    return float(read_field_array(field, col=col)[0])
 
 
 # ---------------------------------------------------------------------------
@@ -494,8 +470,8 @@ def test_multiple_roughness_iterations_converge() -> None:
     assert 0.0 < state5.u_taub < 0.4
 
 
-def test_step_friction_matches_reference_on_first_call() -> None:
-    """Kernel first-call handling must match the NumPy reference path."""
+def test_step_friction_batch_matches_reference_on_first_call() -> None:
+    """step_friction_batch with batch_size=1 must match the Python friction() path."""
     nlev = _NLEV
     tx = 1.0e-4
     ty = -4.0e-5
@@ -506,41 +482,23 @@ def test_step_friction_matches_reference_on_first_call() -> None:
     state_kernel = _make_state(nlev=nlev)
     _configure_parity_state(state_kernel, nlev)
 
-    friction(
-        state_ref,
-        nlev,
-        tx=tx,
-        ty=ty,
-        plume_type=1,
-        rho0=_RHO0,
-        _first=[True],
-    )
-    ws = _run_step_friction(
-        state_kernel,
-        nlev,
-        tx=tx,
-        ty=ty,
-        plume_type=1,
-        first=True,
-        n_cols=1,
+    friction(state_ref, nlev, tx=tx, ty=ty, plume_type=1, rho0=_RHO0, _first=[True])
+    ws = _run_step_friction_batch(
+        state_kernel, nlev, tx=tx, ty=ty, plume_type=1, first=True, batch_size=1,
     )
 
     assert state_ref.drag is not None
-    np.testing.assert_allclose(read_field_array(ws.drag), state_ref.drag, rtol=1e-12)
-    np.testing.assert_allclose(_read_scalar(ws.z0b), state_ref.z0b, rtol=1e-12)
-    np.testing.assert_allclose(_read_scalar(ws.z0s), state_ref.z0s, rtol=1e-12)
-    np.testing.assert_allclose(_read_scalar(ws.u_taub), state_ref.u_taub, rtol=1e-12)
-    np.testing.assert_allclose(
-        _read_scalar(ws.u_taubo),
-        state_ref.u_taubo,
-        rtol=1e-12,
-    )
-    np.testing.assert_allclose(_read_scalar(ws.u_taus), state_ref.u_taus, rtol=1e-12)
-    np.testing.assert_allclose(_read_scalar(ws.taub), state_ref.taub, rtol=1e-12)
+    np.testing.assert_allclose(ws.drag[0], state_ref.drag, rtol=1e-12)
+    np.testing.assert_allclose(ws.z0b[0], state_ref.z0b, rtol=1e-12)
+    np.testing.assert_allclose(ws.z0s[0], state_ref.z0s, rtol=1e-12)
+    np.testing.assert_allclose(ws.u_taub[0], state_ref.u_taub, rtol=1e-12)
+    np.testing.assert_allclose(ws.u_taubo[0], state_ref.u_taubo, rtol=1e-12)
+    np.testing.assert_allclose(ws.u_taus[0], state_ref.u_taus, rtol=1e-12)
+    np.testing.assert_allclose(ws.taub[0], state_ref.taub, rtol=1e-12)
 
 
-def test_step_friction_matches_reference_and_multicolumn_parity() -> None:
-    """Kernel output must match the reference implementation for both columns."""
+def test_step_friction_batch_multicolumn_parity() -> None:
+    """step_friction_batch with batch_size=2 identical columns gives identical results."""
     nlev = _NLEV
     tx = 1.0e-4
     ty = -4.0e-5
@@ -551,51 +509,17 @@ def test_step_friction_matches_reference_and_multicolumn_parity() -> None:
     state_kernel = _make_state(nlev=nlev)
     _configure_parity_state(state_kernel, nlev)
 
-    friction(
-        state_ref,
-        nlev,
-        tx=tx,
-        ty=ty,
-        plume_type=1,
-        rho0=_RHO0,
-        _first=[False],
-    )
-    ws = _run_step_friction(
-        state_kernel,
-        nlev,
-        tx=tx,
-        ty=ty,
-        plume_type=1,
-        first=False,
-        n_cols=2,
+    friction(state_ref, nlev, tx=tx, ty=ty, plume_type=1, rho0=_RHO0, _first=[False])
+    ws = _run_step_friction_batch(
+        state_kernel, nlev, tx=tx, ty=ty, plume_type=1, first=False, batch_size=2,
     )
 
     assert state_ref.drag is not None
-    for col in range(2):
-        np.testing.assert_allclose(
-            read_field_array(ws.drag, col=col),
-            state_ref.drag,
-            rtol=1e-12,
-        )
-        np.testing.assert_allclose(_read_scalar(ws.z0b, col), state_ref.z0b, rtol=1e-12)
-        np.testing.assert_allclose(_read_scalar(ws.z0s, col), state_ref.z0s, rtol=1e-12)
-        np.testing.assert_allclose(
-            _read_scalar(ws.u_taub, col),
-            state_ref.u_taub,
-            rtol=1e-12,
-        )
-        np.testing.assert_allclose(
-            _read_scalar(ws.u_taubo, col),
-            state_ref.u_taubo,
-            rtol=1e-12,
-        )
-        np.testing.assert_allclose(
-            _read_scalar(ws.u_taus, col),
-            state_ref.u_taus,
-            rtol=1e-12,
-        )
-        np.testing.assert_allclose(
-            _read_scalar(ws.taub, col),
-            state_ref.taub,
-            rtol=1e-12,
-        )
+    for b in range(2):
+        np.testing.assert_allclose(ws.drag[b], state_ref.drag, rtol=1e-12)
+        np.testing.assert_allclose(ws.z0b[b], state_ref.z0b, rtol=1e-12)
+        np.testing.assert_allclose(ws.z0s[b], state_ref.z0s, rtol=1e-12)
+        np.testing.assert_allclose(ws.u_taub[b], state_ref.u_taub, rtol=1e-12)
+        np.testing.assert_allclose(ws.u_taubo[b], state_ref.u_taubo, rtol=1e-12)
+        np.testing.assert_allclose(ws.u_taus[b], state_ref.u_taus, rtol=1e-12)
+        np.testing.assert_allclose(ws.taub[b], state_ref.taub, rtol=1e-12)

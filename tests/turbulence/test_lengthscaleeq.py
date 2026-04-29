@@ -3,12 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import (
-    fill_field_from_array,
-    fill_field_scalar,
-    make_equidistant_h,
-    read_field_array,
-)
 
 from pygotm.turbulence.lengthscaleeq import (
     LengthScaleEquationWorkspace,
@@ -27,6 +21,12 @@ from pygotm.turbulence.turbulence import (
 _NLEV = 12
 _DT = 60.0
 _DEPTH = 24.0
+
+
+def make_equidistant_h(nlev: int, depth: float) -> np.ndarray:
+    h = np.full(nlev + 1, depth / nlev, dtype=np.float64)
+    h[0] = 0.0
+    return h
 
 
 def _zeros(nlev: int = _NLEV) -> np.ndarray:
@@ -107,35 +107,23 @@ def _prepare_workspace(
     )
     profile_h = h if h is not None else make_equidistant_h(nlev, depth)
     for col in range(n_cols):
-        fill_field_from_array(ws.tke, tke if tke is not None else state.tke, col=col)
-        fill_field_from_array(
-            ws.tkeo,
-            tkeo if tkeo is not None else state.tkeo,
-            col=col,
-        )
-        fill_field_from_array(ws.eps, eps if eps is not None else state.eps, col=col)
-        fill_field_from_array(ws.L, L if L is not None else state.L, col=col)
-        fill_field_from_array(ws.h, profile_h, col=col)
-        fill_field_from_array(ws.NN, NN if NN is not None else _zeros(nlev), col=col)
-        fill_field_from_array(ws.SS, SS if SS is not None else _zeros(nlev), col=col)
-        fill_field_from_array(ws.P, P if P is not None else state.P, col=col)
-        fill_field_from_array(ws.B, B if B is not None else state.B, col=col)
-        fill_field_from_array(ws.Px, Px if Px is not None else state.Px, col=col)
-        fill_field_from_array(
-            ws.PSTK,
-            PSTK if PSTK is not None else state.PSTK,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.sl_var,
-            sl_var if sl_var is not None else state.sl_var,
-            col=col,
-        )
-        fill_field_scalar(ws.depth, depth, col=col)
-        fill_field_scalar(ws.u_taus, u_taus, col=col)
-        fill_field_scalar(ws.u_taub, u_taub, col=col)
-        fill_field_scalar(ws.z0s, z0s, col=col)
-        fill_field_scalar(ws.z0b, z0b, col=col)
+        ws.tke[col] = tke if tke is not None else state.tke
+        ws.tkeo[col] = tkeo if tkeo is not None else state.tkeo
+        ws.eps[col] = eps if eps is not None else state.eps
+        ws.L[col] = L if L is not None else state.L
+        ws.h[col] = profile_h
+        ws.NN[col] = NN if NN is not None else _zeros(nlev)
+        ws.SS[col] = SS if SS is not None else _zeros(nlev)
+        ws.P[col] = P if P is not None else state.P
+        ws.B[col] = B if B is not None else state.B
+        ws.Px[col] = Px if Px is not None else state.Px
+        ws.PSTK[col] = PSTK if PSTK is not None else state.PSTK
+        ws.sl_var[col] = sl_var if sl_var is not None else state.sl_var
+        ws.depth[col, 0] = depth
+        ws.u_taus[col, 0] = u_taus
+        ws.u_taub[col, 0] = u_taub
+        ws.z0s[col, 0] = z0s
+        ws.z0b[col, 0] = z0b
 
     ws.q2l.fill(0.0)
     ws.avh.fill(0.0)
@@ -256,8 +244,8 @@ def _run_step_lengthscaleeq(
 
     assert state.eps is not None
     assert state.L is not None
-    state.eps[:] = read_field_array(ws.eps)
-    state.L[:] = read_field_array(ws.L)
+    state.eps[:] = ws.eps[0]
+    state.L[:] = ws.L[0]
     return ws
 
 
@@ -325,7 +313,7 @@ def test_avh_matches_fortran_formula() -> None:
         sl_var=sl_var,
     )
 
-    avh = read_field_array(workspace.avh)
+    avh = workspace.avh[0]
     expected = sl_var[1:nlev] * np.sqrt(2.0 * tke[1:nlev]) * L[1:nlev]
     np.testing.assert_allclose(avh[1:nlev], expected, rtol=1.0e-12)
 
@@ -359,7 +347,7 @@ def test_my_length_variants_match_local_sink_update() -> None:
             z0b=8.0e-4,
         )
 
-        q2l = read_field_array(workspace.q2l)
+        q2l = workspace.q2l[0]
         lz = _compute_lz(my_length, h, _DEPTH, 1.2e-3, 8.0e-4, state.kappa)
         q3 = np.sqrt(8.0 * tke[1:nlev] ** 3)
         diss = q3 / state.b1 * (1.0 + state.e2 * (initial_l[1:nlev] / lz[1:nlev]) ** 2)
@@ -399,7 +387,7 @@ def test_positive_source_branch_matches_analytic_no_diffusion_update() -> None:
         sl_var=_zeros(nlev),
     )
 
-    q2l = read_field_array(workspace.q2l)
+    q2l = workspace.q2l[0]
     lz = _compute_lz(state.my_length, h, _DEPTH, 1.0e-3, 1.0e-3, state.kappa)
     prod = initial_l[1:nlev] * (
         state.e1 * P[1:nlev] + state.ex * Px[1:nlev] + state.e6 * PSTK[1:nlev]
@@ -441,7 +429,7 @@ def test_negative_buoyancy_branch_moves_sink_into_l_sour() -> None:
         sl_var=_zeros(nlev),
     )
 
-    q2l = read_field_array(workspace.q2l)
+    q2l = workspace.q2l[0]
     lz = _compute_lz(state.my_length, h, _DEPTH, 1.0e-3, 1.0e-3, state.kappa)
     prod = initial_l[1:nlev] * state.e1 * P[1:nlev]
     buoyan = state.e3 * initial_l[1:nlev] * B[1:nlev]
@@ -481,7 +469,7 @@ def test_boundary_fill_uses_logarithmic_dirichlet_values() -> None:
         z0b=z0b,
     )
 
-    q2l_profile = read_field_array(workspace.q2l)
+    q2l_profile = workspace.q2l[0]
     top = q2l_bc(state, Dirichlet, logarithmic, z0s, tke[nlev], z0s, u_taus)
     bottom = q2l_bc(state, Dirichlet, logarithmic, z0b, tke[0], z0b, u_taub)
     np.testing.assert_allclose(q2l_profile[nlev], top, rtol=1.0e-12)
@@ -635,9 +623,9 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     )
 
     for name in ("q2l", "eps", "L"):
-        single_arr = read_field_array(getattr(single, name), col=0)
-        multi_0 = read_field_array(getattr(multi, name), col=0)
-        multi_1 = read_field_array(getattr(multi, name), col=1)
+        single_arr = getattr(single, name)[0]
+        multi_0 = getattr(multi, name)[0]
+        multi_1 = getattr(multi, name)[1]
         np.testing.assert_allclose(multi_0, single_arr, rtol=1.0e-12)
         np.testing.assert_allclose(multi_1, single_arr, rtol=1.0e-12)
 
@@ -673,7 +661,7 @@ def test_no_nan_or_inf_for_valid_inputs() -> None:
 
     assert state.eps is not None
     assert state.L is not None
-    q2l = read_field_array(workspace.q2l)
+    q2l = workspace.q2l[0]
     assert np.isfinite(q2l).all()
     assert np.isfinite(state.eps).all()
     assert np.isfinite(state.L).all()

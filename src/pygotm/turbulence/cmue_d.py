@@ -5,81 +5,17 @@ r"""
 !
 ! !ROUTINE: The quasi-equilibrium stability functions \label{sec:cmueD}
 !
-! !INTERFACE:
-!   subroutine cmue_d(nlev)
-!
-! !DESCRIPTION:
-!
-!  This subroutine updates the explicit solution of
-!  \eq{bijVertical} and \eq{giVertical} under the same assumptions
-!  as those discussed in \sect{sec:cmueC}. Now, however, an additional
-!  equilibrium assumption is invoked. With the help of \eq{PeVertical},
-!  one can write the equilibrium condition for the TKE as
-! \begin{equation}
-!  \label{quasiEquilibrium}
-!     \dfrac{P+G}{\epsilon} =
-!    \hat{c}_\mu(\alpha_M,\alpha_N) \alpha_M
-!    - \hat{c}'_\mu(\alpha_M,\alpha_N) \alpha_N = 1
-!   \comma
-! \end{equation}
-! where \eq{alphaIdentities} has been used. This is an implicit relation
-! to determine $\alpha_M$ as a function of $\alpha_N$.
-! With the definitions given in \sect{sec:cmueC}, it turns out that
-! $\alpha_M(\alpha_N)$ is a quadratic polynomial that is easily solved.
-! The resulting value for $\alpha_M$ is substituted into the stability
-! functions described in \sect{sec:cmueC}. For negative $\alpha_N$
-! (convection) the shear number $\alpha_M$ computed in this way may
-! become negative. The value of $\alpha_N$ is limited such that this
-! does not happen, see \cite{UmlaufBurchard2005a}.
-!
-! !USES:
-!   use turbulence, only: an,as,at
-!   use turbulence, only: cmue1,cmue2
-!   use turbulence, only: cm0
-!   use turbulence, only: cc1
-!   use turbulence, only: ct1,ctt
-!   use turbulence, only: a1,a2,a3,a4,a5
-!   use turbulence, only: at1,at2,at3,at4,at5
-!
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!
-!  number of vertical layers
-!   integer, intent(in)       :: nlev
-!
-! !DEFINED PARAMETERS:
-!   REALTYPE, parameter       :: anLimitFact = 0.5D0
-!   REALTYPE, parameter       :: small       = 1.0D-10
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!-----------------------------------------------------------------------
-! !LOCAL VARIABLES:
-!
-!     integer                 ::   i
-!     REALTYPE                ::   N,Nt
-!     REALTYPE                ::   d0,d1,d2,d3,d4,d5
-!     REALTYPE                ::   n0,n1,n2,nt0,nt1,nt2
-!     REALTYPE                ::   dCm,nCm,nCmp,cm3_inv
-!     REALTYPE                ::   tmp0,tmp1,tmp2
-!     REALTYPE                ::   asMax,asMaxNum,asMaxDen
-!     REALTYPE                ::   anMin,anMinNum,anMinDen
-!-----------------------------------------------------------------------
-!BOC
-!EOC
-!
 !-----------------------------------------------------------------------
 ! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import math
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+import numba
+import numpy as np
+
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = [
     "CmueDWorkspace",
@@ -90,40 +26,42 @@ _AN_LIMIT_FACT: float = 0.5
 _SMALL: float = 1.0e-10
 
 
-class CmueDWorkspace(TaichiFieldCollection):
-    """Taichi fields for the quasi-equilibrium stability closure."""
+class CmueDWorkspace(ColumnWorkspace):
+    """Workspace arrays for quasi-equilibrium stability functions."""
 
-    as_: ti.Field
-    an: ti.Field
-    cmue1: ti.Field
-    cmue2: ti.Field
+    as_: np.ndarray
+    an: np.ndarray
+    cmue1: np.ndarray
+    cmue2: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("as_", "an", "cmue1", "cmue2"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.as_ = make_column_array(nlev, n_cols=n_cols)
+        self.an = make_column_array(nlev, n_cols=n_cols)
+        self.cmue1 = make_column_array(nlev, n_cols=n_cols)
+        self.cmue2 = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti_kernel
-def step_cmue_d(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    cm0: ti.f64,
-    cc1: ti.f64,
-    ct1: ti.f64,
-    a1: ti.f64,
-    a2: ti.f64,
-    a3: ti.f64,
-    a5: ti.f64,
-    at1: ti.f64,
-    at2: ti.f64,
-    at3: ti.f64,
-    at5: ti.f64,
-    as_: TemplateArg,
-    an: TemplateArg,
-    cmue1: TemplateArg,
-    cmue2: TemplateArg,
-):
-    r"""Update the quasi-equilibrium stability functions."""
+@numba.njit(cache=True)
+def _step_cmue_d(
+    nlev: int,
+    cm0: float,
+    cc1: float,
+    ct1: float,
+    a1: float,
+    a2: float,
+    a3: float,
+    a5: float,
+    at1: float,
+    at2: float,
+    at3: float,
+    at5: float,
+    as_: np.ndarray,
+    an: np.ndarray,
+    cmue1: np.ndarray,
+    cmue2: np.ndarray,
+) -> None:
+    r"""Update the quasi-equilibrium stability functions (single column)."""
 
     n_val = 0.5 * cc1
     nt_val = ct1
@@ -161,35 +99,63 @@ def step_cmue_d(  # type: ignore[no-untyped-def]
 
     cm3_inv = 1.0 / (cm0 * cm0 * cm0)
 
-    an_min_num = -(d1 + nt0) + ti.sqrt((d1 + nt0) * (d1 + nt0) - 4.0 * d0 * (d4 + nt1))
+    an_min_num = -(d1 + nt0) + math.sqrt((d1 + nt0) * (d1 + nt0) - 4.0 * d0 * (d4 + nt1))
     an_min_den = 2.0 * (d4 + nt1)
     an_min = an_min_num / an_min_den
 
-    for col in range(n_cols):
-        for i in range(1, nlev):
-            an[col, i] = ti.max(an[col, i], _AN_LIMIT_FACT * an_min)
+    for i in range(1, nlev):
+        if an[i] < _AN_LIMIT_FACT * an_min:
+            an[i] = _AN_LIMIT_FACT * an_min
 
-            tmp0 = -d0 - (d1 + nt0) * an[col, i] - (d4 + nt1) * an[col, i] * an[col, i]
-            tmp1 = -d2 + n0 + (n1 - d3 - nt2) * an[col, i]
+        tmp0 = -d0 - (d1 + nt0) * an[i] - (d4 + nt1) * an[i] * an[i]
+        tmp1 = -d2 + n0 + (n1 - d3 - nt2) * an[i]
 
-            if ti.abs(n2 - d5) < _SMALL:
-                as_[col, i] = -tmp0 / tmp1
-            else:
-                tmp2 = n2 - d5
-                as_[col, i] = (-tmp1 + ti.sqrt(tmp1 * tmp1 - 4.0 * tmp0 * tmp2)) / (
-                    2.0 * tmp2
-                )
-
-            d_cm = (
-                d0
-                + d1 * an[col, i]
-                + d2 * as_[col, i]
-                + d3 * an[col, i] * as_[col, i]
-                + d4 * an[col, i] * an[col, i]
-                + d5 * as_[col, i] * as_[col, i]
+        if abs(n2 - d5) < _SMALL:
+            as_[i] = -tmp0 / tmp1
+        else:
+            tmp2 = n2 - d5
+            as_[i] = (-tmp1 + math.sqrt(tmp1 * tmp1 - 4.0 * tmp0 * tmp2)) / (
+                2.0 * tmp2
             )
-            n_cm = n0 + n1 * an[col, i] + n2 * as_[col, i]
-            n_cmp = nt0 + nt1 * an[col, i] + nt2 * as_[col, i]
 
-            cmue1[col, i] = cm3_inv * n_cm / d_cm
-            cmue2[col, i] = cm3_inv * n_cmp / d_cm
+        d_cm = (
+            d0
+            + d1 * an[i]
+            + d2 * as_[i]
+            + d3 * an[i] * as_[i]
+            + d4 * an[i] * an[i]
+            + d5 * as_[i] * as_[i]
+        )
+        n_cm = n0 + n1 * an[i] + n2 * as_[i]
+        n_cmp = nt0 + nt1 * an[i] + nt2 * as_[i]
+
+        cmue1[i] = cm3_inv * n_cm / d_cm
+        cmue2[i] = cm3_inv * n_cmp / d_cm
+
+
+@numba.njit(parallel=True, cache=True)
+def step_cmue_d(
+    batch_size: int,
+    nlev: int,
+    cm0: float,
+    cc1: float,
+    ct1: float,
+    a1: float,
+    a2: float,
+    a3: float,
+    a5: float,
+    at1: float,
+    at2: float,
+    at3: float,
+    at5: float,
+    as_: np.ndarray,
+    an: np.ndarray,
+    cmue1: np.ndarray,
+    cmue2: np.ndarray,
+) -> None:
+    r"""Update the quasi-equilibrium stability functions (batch)."""
+    for b in numba.prange(batch_size):
+        _step_cmue_d(
+            nlev, cm0, cc1, ct1, a1, a2, a3, a5, at1, at2, at3, at5,
+            as_[b], an[b], cmue1[b], cmue2[b],
+        )

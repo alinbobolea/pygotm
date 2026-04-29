@@ -27,8 +27,6 @@ from typing import Any
 
 import gsw
 import numpy as np
-import taichi as ti
-from taichi.lang import impl as ti_impl
 
 from pygotm.airsea.airsea import (
     AirSeaDriverState,
@@ -54,6 +52,13 @@ from pygotm.airsea.airsea_variables import (
 )
 from pygotm.config import GotmConfig, GotmSettings, load_config
 from pygotm.config.settings import InputSetting, _canonical_token
+from pygotm.extras.seagrass.seagrass import (
+    SeagrassState,
+    do_seagrass,
+    end_seagrass,
+    init_seagrass,
+    post_init_seagrass,
+)
 from pygotm.gotm.diagnostics import (
     DiagnosticsState,
     clean_diagnostics,
@@ -67,6 +72,7 @@ from pygotm.gotm.register_all_variables import (
     snapshot_registry,
 )
 from pygotm.input.input import (
+    ProfileInput,
     ScalarInput,
     close_input,
     do_input,
@@ -98,19 +104,44 @@ from pygotm.observations.observations import (
     init_observations,
     post_init_observations,
 )
+from pygotm.stokes_drift.stokes_drift import (
+    CONSTANT as STOKES_CONSTANT,
+)
+from pygotm.stokes_drift.stokes_drift import (
+    EXPONENTIAL as STOKES_EXPONENTIAL,
+)
+from pygotm.stokes_drift.stokes_drift import (
+    FROMFILE as STOKES_FROMFILE,
+)
+from pygotm.stokes_drift.stokes_drift import (
+    FROMUS as STOKES_FROMUS,
+)
+from pygotm.stokes_drift.stokes_drift import (
+    NOTHING as STOKES_NOTHING,
+)
+from pygotm.stokes_drift.stokes_drift import (
+    THEORYWAVE as STOKES_THEORYWAVE,
+)
+from pygotm.stokes_drift.stokes_drift import (
+    StokesDriftState,
+    clean_stokes_drift,
+    do_stokes_drift,
+    init_stokes_drift,
+    post_init_stokes_drift,
+)
 from pygotm.turbulence.turbulence import (
-    Blackadar,
-    Bougeault_Andre,
+    CCH02,
     CHCD01A,
     CHCD01B,
-    CCH02,
-    Constant,
     GL78,
     KC94,
     LDOR96,
     LIST,
-    Munk_Anderson,
     MY82,
+    Blackadar,
+    Bougeault_Andre,
+    Constant,
+    Munk_Anderson,
     Parabolic,
     Robert_Ouellet,
     Schumann_Gerz,
@@ -144,10 +175,10 @@ from pygotm.turbulence.turbulence import (
 )
 from pygotm.util.density import (
     CP0,
-    DensityState,
     METHOD_LINEAR_TEOS10,
     METHOD_LINEAR_USER,
     METHOD_TEOS10,
+    DensityState,
     clean_density,
     do_density,
     init_density,
@@ -165,7 +196,8 @@ __all__ = [
 _GRID_METHOD = {"analytical": 0, "file_sigma": 1, "file_h": 2}
 _DENSITY_METHOD = {
     "full_teos10": METHOD_TEOS10,
-    "full_teos_10": METHOD_TEOS10,        # reference YAMLs use full_teos-10 → normalised
+    # Reference YAMLs use full_teos-10, normalised by _canonical_token.
+    "full_teos_10": METHOD_TEOS10,
     "linear_teos10": METHOD_LINEAR_TEOS10,
     "linear_teos_10": METHOD_LINEAR_TEOS10,
     "linear_custom": METHOD_LINEAR_USER,
@@ -270,6 +302,8 @@ class GotmRun:
     density: DensityState
     observations: ObservationsState
     airsea: AirSeaDriverState
+    stokes_drift: StokesDriftState
+    seagrass: SeagrassState
     turbulence: TurbulenceState
     diagnostics: DiagnosticsState
     surface_inputs: SurfaceInputs
@@ -294,11 +328,6 @@ def _mapping(value: object) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
-
-
-def _ensure_taichi_runtime() -> None:
-    if ti_impl.get_runtime().prog is None:
-        ti.init(arch=ti.cpu, default_fp=ti.f64)
 
 
 def _surface_value(input_: ScalarInput | None, default: float = 0.0) -> float:
@@ -334,6 +363,143 @@ def _maybe_register_scalar(
     )
     register_input(input_)
     return input_
+
+
+def _input_token(raw: dict[str, Any] | None, default: str = "constant") -> str:
+    setting = InputSetting.model_validate({} if raw is None else raw)
+    return _canonical_token(setting.method, default)
+
+
+def _register_stokes_scalar(
+    name: str,
+    raw: dict[str, Any] | None,
+) -> ScalarInput | None:
+    if not raw:
+        return None
+    setting = InputSetting.model_validate({} if raw is None else raw)
+    method = _canonical_token(setting.method, "off")
+    if method == "off":
+        return None
+    if method not in {"constant", "file"}:
+        msg = f"unsupported scalar Stokes input method {method!r} for {name!r}"
+        raise NotImplementedError(msg)
+    input_ = ScalarInput(
+        name=name,
+        method=STOKES_CONSTANT if method == "constant" else STOKES_FROMFILE,
+        path=setting.file,
+        index=setting.column,
+        constant_value=setting.constant_value,
+        scale_factor=setting.scale_factor,
+        add_offset=setting.offset,
+        method_constant=STOKES_CONSTANT,
+        method_file=STOKES_FROMFILE,
+    )
+    register_input(input_)
+    return input_
+
+
+def _register_stokes_profile(
+    name: str,
+    raw: dict[str, Any] | None,
+) -> tuple[int, ProfileInput | None]:
+    if not raw:
+        return STOKES_NOTHING, None
+    setting = InputSetting.model_validate({} if raw is None else raw)
+    method = _canonical_token(setting.method, "off")
+    if method in {"off", "none"}:
+        return STOKES_NOTHING, None
+    if method == "file":
+        input_ = ProfileInput(
+            name=name,
+            method=STOKES_FROMFILE,
+            path=setting.file,
+            index=setting.column,
+            constant_value=setting.constant_value,
+            scale_factor=setting.scale_factor,
+            add_offset=setting.offset,
+            method_constant=STOKES_CONSTANT,
+            method_file=STOKES_FROMFILE,
+        )
+        register_input(input_)
+        return STOKES_FROMFILE, input_
+    if method == "exponential":
+        return STOKES_EXPONENTIAL, None
+    if method in {"empirical", "theorywave", "theory_wave"}:
+        return STOKES_THEORYWAVE, None
+    if method in {"us", "vs"}:
+        return STOKES_FROMUS, None
+    msg = f"unsupported Stokes profile method {method!r} for {name!r}"
+    raise NotImplementedError(msg)
+
+
+def _configure_stokes_drift_from_document(
+    state: StokesDriftState,
+    document: dict[str, Any],
+) -> None:
+    waves = _mapping(document.get("waves"))
+    raw = _mapping(waves.get("stokes_drift"))
+    init_stokes_drift(state)
+
+    us0_raw = _mapping(raw.get("us0"))
+    vs0_raw = _mapping(raw.get("vs0"))
+    ds_raw = _mapping(_mapping(raw.get("exponential")).get("ds"))
+    if "ds" in raw:
+        ds_raw = _mapping(raw.get("ds"))
+    empirical = _mapping(raw.get("empirical"))
+    uwnd_raw = _mapping(empirical.get("uwnd"))
+    vwnd_raw = _mapping(empirical.get("vwnd"))
+
+    state.us0_input = _register_stokes_scalar("us0", us0_raw)
+    state.vs0_input = _register_stokes_scalar("vs0", vs0_raw)
+    state.ds_input = _register_stokes_scalar("ds", ds_raw) if ds_raw else None
+    state.uwnd_input = _register_stokes_scalar("uwnd", uwnd_raw) if uwnd_raw else None
+    state.vwnd_input = _register_stokes_scalar("vwnd", vwnd_raw) if vwnd_raw else None
+
+    state.us0_method = (
+        STOKES_NOTHING if state.us0_input is None else int(state.us0_input.method)
+    )
+    state.vs0_method = (
+        STOKES_NOTHING if state.vs0_input is None else int(state.vs0_input.method)
+    )
+    state.ds_method = (
+        STOKES_NOTHING if state.ds_input is None else int(state.ds_input.method)
+    )
+    state.uwnd_method = (
+        STOKES_NOTHING if state.uwnd_input is None else int(state.uwnd_input.method)
+    )
+    state.vwnd_method = (
+        STOKES_NOTHING if state.vwnd_input is None else int(state.vwnd_input.method)
+    )
+
+    state.usprof_method, state.usprof_input = _register_stokes_profile(
+        "us",
+        _mapping(raw.get("us")),
+    )
+    state.vsprof_method, state.vsprof_input = _register_stokes_profile(
+        "vs",
+        _mapping(raw.get("vs")),
+    )
+    state.dusdz_method, state.dusdz_input = _register_stokes_profile(
+        "dusdz",
+        _mapping(raw.get("dusdz")),
+    )
+    state.dvsdz_method, state.dvsdz_input = _register_stokes_profile(
+        "dvsdz",
+        _mapping(raw.get("dvsdz")),
+    )
+
+
+def _configure_seagrass_from_document(
+    state: SeagrassState,
+    document: dict[str, Any],
+) -> None:
+    raw = _mapping(document.get("seagrass"))
+    init_seagrass(
+        state,
+        method=int(raw.get("method", 0)),
+        grassfile=str(raw.get("file", "seagrass.dat") or "seagrass.dat"),
+        alpha=float(raw.get("alpha", 0.0)),
+    )
 
 
 def _configure_meanflow_from_document(
@@ -418,10 +584,12 @@ def _configure_airsea_from_document(
         hum_method=_HUM_METHOD[hum_type],
         shortwave_method=3 if swr_method == "calculate" else 1,
         shortwave_type=int(swr.get("type", 1)),
+        shortwave_scale_factor=float(swr.get("scale_factor", 1.0)),
         longwave_method=_LONGWAVE_METHOD[longwave_method],
         longwave_type=int(longwave.get("type", 1)),
         albedo_method=_ALBEDO_METHOD[albedo_method],
         const_albedo=float(albedo.get("constant_value", 0.0)),
+        heat_scale_factor=float(_mapping(fluxes.get("heat")).get("scale_factor", 1.0)),
         ssuv_method=0 if ssuv_method == "absolute" else 1,
     )
     airsea.calc_evaporation = bool(surface.get("calc_evaporation", False))
@@ -434,12 +602,20 @@ def _configure_airsea_from_document(
     else:
         inputs.u10 = _maybe_register_scalar("u10_input", _mapping(surface.get("u10")))
         inputs.v10 = _maybe_register_scalar("v10_input", _mapping(surface.get("v10")))
-        inputs.airp = _maybe_register_scalar("airp_input", _mapping(surface.get("airp")))
-        inputs.airt = _maybe_register_scalar("airt_input", _mapping(surface.get("airt")))
+        inputs.airp = _maybe_register_scalar(
+            "airp_input", _mapping(surface.get("airp"))
+        )
+        inputs.airt = _maybe_register_scalar(
+            "airt_input", _mapping(surface.get("airt"))
+        )
         inputs.hum = _maybe_register_scalar("hum_input", hum)
-        inputs.cloud = _maybe_register_scalar("cloud_input", _mapping(surface.get("cloud")))
+        inputs.cloud = _maybe_register_scalar(
+            "cloud_input", _mapping(surface.get("cloud"))
+        )
 
-    inputs.precip = _maybe_register_scalar("precip_input", _mapping(surface.get("precip")))
+    inputs.precip = _maybe_register_scalar(
+        "precip_input", _mapping(surface.get("precip"))
+    )
     if swr_method != "calculate":
         inputs.swr = _maybe_register_scalar("I_0_input", swr)
     if longwave_method in {"constant", "file"}:
@@ -626,9 +802,14 @@ def _configure_output_schedule(document: dict[str, Any], dt: float) -> OutputSch
             msg = f"unsupported output time_unit {time_unit!r}"
             raise NotImplementedError(msg)
 
-        interval_steps = interval if interval_steps == 1 else min(interval_steps, interval)
+        interval_steps = (
+            interval if interval_steps == 1 else min(interval_steps, interval)
+        )
 
-    return OutputSchedule(interval_steps=interval_steps, time_method=current_time_method)
+    return OutputSchedule(
+        interval_steps=interval_steps,
+        time_method=current_time_method,
+    )
 
 
 def _apply_initial_profiles(run: GotmRun) -> None:
@@ -724,7 +905,10 @@ def _update_relaxation_targets(run: GotmRun) -> None:
     z = meanflow.z[1 : run.nlev + 1]
     pressure = -z
 
-    if observations.sprof_input.method != 0 and observations.sprof_input.data is not None:
+    if (
+        observations.sprof_input.method != 0
+        and observations.sprof_input.data is not None
+    ):
         if observations.initial_salinity_type == 1:
             meanflow.Sobs[1 : run.nlev + 1] = gsw.SA_from_SP(
                 observations.sprof_input.data[1 : run.nlev + 1],
@@ -733,9 +917,14 @@ def _update_relaxation_targets(run: GotmRun) -> None:
                 run.latitude,
             )
         else:
-            meanflow.Sobs[1 : run.nlev + 1] = observations.sprof_input.data[1 : run.nlev + 1]
+            meanflow.Sobs[1 : run.nlev + 1] = observations.sprof_input.data[
+                1 : run.nlev + 1
+            ]
 
-    if observations.tprof_input.method != 0 and observations.tprof_input.data is not None:
+    if (
+        observations.tprof_input.method != 0
+        and observations.tprof_input.data is not None
+    ):
         if observations.initial_temperature_type == 1:
             meanflow.Tobs[1 : run.nlev + 1] = gsw.CT_from_t(
                 meanflow.Sobs[1 : run.nlev + 1],
@@ -748,7 +937,9 @@ def _update_relaxation_targets(run: GotmRun) -> None:
                 observations.tprof_input.data[1 : run.nlev + 1],
             )
         else:
-            meanflow.Tobs[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
+            meanflow.Tobs[1 : run.nlev + 1] = observations.tprof_input.data[
+                1 : run.nlev + 1
+            ]
 
 
 def _accumulate_snapshot(run: GotmRun) -> None:
@@ -803,7 +994,6 @@ def initialize_gotm_from_settings(
     nlev = settings.grid.nlev
     depth = settings.location.depth
 
-    _ensure_taichi_runtime()
     init_input(nlev)
 
     meanflow = MeanflowState()
@@ -840,8 +1030,20 @@ def initialize_gotm_from_settings(
     )
 
     airsea = AirSeaDriverState()
-    surface_inputs, _ice_model = _configure_airsea_from_document(airsea, resolved_document)
+    surface_inputs, _ice_model = _configure_airsea_from_document(
+        airsea,
+        resolved_document,
+    )
     post_init_airsea(airsea, settings.location.latitude, settings.location.longitude)
+
+    stokes = StokesDriftState()
+    _configure_stokes_drift_from_document(stokes, resolved_document)
+    post_init_stokes_drift(stokes, nlev)
+
+    seagrass = SeagrassState()
+    _configure_seagrass_from_document(seagrass, resolved_document)
+    assert meanflow.h is not None
+    post_init_seagrass(seagrass, nlev, meanflow.h)
 
     do_input(time_state.julianday, time_state.secondsofday, nlev, meanflow.z)
     get_all_obs(
@@ -869,6 +1071,8 @@ def initialize_gotm_from_settings(
             density=density,
             observations=observations,
             airsea=airsea,
+            stokes_drift=stokes,
+            seagrass=seagrass,
             turbulence=turbulence,
             diagnostics=DiagnosticsState(),
             surface_inputs=surface_inputs,
@@ -896,6 +1100,8 @@ def initialize_gotm_from_settings(
         density=density,
         observations=observations,
         airsea=airsea,
+        stokes_drift=stokes,
+        seagrass=seagrass,
         turbulence=turbulence,
         diagnostics=diagnostics,
         surface_inputs=surface_inputs,
@@ -919,6 +1125,7 @@ def initialize_gotm_from_settings(
         airsea=airsea,
         density=density,
         turbulence=turbulence,
+        stokes_drift=stokes,
         surface_inputs=surface_inputs,
         i0_provider=lambda: run.current_i0,
     )
@@ -951,7 +1158,16 @@ def initialize_gotm_from_settings(
         ),
     )
     run.current_i0 = airsea.shortwave * (1.0 - airsea.albedo - airsea.bio_albedo)
-    shear(meanflow, nlev, settings.time.cnpar)
+    do_stokes_drift(
+        stokes,
+        nlev,
+        meanflow.z,
+        meanflow.zi,
+        meanflow.gravity,
+        _surface_value(surface_inputs.u10),
+        _surface_value(surface_inputs.v10),
+    )
+    shear(meanflow, nlev, settings.time.cnpar, stokes.dusdz, stokes.dvsdz)
     do_density(density, nlev, meanflow.S, meanflow.T, -meanflow.z, -meanflow.zi)
     meanflow.buoy[1 : nlev + 1] = (
         -meanflow.gravity * (density.rho_p[1 : nlev + 1] - density.rho0) / density.rho0
@@ -1017,6 +1233,8 @@ def integrate_gotm(
     observations = run.observations
     turbulence = run.turbulence
     airsea = run.airsea
+    stokes = run.stokes_drift
+    seagrass = run.seagrass
     density = run.density
     surface_inputs = run.surface_inputs
 
@@ -1029,6 +1247,7 @@ def integrate_gotm(
     assert meanflow.v is not None
     assert meanflow.buoy is not None
     assert meanflow.drag is not None
+    assert meanflow.xP is not None
     assert meanflow.NN is not None
     assert meanflow.SS is not None
     assert meanflow.SSU is not None
@@ -1047,6 +1266,8 @@ def integrate_gotm(
     assert turbulence.gamh is not None
     assert turbulence.gams is not None
     assert turbulence.tke is not None
+    assert stokes.dusdz is not None
+    assert stokes.dvsdz is not None
     h = meanflow.h
     salinity_profile = meanflow.S
     temperature_profile = meanflow.T
@@ -1121,9 +1342,18 @@ def integrate_gotm(
         airsea.ty = airsea.ty / density.rho0
         tx = airsea.tx
         ty = airsea.ty
-        integrated_fluxes(airsea, run.dt)
+        integrated_fluxes(airsea, run.dt, shortwave=run.current_i0)
 
         updategrid(meanflow, run.nlev, run.dt, meanflow.zeta)
+        do_stokes_drift(
+            stokes,
+            run.nlev,
+            meanflow.z,
+            meanflow.zi,
+            meanflow.gravity,
+            _surface_value(surface_inputs.u10),
+            _surface_value(surface_inputs.v10),
+        )
         adjusted_w_height = wequation(
             meanflow,
             run.nlev,
@@ -1134,6 +1364,16 @@ def integrate_gotm(
         )
         observations.w_height_input.value = adjusted_w_height
         coriolis(meanflow, run.nlev, run.dt)
+        do_seagrass(
+            seagrass,
+            run.nlev,
+            run.dt,
+            meanflow.u,
+            meanflow.v,
+            meanflow.h,
+            meanflow.drag,
+            meanflow.xP,
+        )
 
         uequation(
             meanflow,
@@ -1147,6 +1387,7 @@ def integrate_gotm(
             ext_method=observations.ext_press_mode,
             dpdx=float(observations.dpdx_input.value),
             idpdx=observations.idpdx,
+            dusdz=stokes.dusdz,
             w_adv_active=observations.w_adv_input.method != 0,
             w_adv_discr=observations.w_adv_discr,
             vel_relax_tau=observations.SRelaxTau * 0.0 + observations.vel_relax_tau,
@@ -1155,6 +1396,7 @@ def integrate_gotm(
             plume_active=(
                 observations.int_press_type == 2 and observations.plume_type == 1
             ),
+            seagrass_active=seagrass.seagrass_calc,
         )
         vequation(
             meanflow,
@@ -1168,6 +1410,7 @@ def integrate_gotm(
             ext_method=observations.ext_press_mode,
             dpdy=float(observations.dpdy_input.value),
             idpdy=observations.idpdy,
+            dvsdz=stokes.dvsdz,
             w_adv_active=observations.w_adv_input.method != 0,
             w_adv_discr=observations.w_adv_discr,
             vel_relax_tau=observations.SRelaxTau * 0.0 + observations.vel_relax_tau,
@@ -1257,7 +1500,7 @@ def integrate_gotm(
             )
 
         _update_relaxation_targets(run)
-        shear(meanflow, run.nlev, run.cnpar)
+        shear(meanflow, run.nlev, run.cnpar, stokes.dusdz, stokes.dvsdz)
         do_density(
             density,
             run.nlev,
@@ -1323,6 +1566,8 @@ def finalize_gotm(run: GotmRun) -> None:
         return
     close_input()
     clean_airsea(run.airsea)
+    clean_stokes_drift(run.stokes_drift)
+    end_seagrass(run.seagrass)
     clean_turbulence(run.turbulence)
     clean_observations(run.observations)
     clean_diagnostics(run.diagnostics)

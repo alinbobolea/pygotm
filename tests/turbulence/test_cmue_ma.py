@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, read_field_array
 
 from pygotm.turbulence.cmue_ma import CmueMAWorkspace, step_cmue_ma
 from pygotm.turbulence.turbulence import (
@@ -37,18 +36,10 @@ def _run_step_cmue_ma(
 
     ws = CmueMAWorkspace(nlev, n_cols=n_cols)
     for col in range(n_cols):
-        fill_field_from_array(ws.as_, as_, col=col)
-        fill_field_from_array(ws.an, an, col=col)
-        fill_field_from_array(
-            ws.cmue1,
-            cmue1 if cmue1 is not None else state.cmue1,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.cmue2,
-            cmue2 if cmue2 is not None else state.cmue2,
-            col=col,
-        )
+        ws.as_[col] = as_
+        ws.an[col] = an
+        ws.cmue1[col] = cmue1 if cmue1 is not None else state.cmue1
+        ws.cmue2[col] = cmue2 if cmue2 is not None else state.cmue2
 
     step_cmue_ma(
         n_cols,
@@ -61,8 +52,8 @@ def _run_step_cmue_ma(
         ws.cmue2,
     )
 
-    state.cmue1[:] = read_field_array(ws.cmue1)
-    state.cmue2[:] = read_field_array(ws.cmue2)
+    state.cmue1[:] = ws.cmue1[0]
+    state.cmue2[:] = ws.cmue2[0]
     return ws
 
 
@@ -118,10 +109,10 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     multi = _run_step_cmue_ma(multi_state, nlev, as_=as_, an=an, n_cols=3)
 
     for name in ("cmue1", "cmue2"):
-        single_arr = read_field_array(getattr(single, name), col=0)
+        single_arr = getattr(single, name)[0]
         for col in range(3):
             np.testing.assert_allclose(
-                read_field_array(getattr(multi, name), col=col),
+                getattr(multi, name)[col],
                 single_arr,
                 rtol=1.0e-12,
             )

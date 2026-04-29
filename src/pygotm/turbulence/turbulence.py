@@ -156,7 +156,6 @@ from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import numpy as np
-import taichi as ti
 
 __all__ = [
     "TurbulenceState",
@@ -500,7 +499,7 @@ class TurbulenceState:
         self.nuhiw: float = 5.0e-5
         self.numshear: float = 5.0e-3
 
-        # Lazily allocated Taichi workspaces reused across time steps.
+        # Lazily allocated NumPy workspaces reused across time steps.
         self._kernel_workspaces: dict[str, object] = {}
         self._kernel_nlev: int | None = None
 
@@ -678,28 +677,25 @@ def _validate_profile(name: str, values: np.ndarray, nlev: int) -> None:
         raise ValueError(msg)
 
 
-def _write_profile(field: ti.Field, values: np.ndarray) -> None:
-    data = np.zeros(field.shape, dtype=np.float64)
-    if data.ndim == 1:
-        data[:] = values
+def _write_profile(field: np.ndarray, values: np.ndarray) -> None:
+    if field.ndim == 1:
+        field[:] = values
     else:
-        data[0, :] = values
-    field.from_numpy(data)
+        field[0, :] = values
 
 
-def _write_scalar(field: ti.Field, value: float) -> None:
+def _write_scalar(field: np.ndarray, value: float) -> None:
     field.fill(0.0)
-    if len(field.shape) == 1:
+    if field.ndim == 1:
         field[0] = value
     else:
         field[0, 0] = value
 
 
-def _read_profile(field: ti.Field) -> np.ndarray:
-    data = np.asarray(field.to_numpy(), dtype=np.float64)
-    if data.ndim == 1:
-        return data.copy()
-    return np.asarray(data[0, :], dtype=np.float64).copy()
+def _read_profile(field: np.ndarray) -> np.ndarray:
+    if field.ndim == 1:
+        return np.asarray(field, dtype=np.float64).copy()
+    return np.asarray(field[0, :], dtype=np.float64).copy()
 
 
 def _ensure_workspace(

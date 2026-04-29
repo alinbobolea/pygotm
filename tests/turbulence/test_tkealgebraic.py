@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, fill_field_scalar, read_field_array
 
 from pygotm.turbulence.tkealgebraic import (
     TKEAlgebraicWorkspace,
@@ -58,23 +57,15 @@ def _prepare_workspace(
     ss = SS if SS is not None else np.zeros(nlev + 1, dtype=np.float64)
 
     for col in range(n_cols):
-        fill_field_from_array(ws.tke, tke if tke is not None else state.tke, col=col)
-        fill_field_from_array(ws.tkeo, state.tkeo, col=col)
-        fill_field_from_array(ws.L, L if L is not None else state.L, col=col)
-        fill_field_from_array(ws.NN, nn, col=col)
-        fill_field_from_array(ws.SS, ss, col=col)
-        fill_field_from_array(
-            ws.cmue1,
-            cmue1 if cmue1 is not None else state.cmue1,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.cmue2,
-            cmue2 if cmue2 is not None else state.cmue2,
-            col=col,
-        )
-        fill_field_scalar(ws.u_taus, u_taus, col=col)
-        fill_field_scalar(ws.u_taub, u_taub, col=col)
+        ws.tke[col] = tke if tke is not None else state.tke
+        ws.tkeo[col] = state.tkeo
+        ws.L[col] = L if L is not None else state.L
+        ws.NN[col] = nn
+        ws.SS[col] = ss
+        ws.cmue1[col] = cmue1 if cmue1 is not None else state.cmue1
+        ws.cmue2[col] = cmue2 if cmue2 is not None else state.cmue2
+        ws.u_taus[col, 0] = u_taus
+        ws.u_taub[col, 0] = u_taub
 
     return ws
 
@@ -128,8 +119,8 @@ def _run_step_tkealgebraic(
 
     assert state.tke is not None
     assert state.tkeo is not None
-    state.tke[:] = read_field_array(ws.tke)
-    state.tkeo[:] = read_field_array(ws.tkeo)
+    state.tke[:] = ws.tke[0]
+    state.tkeo[:] = ws.tkeo[0]
     return ws
 
 
@@ -260,7 +251,7 @@ def test_multicolumn_parity_for_identical_columns() -> None:
         u_taus=0.012,
         u_taub=0.007,
     )
-    single_result = read_field_array(single.tke)
+    single_result = single.tke[0]
 
     multi_state = _make_state(nlev)
     multi = _run_step_tkealgebraic(
@@ -279,7 +270,7 @@ def test_multicolumn_parity_for_identical_columns() -> None:
 
     for col in range(3):
         np.testing.assert_allclose(
-            read_field_array(multi.tke, col=col),
+            multi.tke[col],
             single_result,
             rtol=1.0e-12,
         )

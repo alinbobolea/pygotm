@@ -4,12 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from taichi_helpers import (
-    fill_field_from_array,
-    fill_field_scalar,
-    make_equidistant_h,
-    read_field_array,
-)
 
 from pygotm.turbulence.algebraiclength import (
     AlgebraicLengthWorkspace,
@@ -30,6 +24,12 @@ _NLEV = 12
 _DEPTH = 24.0
 _Z0B = 2.0e-3
 _Z0S = 1.0e-3
+
+
+def make_equidistant_h(nlev: int, depth: float) -> np.ndarray:
+    h = np.full(nlev + 1, depth / nlev, dtype=np.float64)
+    h[0] = 0.0
+    return h
 
 
 def _make_state(nlev: int = _NLEV, *, length_lim: bool = True) -> TurbulenceState:
@@ -145,14 +145,14 @@ def _run_step_algebraiclength(
     profile_h = h if h is not None else make_equidistant_h(nlev, depth)
     profile_nn = NN if NN is not None else np.zeros(nlev + 1, dtype=np.float64)
     for col in range(n_cols):
-        fill_field_from_array(ws.tke, tke, col=col)
-        fill_field_from_array(ws.eps, eps if eps is not None else state.eps, col=col)
-        fill_field_from_array(ws.L, L if L is not None else state.L, col=col)
-        fill_field_from_array(ws.h, profile_h, col=col)
-        fill_field_from_array(ws.NN, profile_nn, col=col)
-        fill_field_scalar(ws.depth, depth, col=col)
-        fill_field_scalar(ws.z0b, z0b, col=col)
-        fill_field_scalar(ws.z0s, z0s, col=col)
+        ws.tke[col] = tke
+        ws.eps[col] = eps if eps is not None else state.eps
+        ws.L[col] = L if L is not None else state.L
+        ws.h[col] = profile_h
+        ws.NN[col] = profile_nn
+        ws.depth[col, 0] = depth
+        ws.z0b[col, 0] = z0b
+        ws.z0s[col, 0] = z0s
 
     step_algebraiclength(
         n_cols,
@@ -173,8 +173,8 @@ def _run_step_algebraiclength(
         ws.z0s,
     )
 
-    state.L[:] = read_field_array(ws.L)
-    state.eps[:] = read_field_array(ws.eps)
+    state.L[:] = ws.L[0]
+    state.eps[:] = ws.eps[0]
     return ws
 
 
@@ -272,10 +272,10 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     )
 
     for name in ("L", "eps"):
-        single_arr = read_field_array(getattr(single, name), col=0)
+        single_arr = getattr(single, name)[0]
         for col in range(2):
             np.testing.assert_allclose(
-                read_field_array(getattr(multi, name), col=col),
+                getattr(multi, name)[col],
                 single_arr,
                 rtol=1.0e-12,
             )

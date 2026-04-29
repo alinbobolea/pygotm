@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, read_field_array
 
 from pygotm.turbulence.internal_wave import InternalWaveWorkspace, step_internal_wave
 from pygotm.turbulence.turbulence import (
@@ -72,11 +71,11 @@ def _run_step(
 ) -> InternalWaveWorkspace:
     workspace = InternalWaveWorkspace(_NLEV, n_cols=n_cols)
     for col in range(n_cols):
-        fill_field_from_array(workspace.tke, tke, col=col)
-        fill_field_from_array(workspace.num, num, col=col)
-        fill_field_from_array(workspace.nuh, nuh, col=col)
-        fill_field_from_array(workspace.NN, NN, col=col)
-        fill_field_from_array(workspace.SS, SS, col=col)
+        workspace.tke[col] = tke
+        workspace.num[col] = num
+        workspace.nuh[col] = nuh
+        workspace.NN[col] = NN
+        workspace.SS[col] = SS
 
     step_internal_wave(
         n_cols,
@@ -128,14 +127,10 @@ def test_matches_fortran_reference_across_all_branches() -> None:
         SS=SS,
     )
 
-    np.testing.assert_allclose(
-        read_field_array(workspace.num), expected_num, rtol=1.0e-12
-    )
-    np.testing.assert_allclose(
-        read_field_array(workspace.nuh), expected_nuh, rtol=1.0e-12
-    )
-    assert read_field_array(workspace.num)[0] == num[0]
-    assert read_field_array(workspace.nuh)[_NLEV] == nuh[_NLEV]
+    np.testing.assert_allclose(workspace.num[0], expected_num, rtol=1.0e-12)
+    np.testing.assert_allclose(workspace.nuh[0], expected_nuh, rtol=1.0e-12)
+    assert workspace.num[0, 0] == num[0]
+    assert workspace.nuh[0, _NLEV] == nuh[_NLEV]
 
 
 def test_non_matching_iw_model_leaves_fields_unchanged() -> None:
@@ -148,8 +143,8 @@ def test_non_matching_iw_model_leaves_fields_unchanged() -> None:
 
     workspace = _run_step(state, tke=tke, num=num, nuh=nuh, NN=NN, SS=SS)
 
-    np.testing.assert_allclose(read_field_array(workspace.num), num)
-    np.testing.assert_allclose(read_field_array(workspace.nuh), nuh)
+    np.testing.assert_allclose(workspace.num[0], num)
+    np.testing.assert_allclose(workspace.nuh[0], nuh)
 
 
 def test_multicolumn_parity_for_identical_columns() -> None:
@@ -164,12 +159,9 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     multi = _run_step(state, tke=tke, num=num, nuh=nuh, NN=NN, SS=SS, n_cols=2)
 
     for name in ("num", "nuh"):
-        expected = read_field_array(getattr(single, name))
+        expected = getattr(single, name)[0]
         for col in range(2):
-            np.testing.assert_allclose(
-                read_field_array(getattr(multi, name), col=col),
-                expected,
-            )
+            np.testing.assert_allclose(getattr(multi, name)[col], expected)
 
 
 def test_no_nan_or_inf_for_valid_inputs() -> None:
@@ -182,5 +174,5 @@ def test_no_nan_or_inf_for_valid_inputs() -> None:
 
     workspace = _run_step(state, tke=tke, num=num, nuh=nuh, NN=NN, SS=SS)
 
-    assert np.isfinite(read_field_array(workspace.num)).all()
-    assert np.isfinite(read_field_array(workspace.nuh)).all()
+    assert np.isfinite(workspace.num).all()
+    assert np.isfinite(workspace.nuh).all()

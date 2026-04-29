@@ -1,3 +1,5 @@
 """Sediment extension modules."""
 
-__all__: list[str] = []
+from pygotm.extras.sediment.sediment import SedimentState
+
+__all__ = ["SedimentState"]

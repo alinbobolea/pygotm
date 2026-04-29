@@ -41,7 +41,7 @@ def collect_version_lines() -> tuple[str, ...]:
         f"pyGOTM:  {_dist_version('pygotm', '0.1.0')}",
         f"Python:  {platform.python_version()}",
         f"NumPy:   {_dist_version('numpy')}",
-        f"Taichi:  {_dist_version('taichi')}",
+        f"Numba:   {_dist_version('numba')}",
         f"xarray:  {_dist_version('xarray')}",
         f"NetCDF4: {_dist_version('netcdf4')}",
         f"GSW:     {_dist_version('gsw')}",

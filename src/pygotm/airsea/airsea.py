@@ -68,12 +68,14 @@ class AirSeaDriverState(AirSeaState):
 
         self.shortwave_method: int = 1
         self.shortwave_type: int = 1
+        self.shortwave_scale_factor: float = 1.0
         self.longwave_method: int = CLARK
         self.longwave_type: int = 1
         self.hum_method: int = 1
         self.albedo_method: int = PAYNE
         self.const_albedo: float = 0.0
         self.fluxes_method: int = 0
+        self.heat_scale_factor: float = 1.0
         self.ssuv_method: int = 1
 
         self.dlon: float = 0.0
@@ -247,7 +249,8 @@ def do_airsea(
                 state.dlon,
                 state.dlat,
                 cloud,
-            )
+            ) * state.shortwave_scale_factor
+        state.heat = state.heat * state.heat_scale_factor
     else:
         state.qe = 0.0
         state.qh = 0.0
@@ -288,13 +291,20 @@ def clean_airsea(state: AirSeaDriverState) -> None:
     del state
 
 
-def integrated_fluxes(state: AirSeaDriverState, dt: float) -> None:
+def integrated_fluxes(
+    state: AirSeaDriverState,
+    dt: float,
+    *,
+    shortwave: float | None = None,
+) -> None:
     """Integrate freshwater and heat fluxes over ``dt`` seconds."""
 
     state.int_precip = state.int_precip + dt * state.precip
     state.int_evap = state.int_evap + dt * state.evap
     state.int_fwf = state.int_precip + state.int_evap
-    state.int_swr = state.int_swr + dt * state.shortwave
+    state.int_swr = state.int_swr + dt * (
+        state.shortwave if shortwave is None else shortwave
+    )
     state.int_heat = state.int_heat + dt * state.heat
     state.int_total = state.int_swr + state.int_heat
 

@@ -1,3 +1,5 @@
 """Seagrass extension modules."""
 
-__all__: list[str] = []
+from pygotm.extras.seagrass.seagrass import SeagrassState
+
+__all__ = ["SeagrassState"]

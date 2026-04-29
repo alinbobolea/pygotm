@@ -5,88 +5,17 @@ r"""
 !
 ! !ROUTINE: The algebraic k-equation\label{sec:tkealgebraic}
 !
-! !INTERFACE:
-!   subroutine tkealgebraic(nlev,u_taus,u_taub,NN,SS)
-!
-! !DESCRIPTION:
-!  This subroutine computes the turbulent kinetic energy based
-!  on \eq{tkeA}, but using the local equilibrium assumption
-!  \begin{equation}
-!   \label{localEQa}
-!     P+G-\epsilon=0
-!    \point
-!  \end{equation}
-! This statement can be re-expressed in the form
-!  \begin{equation}
-!   \label{localEQb}
-!     k= (c_\mu^0)^{-3} \, l^2 ( c_\mu M^2 - c'_\mu N^2 )
-!    \comma
-!  \end{equation}
-!  were we used the expressions in \eq{PandG} together with
-!  \eq{fluxes} and \eq{nu}. The rate of dissipaton, $\epsilon$,
-!  has been expressed in terms of $l$ via \eq{epsilon}.
-!  This equation has been implemented to update $k$ in a diagnostic
-!  way. It is possible to compute the value of $k$ as the weighted average
-!  of \eq{localEQb} and the value of $k$ at the old timestep. The weighting factor
-!  is defined by the {\tt parameter c\_filt}. It is recommended to take this factor
-!  small (e.g.\ {\tt c\_filt = 0.2}) in order to reduce the strong oscillations
-!  associated with this scheme, and to couple it with an algebraically prescribed
-!  length scale with the length scale limitation active ({\tt length\_lim=.true.} in
-!  {\tt gotm.yaml}, see \cite{Galperinetal88}).
-!
-! !USES:
-!   use turbulence,   only: tke,tkeo,L,k_min
-!   use turbulence,   only: cmue2,cde,cmue1,cm0
-!
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!
-!  number of vertical layers
-!   integer,  intent(in)                :: nlev
-!
-!  surface and bottom
-!  friction velocity (m/s)
-!   REALTYPE, intent(in)                :: u_taus,u_taub
-!
-!  square of shear and buoyancy
-!  frequency (1/s^2)
-!   REALTYPE, intent(in)                :: NN(0:nlev),SS(0:nlev)
-!
-! !DEFINED PARAMETERS:
-!   REALTYPE , parameter                :: c_filt=1.0
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-!EOP
-!-----------------------------------------------------------------------
-!
-! !LOCAL VARIABLES:
-!   integer                   :: i
-!
-!-----------------------------------------------------------------------
-!BOC
-!
-!  save value at old time step
-!
-!  compute new tke as the weighted average of old and new value
-!
-!  formally compute BC
-!
-!
-!  clip at k_min
-!EOC
-!
 !-----------------------------------------------------------------------
 ! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import math
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+import numba
+import numpy as np
+
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = [
     "TKEAlgebraicWorkspace",
@@ -96,64 +25,94 @@ __all__ = [
 _C_FILT: float = 1.0
 
 
-class TKEAlgebraicWorkspace(TaichiFieldCollection):
-    """Taichi fields for the translated algebraic TKE update."""
+class TKEAlgebraicWorkspace(ColumnWorkspace):
+    """Workspace arrays for the algebraic TKE closure."""
 
-    tke: ti.Field
-    tkeo: ti.Field
-    L: ti.Field
-    NN: ti.Field
-    SS: ti.Field
-    cmue1: ti.Field
-    cmue2: ti.Field
-    u_taus: ti.Field
-    u_taub: ti.Field
+    tke: np.ndarray
+    tkeo: np.ndarray
+    L: np.ndarray
+    NN: np.ndarray
+    SS: np.ndarray
+    cmue1: np.ndarray
+    cmue2: np.ndarray
+    u_taus: np.ndarray
+    u_taub: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "tkeo", "L", "NN", "SS", "cmue1", "cmue2"))
-        self.allocate_many(("u_taus", "u_taub"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.tkeo = make_column_array(nlev, n_cols=n_cols)
+        self.L = make_column_array(nlev, n_cols=n_cols)
+        self.NN = make_column_array(nlev, n_cols=n_cols)
+        self.SS = make_column_array(nlev, n_cols=n_cols)
+        self.cmue1 = make_column_array(nlev, n_cols=n_cols)
+        self.cmue2 = make_column_array(nlev, n_cols=n_cols)
+        self.u_taus = make_column_array(nlev, n_cols=n_cols)
+        self.u_taub = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti_kernel
-def step_tkealgebraic(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    k_min: ti.f64,
-    cm0: ti.f64,
-    cde: ti.f64,
-    tke: TemplateArg,
-    tkeo: TemplateArg,
-    L: TemplateArg,
-    NN: TemplateArg,
-    SS: TemplateArg,
-    cmue1: TemplateArg,
-    cmue2: TemplateArg,
-    u_taus: TemplateArg,
-    u_taub: TemplateArg,
-):
-    r"""Advance the algebraic TKE closure for one or more columns."""
+@numba.njit(cache=True)
+def _step_tkealgebraic(
+    nlev: int,
+    k_min: float,
+    cm0: float,
+    cde: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    L: np.ndarray,
+    NN: np.ndarray,
+    SS: np.ndarray,
+    cmue1: np.ndarray,
+    cmue2: np.ndarray,
+    u_taus: float,
+    u_taub: float,
+) -> None:
+    r"""Advance the algebraic TKE closure (single column)."""
+    for i in range(nlev + 1):
+        tkeo[i] = tke[i]
 
-    for col in range(n_cols):
-        for i in range(nlev + 1):
-            tkeo[col, i] = tke[col, i]
-
-        for i in range(1, nlev):
-            tke[col, i] = (
-                _C_FILT
-                * (
-                    L[col, i]
-                    * L[col, i]
-                    / cde
-                    * (cmue1[col, i] * SS[col, i] - cmue2[col, i] * NN[col, i])
-                )
-                + (1.0 - _C_FILT) * tkeo[col, i]
+    for i in range(1, nlev):
+        tke[i] = (
+            _C_FILT
+            * (
+                L[i]
+                * L[i]
+                / cde
+                * (cmue1[i] * SS[i] - cmue2[i] * NN[i])
             )
+            + (1.0 - _C_FILT) * tkeo[i]
+        )
 
-        boundary_scale = ti.sqrt(cm0 * cde)
-        tke[col, 0] = u_taub[col, 0] * u_taub[col, 0] / boundary_scale
-        tke[col, nlev] = u_taus[col, 0] * u_taus[col, 0] / boundary_scale
+    boundary_scale = math.sqrt(cm0 * cde)
+    tke[0] = u_taub * u_taub / boundary_scale
+    tke[nlev] = u_taus * u_taus / boundary_scale
 
-        for i in range(nlev + 1):
-            if tke[col, i] < k_min:
-                tke[col, i] = k_min
+    for i in range(nlev + 1):
+        if tke[i] < k_min:
+            tke[i] = k_min
+
+
+@numba.njit(parallel=True, cache=True)
+def step_tkealgebraic(
+    batch_size: int,
+    nlev: int,
+    k_min: float,
+    cm0: float,
+    cde: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    L: np.ndarray,
+    NN: np.ndarray,
+    SS: np.ndarray,
+    cmue1: np.ndarray,
+    cmue2: np.ndarray,
+    u_taus: np.ndarray,
+    u_taub: np.ndarray,
+) -> None:
+    r"""Advance the algebraic TKE closure (batch)."""
+    for b in numba.prange(batch_size):
+        _step_tkealgebraic(
+            nlev, k_min, cm0, cde,
+            tke[b], tkeo[b], L[b], NN[b], SS[b], cmue1[b], cmue2[b],
+            u_taus[b, 0], u_taub[b, 0],
+        )

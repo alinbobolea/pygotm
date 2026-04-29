@@ -92,7 +92,7 @@ def _make_report(cases: list[CaseResult]) -> Report:
         generated_at="2026-04-26T10:00:00Z",
         rtol=1e-6,
         atol=1e-12,
-        hardware={"cpu_model": "Test CPU", "cpu_count": "8", "taichi_version": "1.7.4",
+        hardware={"cpu_model": "Test CPU", "cpu_count": "8", "numba_version": "0.59",
                   "python_version": "3.12.0", "platform": "Linux", "execution_backend": "cpu"},
         cases=cases,
         verdict="FULL PARITY",

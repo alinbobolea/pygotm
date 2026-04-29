@@ -3,12 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import (
-    fill_field_from_array,
-    fill_field_scalar,
-    make_equidistant_h,
-    read_field_array,
-)
 
 from pygotm.turbulence.dissipationeq import (
     DissipationEquationWorkspace,
@@ -28,6 +22,12 @@ from pygotm.turbulence.turbulence import (
 _NLEV = 12
 _DT = 60.0
 _DEPTH = 24.0
+
+
+def make_equidistant_h(nlev: int, depth: float) -> np.ndarray:
+    h = np.full(nlev + 1, depth / nlev, dtype=np.float64)
+    h[0] = 0.0
+    return h
 
 
 def _zeros(nlev: int = _NLEV) -> np.ndarray:
@@ -108,30 +108,22 @@ def _prepare_workspace(
     )
     profile_h = h if h is not None else make_equidistant_h(nlev, _DEPTH)
     for col in range(n_cols):
-        fill_field_from_array(ws.tke, tke if tke is not None else state.tke, col=col)
-        fill_field_from_array(
-            ws.tkeo,
-            tkeo if tkeo is not None else state.tkeo,
-            col=col,
-        )
-        fill_field_from_array(ws.eps, eps if eps is not None else state.eps, col=col)
-        fill_field_from_array(ws.L, L if L is not None else state.L, col=col)
-        fill_field_from_array(ws.h, profile_h, col=col)
-        fill_field_from_array(ws.NN, NN if NN is not None else _zeros(nlev), col=col)
-        fill_field_from_array(ws.SS, SS if SS is not None else _zeros(nlev), col=col)
-        fill_field_from_array(ws.P, P if P is not None else state.P, col=col)
-        fill_field_from_array(ws.B, B if B is not None else state.B, col=col)
-        fill_field_from_array(ws.Px, Px if Px is not None else state.Px, col=col)
-        fill_field_from_array(
-            ws.PSTK,
-            PSTK if PSTK is not None else state.PSTK,
-            col=col,
-        )
-        fill_field_from_array(ws.num, num if num is not None else state.num, col=col)
-        fill_field_scalar(ws.u_taus, u_taus, col=col)
-        fill_field_scalar(ws.u_taub, u_taub, col=col)
-        fill_field_scalar(ws.z0s, z0s, col=col)
-        fill_field_scalar(ws.z0b, z0b, col=col)
+        ws.tke[col] = tke if tke is not None else state.tke
+        ws.tkeo[col] = tkeo if tkeo is not None else state.tkeo
+        ws.eps[col] = eps if eps is not None else state.eps
+        ws.L[col] = L if L is not None else state.L
+        ws.h[col] = profile_h
+        ws.NN[col] = NN if NN is not None else _zeros(nlev)
+        ws.SS[col] = SS if SS is not None else _zeros(nlev)
+        ws.P[col] = P if P is not None else state.P
+        ws.B[col] = B if B is not None else state.B
+        ws.Px[col] = Px if Px is not None else state.Px
+        ws.PSTK[col] = PSTK if PSTK is not None else state.PSTK
+        ws.num[col] = num if num is not None else state.num
+        ws.u_taus[col, 0] = u_taus
+        ws.u_taub[col, 0] = u_taub
+        ws.z0s[col, 0] = z0s
+        ws.z0b[col, 0] = z0b
 
     ws.avh.fill(0.0)
     ws.sig_eff.fill(0.0)
@@ -251,8 +243,8 @@ def _run_step_dissipationeq(
 
     assert state.eps is not None
     assert state.L is not None
-    state.eps[:] = read_field_array(ws.eps)
-    state.L[:] = read_field_array(ws.L)
+    state.eps[:] = ws.eps[0]
+    state.L[:] = ws.L[0]
     return ws
 
 
@@ -342,8 +334,8 @@ def test_sig_eff_matches_wave_breaking_mixture() -> None:
         tkeo=np.full(nlev + 1, 2.0e-4, dtype=np.float64),
     )
 
-    sig_eff = read_field_array(workspace.sig_eff)
-    avh = read_field_array(workspace.avh)
+    sig_eff = workspace.sig_eff[0]
+    avh = workspace.avh[0]
 
     peps = (P[1:nlev] + Px[1:nlev] + B[1:nlev]) / eps[1:nlev]
     peps = np.minimum(peps, 1.0)
@@ -550,9 +542,9 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     )
 
     for name in ("eps", "L"):
-        single_arr = read_field_array(getattr(single, name), col=0)
-        multi_0 = read_field_array(getattr(multi, name), col=0)
-        multi_1 = read_field_array(getattr(multi, name), col=1)
+        single_arr = getattr(single, name)[0]
+        multi_0 = getattr(multi, name)[0]
+        multi_1 = getattr(multi, name)[1]
         np.testing.assert_allclose(multi_0, single_arr, rtol=1.0e-12)
         np.testing.assert_allclose(multi_1, single_arr, rtol=1.0e-12)
 

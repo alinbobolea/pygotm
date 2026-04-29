@@ -189,6 +189,8 @@ def compare_datasets(
     atol: float = 1.0e-12,
     variables: tuple[str, ...] | None = None,
 ) -> DatasetComparison:
+    """Compare datasets with GOTM's range-aware combined tolerance."""
+
     variable_names = variables or _numeric_variable_names(expected)
     failures: list[ValidationFailure] = []
 
@@ -207,17 +209,23 @@ def compare_datasets(
             )
             raise ValueError(msg)
 
-        matches = np.isclose(
-            actual_values,
-            expected_values,
-            rtol=rtol,
-            atol=atol,
-            equal_nan=True,
+        abs_error = np.abs(actual_values - expected_values)
+        finite_expected = expected_values[np.isfinite(expected_values)]
+        if finite_expected.size:
+            ref_range = float(np.max(finite_expected) - np.min(finite_expected))
+        else:
+            ref_range = 0.0
+        variable_atol = max(1.0e-7 * ref_range, atol)
+        finite = np.isfinite(actual_values) & np.isfinite(expected_values)
+        matches = np.zeros_like(abs_error, dtype=np.bool_)
+        matches[finite] = abs_error[finite] <= (
+            variable_atol + rtol * np.abs(expected_values[finite])
         )
+        matches |= np.isnan(actual_values) & np.isnan(expected_values)
+        matches |= np.isinf(actual_values) & (actual_values == expected_values)
         if bool(np.all(matches)):
             continue
 
-        abs_error = np.abs(actual_values - expected_values)
         rel_error = np.zeros_like(abs_error, dtype=np.float64)
         nonzero = np.abs(expected_values) > 0.0
         rel_error[nonzero] = abs_error[nonzero] / np.abs(expected_values[nonzero])

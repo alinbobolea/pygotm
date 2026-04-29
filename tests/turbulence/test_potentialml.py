@@ -3,12 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import (
-    fill_field_from_array,
-    fill_field_scalar,
-    make_equidistant_h,
-    read_field_array,
-)
 
 from pygotm.turbulence.potentialml import PotentialMLWorkspace, step_potentialml
 from pygotm.turbulence.turbulence import (
@@ -21,6 +15,12 @@ _NLEV = 6
 _DEPTH = 18.0
 _Z0B = 2.0e-3
 _Z0S = 1.0e-3
+
+
+def make_equidistant_h(nlev: int, depth: float) -> np.ndarray:
+    h = np.full(nlev + 1, depth / nlev, dtype=np.float64)
+    h[0] = 0.0
+    return h
 
 
 def _make_state(nlev: int, *, length_lim: bool) -> TurbulenceState:
@@ -122,14 +122,14 @@ def _run_step(
 
     workspace = PotentialMLWorkspace(nlev, n_cols=n_cols)
     for col in range(n_cols):
-        fill_field_from_array(workspace.tke, tke, col=col)
-        fill_field_from_array(workspace.eps, state.eps, col=col)
-        fill_field_from_array(workspace.L, state.L, col=col)
-        fill_field_from_array(workspace.h, h, col=col)
-        fill_field_from_array(workspace.NN, NN, col=col)
-        fill_field_scalar(workspace.depth, depth, col=col)
-        fill_field_scalar(workspace.z0b, z0b, col=col)
-        fill_field_scalar(workspace.z0s, z0s, col=col)
+        workspace.tke[col] = tke
+        workspace.eps[col] = state.eps
+        workspace.L[col] = state.L
+        workspace.h[col] = h
+        workspace.NN[col] = NN
+        workspace.depth[col, 0] = depth
+        workspace.z0b[col, 0] = z0b
+        workspace.z0s[col, 0] = z0s
 
     step_potentialml(
         n_cols,
@@ -182,10 +182,10 @@ def test_matches_reference_translation() -> None:
     )
 
     np.testing.assert_allclose(
-        read_field_array(workspace.L), expected_L, rtol=1.0e-12
+        workspace.L[0], expected_L, rtol=1.0e-12
     )
     np.testing.assert_allclose(
-        read_field_array(workspace.eps), expected_eps, rtol=1.0e-12
+        workspace.eps[0], expected_eps, rtol=1.0e-12
     )
 
 
@@ -196,7 +196,7 @@ def test_stable_length_limit_caps_profile() -> None:
     NN = np.full(_NLEV + 1, 1.0e-2)
 
     workspace = _run_step(state, _NLEV, tke=tke, h=h, NN=NN)
-    result = read_field_array(workspace.L)
+    result = workspace.L[0]
     lcrit = np.sqrt(2.0 * state.galp * state.galp * tke / NN)
 
     assert np.all(result <= lcrit + 1.0e-15)
@@ -212,9 +212,9 @@ def test_eps_min_backstop_replaces_too_small_dissipation() -> None:
     expected_L = state.cde * np.sqrt(tke**3) / state.eps_min
 
     np.testing.assert_allclose(
-        read_field_array(workspace.eps), np.full(2, state.eps_min)
+        workspace.eps[0], np.full(2, state.eps_min)
     )
-    np.testing.assert_allclose(read_field_array(workspace.L), expected_L, rtol=1.0e-12)
+    np.testing.assert_allclose(workspace.L[0], expected_L, rtol=1.0e-12)
 
 
 def test_multicolumn_parity_for_identical_columns() -> None:
@@ -227,10 +227,10 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     multi = _run_step(state, _NLEV, tke=tke, h=h, NN=NN, n_cols=2)
 
     for name in ("L", "eps"):
-        expected = read_field_array(getattr(single, name))
+        expected = getattr(single, name)[0]
         for col in range(2):
             np.testing.assert_allclose(
-                read_field_array(getattr(multi, name), col=col),
+                getattr(multi, name)[col],
                 expected,
             )
 
@@ -243,5 +243,5 @@ def test_no_nan_or_inf_for_boundary_only_case() -> None:
 
     workspace = _run_step(state, 1, tke=tke, h=h, NN=NN, depth=1.0, z0b=0.2, z0s=0.3)
 
-    assert np.isfinite(read_field_array(workspace.L)).all()
-    assert np.isfinite(read_field_array(workspace.eps)).all()
+    assert np.isfinite(workspace.L[0]).all()
+    assert np.isfinite(workspace.eps[0]).all()

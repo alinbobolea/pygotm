@@ -1,106 +1,34 @@
 import numpy as np
 import pytest
-import taichi as ti
 
-from pygotm.taichi_typing import TemplateArg, ti_kernel
-from pygotm.util.diff_face import DIRICHLET, NEUMANN, diff_face, diff_face_column
-from pygotm.util.tridiagonal import init_tridiagonal
+from pygotm.util.diff_face import DIRICHLET, NEUMANN, diff_face, diff_face_batch
+from pygotm.util.tridiagonal import TridiagonalBatchWorkspace, TridiagonalWorkspace
 
 
-@ti_kernel
-def diff_face_kernel(  # type: ignore[no-untyped-def]
-    nlev: ti.i32,
-    dt: ti.f64,
-    cnpar: ti.f64,
-    bc_up: ti.i32,
-    bc_down: ti.i32,
-    y_up: ti.f64,
-    y_down: ti.f64,
-    h: TemplateArg,
-    nu_y: TemplateArg,
-    l_sour: TemplateArg,
-    q_sour: TemplateArg,
-    y: TemplateArg,
-    au: TemplateArg,
-    bu: TemplateArg,
-    cu: TemplateArg,
-    du: TemplateArg,
-    ru: TemplateArg,
-    qu: TemplateArg,
-):
+def _call_diff_face(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    h: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    nu_y: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    y: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Call diff_face in-place; return (y_out, nu_y_out) after the step."""
+    ws = TridiagonalWorkspace(nlev)
+    y_out = y.copy()
+    nu_out = nu_y.copy()
     diff_face(
-        nlev,
-        dt,
-        cnpar,
-        h,
-        bc_up,
-        bc_down,
-        y_up,
-        y_down,
-        nu_y,
-        l_sour,
-        q_sour,
-        y,
-        au,
-        bu,
-        cu,
-        du,
-        ru,
-        qu,
+        nlev, dt, cnpar, h, bc_up, bc_down, y_up, y_down,
+        nu_out, l_sour, q_sour, y_out,
+        ws.au, ws.bu, ws.cu, ws.du, ws.ru, ws.qu,
     )
-
-
-@ti_kernel
-def diff_face_multi_kernel(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    dt: ti.f64,
-    cnpar: ti.f64,
-    bc_up: ti.i32,
-    bc_down: ti.i32,
-    y_up: ti.f64,
-    y_down: ti.f64,
-    h: TemplateArg,
-    nu_y: TemplateArg,
-    l_sour: TemplateArg,
-    q_sour: TemplateArg,
-    y: TemplateArg,
-    au: TemplateArg,
-    bu: TemplateArg,
-    cu: TemplateArg,
-    du: TemplateArg,
-    ru: TemplateArg,
-    qu: TemplateArg,
-):
-    for col in range(n_cols):
-        diff_face_column(
-            col,
-            nlev,
-            dt,
-            cnpar,
-            h,
-            bc_up,
-            bc_down,
-            y_up,
-            y_down,
-            nu_y,
-            l_sour,
-            q_sour,
-            y,
-            au,
-            bu,
-            cu,
-            du,
-            ru,
-            qu,
-        )
-
-
-def _field(values: np.ndarray) -> ti.Field:
-    field = ti.field(dtype=ti.f64, shape=values.shape)
-    for index in np.ndindex(values.shape):
-        field[index] = values[index]
-    return field
+    return y_out, nu_out
 
 
 def _reference_diff_face(
@@ -134,7 +62,6 @@ def _reference_diff_face(
         c = dt * (local_nu_y[i + 1] + local_nu_y[i]) / (h[i] + h[i + 1]) / h[i + 1]
         a = dt * (local_nu_y[i] + local_nu_y[i - 1]) / (h[i] + h[i + 1]) / h[i]
         linear_source = dt * l_sour[i]
-
         cu[i] = -cnpar * c
         au[i] = -cnpar * a
         bu[i] = 1.0 + cnpar * (a + c) - linear_source
@@ -185,7 +112,7 @@ def _reference_diff_face(
     return updated
 
 
-def test_diff_face_dirichlet_matches_numpy_reference() -> None:
+def test_dirichlet_matches_numpy_reference() -> None:
     nlev = 5
     dt = 20.0
     cnpar = 0.6
@@ -194,51 +121,21 @@ def test_diff_face_dirichlet_matches_numpy_reference() -> None:
     l_sour = np.array([0.0, 0.02, -0.01, 0.03, 0.01, 0.0], dtype=np.float64)
     q_sour = np.array([0.0, 0.002, -0.003, 0.004, -0.001, 0.0], dtype=np.float64)
     y = np.array([0.0, 0.9, 0.7, 0.4, 0.2, 0.0], dtype=np.float64)
-    y_up = 0.3
-    y_down = 1.1
+    y_up, y_down = 0.3, 1.1
 
-    workspace = init_tridiagonal(nlev)
-    y_field = _field(y)
-    diff_face_kernel(
-        nlev,
-        dt,
-        cnpar,
-        DIRICHLET,
-        DIRICHLET,
-        y_up,
-        y_down,
-        _field(h),
-        _field(nu_y),
-        _field(l_sour),
-        _field(q_sour),
-        y_field,
-        workspace.au,
-        workspace.bu,
-        workspace.cu,
-        workspace.du,
-        workspace.ru,
-        workspace.qu,
+    result, _ = _call_diff_face(
+        nlev, dt, cnpar, h, DIRICHLET, DIRICHLET, y_up, y_down,
+        nu_y, l_sour, q_sour, y,
     )
-
     expected = _reference_diff_face(
-        nlev,
-        dt,
-        cnpar,
-        DIRICHLET,
-        DIRICHLET,
-        y_up,
-        y_down,
-        h,
-        nu_y,
-        l_sour,
-        q_sour,
-        y,
+        nlev, dt, cnpar, DIRICHLET, DIRICHLET, y_up, y_down,
+        h, nu_y, l_sour, q_sour, y,
     )
-    result = np.array([y_field[i] for i in range(nlev + 1)])
-    assert np.allclose(result[1:nlev], expected[1:nlev], rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(result[1:nlev], expected[1:nlev], rtol=1e-12, atol=1e-12)
 
 
-def test_diff_face_two_layer_bugfix_matches_reference() -> None:
+def test_two_layer_bugfix_matches_reference() -> None:
+    """nlev==2 triggers the Georg Umgiesser bug-fix that mutates nu_y in place."""
     nlev = 2
     dt = 12.0
     cnpar = 1.0
@@ -247,119 +144,22 @@ def test_diff_face_two_layer_bugfix_matches_reference() -> None:
     l_sour = np.array([0.0, 0.01, 0.0], dtype=np.float64)
     q_sour = np.array([0.0, -0.002, 0.0], dtype=np.float64)
     y = np.array([0.0, 0.5, 0.0], dtype=np.float64)
-    y_up = 0.04
-    y_down = -0.03
+    y_up, y_down = 0.04, -0.03
 
-    workspace = init_tridiagonal(nlev)
-    nu_field = _field(nu_y)
-    y_field = _field(y)
-    diff_face_kernel(
-        nlev,
-        dt,
-        cnpar,
-        NEUMANN,
-        NEUMANN,
-        y_up,
-        y_down,
-        _field(h),
-        nu_field,
-        _field(l_sour),
-        _field(q_sour),
-        y_field,
-        workspace.au,
-        workspace.bu,
-        workspace.cu,
-        workspace.du,
-        workspace.ru,
-        workspace.qu,
+    result, nu_out = _call_diff_face(
+        nlev, dt, cnpar, h, NEUMANN, NEUMANN, y_up, y_down,
+        nu_y, l_sour, q_sour, y,
     )
-
     expected = _reference_diff_face(
-        nlev,
-        dt,
-        cnpar,
-        NEUMANN,
-        NEUMANN,
-        y_up,
-        y_down,
-        h,
-        nu_y,
-        l_sour,
-        q_sour,
-        y,
+        nlev, dt, cnpar, NEUMANN, NEUMANN, y_up, y_down,
+        h, nu_y, l_sour, q_sour, y,
     )
-    result = np.array([y_field[i] for i in range(nlev + 1)])
-    mutated_nu = np.array([nu_field[i] for i in range(nlev + 1)])
-    assert np.allclose(result, expected, rtol=1e-12, atol=1e-12)
-    assert mutated_nu[0] == pytest.approx(mutated_nu[1])
-    assert mutated_nu[nlev] == pytest.approx(mutated_nu[1])
+    np.testing.assert_allclose(result, expected, rtol=1e-12, atol=1e-12)
+    assert nu_out[0] == pytest.approx(nu_out[1])
+    assert nu_out[nlev] == pytest.approx(nu_out[1])
 
 
-def test_diff_face_multicolumn_ncols_one_matches_single_column() -> None:
-    nlev = 4
-    dt = 18.0
-    cnpar = 0.5
-    h = np.array([0.0, 1.0, 1.0, 1.2, 0.9], dtype=np.float64)
-    nu_y = np.array([0.0, 0.06, 0.09, 0.07, 0.0], dtype=np.float64)
-    l_sour = np.array([0.0, -0.01, 0.02, -0.03, 0.0], dtype=np.float64)
-    q_sour = np.array([0.0, 0.003, 0.001, -0.002, 0.0], dtype=np.float64)
-    y = np.array([0.0, -0.2, 0.4, 0.8, 0.0], dtype=np.float64)
-    y_up = 0.15
-    y_down = -0.05
-
-    single_workspace = init_tridiagonal(nlev)
-    single_y = _field(y)
-    multi_workspace = init_tridiagonal(nlev, n_cols=1)
-    multi_y = _field(np.expand_dims(y, axis=0))
-
-    diff_face_kernel(
-        nlev,
-        dt,
-        cnpar,
-        DIRICHLET,
-        DIRICHLET,
-        y_up,
-        y_down,
-        _field(h),
-        _field(nu_y),
-        _field(l_sour),
-        _field(q_sour),
-        single_y,
-        single_workspace.au,
-        single_workspace.bu,
-        single_workspace.cu,
-        single_workspace.du,
-        single_workspace.ru,
-        single_workspace.qu,
-    )
-    diff_face_multi_kernel(
-        1,
-        nlev,
-        dt,
-        cnpar,
-        DIRICHLET,
-        DIRICHLET,
-        y_up,
-        y_down,
-        _field(np.expand_dims(h, axis=0)),
-        _field(np.expand_dims(nu_y, axis=0)),
-        _field(np.expand_dims(l_sour, axis=0)),
-        _field(np.expand_dims(q_sour, axis=0)),
-        multi_y,
-        multi_workspace.au,
-        multi_workspace.bu,
-        multi_workspace.cu,
-        multi_workspace.du,
-        multi_workspace.ru,
-        multi_workspace.qu,
-    )
-
-    single_result = np.array([single_y[i] for i in range(nlev + 1)])
-    multi_result = np.array([multi_y[0, i] for i in range(nlev + 1)])
-    assert np.allclose(multi_result, single_result, rtol=1e-12, atol=1e-12)
-
-
-def test_diff_face_no_nan_inf() -> None:
+def test_no_nan_inf() -> None:
     nlev = 5
     dt = 30.0
     cnpar = 0.6
@@ -368,30 +168,46 @@ def test_diff_face_no_nan_inf() -> None:
     l_sour = np.array([0.0, 0.01, -0.02, 0.03, -0.01, 0.0], dtype=np.float64)
     q_sour = np.array([0.0, 0.002, -0.001, 0.003, -0.002, 0.0], dtype=np.float64)
     y = np.array([0.0, -0.3, 0.5, 1.2, 0.7, 0.0], dtype=np.float64)
-    y_up = 0.2
-    y_down = -0.1
+    y_up, y_down = 0.2, -0.1
 
-    workspace = init_tridiagonal(nlev)
-    y_field = _field(y)
-    diff_face_kernel(
-        nlev,
-        dt,
-        cnpar,
-        NEUMANN,
-        NEUMANN,
-        y_up,
-        y_down,
-        _field(h),
-        _field(nu_y),
-        _field(l_sour),
-        _field(q_sour),
-        y_field,
-        workspace.au,
-        workspace.bu,
-        workspace.cu,
-        workspace.du,
-        workspace.ru,
-        workspace.qu,
+    result, _ = _call_diff_face(
+        nlev, dt, cnpar, h, NEUMANN, NEUMANN, y_up, y_down,
+        nu_y, l_sour, q_sour, y,
     )
-    result = np.array([y_field[i] for i in range(nlev + 1)])
     assert np.isfinite(result[1:nlev]).all(), "diff_face produced NaN or Inf"
+
+
+def test_batch_parity() -> None:
+    """diff_face_batch with 2 identical columns must match single-column result."""
+    nlev = 5
+    dt = 20.0
+    cnpar = 0.6
+    batch_size = 2
+    h = np.array([0.0, 1.0, 1.1, 0.9, 1.2, 1.0], dtype=np.float64)
+    nu_y = np.array([0.0, 0.05, 0.07, 0.08, 0.06, 0.0], dtype=np.float64)
+    l_sour = np.zeros(nlev + 1, dtype=np.float64)
+    q_sour = np.zeros(nlev + 1, dtype=np.float64)
+    y = np.array([0.0, 0.9, 0.7, 0.4, 0.2, 0.0], dtype=np.float64)
+    y_up, y_down = 0.3, 1.1
+
+    expected, _ = _call_diff_face(
+        nlev, dt, cnpar, h, DIRICHLET, DIRICHLET, y_up, y_down,
+        nu_y, l_sour, q_sour, y,
+    )
+
+    ws = TridiagonalBatchWorkspace(nlev, batch_size)
+    h_b = np.tile(h, (batch_size, 1))
+    nu_b = np.tile(nu_y, (batch_size, 1))
+    ls_b = np.tile(l_sour, (batch_size, 1))
+    qs_b = np.tile(q_sour, (batch_size, 1))
+    y_b = np.tile(y, (batch_size, 1))
+
+    diff_face_batch(
+        batch_size, nlev, dt, cnpar,
+        h_b, DIRICHLET, DIRICHLET, y_up, y_down,
+        nu_b, ls_b, qs_b, y_b,
+        ws.au, ws.bu, ws.cu, ws.du, ws.ru, ws.qu,
+    )
+
+    for b in range(batch_size):
+        np.testing.assert_array_equal(y_b[b], expected)

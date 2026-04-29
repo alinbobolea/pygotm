@@ -115,9 +115,10 @@ r"""!-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import numba
+import numpy as np
 
-from pygotm.util.tridiagonal import tridiagonal, tridiagonal_column
+from pygotm.util.tridiagonal import tridiagonal
 from pygotm.util.util import Dirichlet as DIRICHLET
 from pygotm.util.util import Neumann as NEUMANN
 
@@ -125,34 +126,34 @@ __all__ = [
     "DIRICHLET",
     "NEUMANN",
     "diff_center",
-    "diff_center_column",
+    "diff_center_batch",
 ]
 
 
-@ti.func
-def diff_center(  # type: ignore[no-untyped-def]
-    nlev,
-    dt,
-    cnpar,
-    posconc,
-    h,
-    bc_up,
-    bc_down,
-    y_up,
-    y_down,
-    nu_y,
-    l_sour,
-    q_sour,
-    tau_r,
-    y_obs,
-    y,
-    au,
-    bu,
-    cu,
-    du,
-    ru,
-    qu,
-):
+@numba.njit(cache=True)
+def diff_center(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    posconc: int,
+    h: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    nu_y: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    tau_r: np.ndarray,
+    y_obs: np.ndarray,
+    y: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
     r"""! !ROUTINE: Diffusion schemes --- grid centers
 !
 ! !DESCRIPTION:
@@ -229,120 +230,53 @@ def diff_center(  # type: ignore[no-untyped-def]
     tridiagonal(au, bu, cu, du, ru, qu, y, 1, nlev)
 
 
-@ti.func
-def diff_center_column(  # type: ignore[no-untyped-def]
-    col,
-    nlev,
-    dt,
-    cnpar,
-    posconc,
-    h,
-    bc_up,
-    bc_down,
-    y_up,
-    y_down,
-    nu_y,
-    l_sour,
-    q_sour,
-    tau_r,
-    y_obs,
-    y,
-    au,
-    bu,
-    cu,
-    du,
-    ru,
-    qu,
-):
-    r"""! !ROUTINE: Diffusion schemes --- grid centers
-!
-! !DESCRIPTION:
-! This subroutine solves the one-dimensional diffusion equation including
-! source terms for all variables defined at the centers of the grid cells.
-    """
-
-    for i in range(2, nlev):
-        c = 2.0 * dt * nu_y[col, i] / (h[col, i] + h[col, i + 1]) / h[col, i]
-        a = 2.0 * dt * nu_y[col, i - 1] / (h[col, i] + h[col, i - 1]) / h[col, i]
-        linear_source = dt * l_sour[col, i]
-
-        cu[col, i] = -cnpar * c
-        au[col, i] = -cnpar * a
-        bu[col, i] = 1.0 + cnpar * (a + c) - linear_source
-        du[col, i] = (1.0 - (1.0 - cnpar) * (a + c)) * y[col, i]
-        du[col, i] += (1.0 - cnpar) * (a * y[col, i - 1] + c * y[col, i + 1])
-        du[col, i] += dt * q_sour[col, i]
-
-    if bc_up == NEUMANN:
-        a = (
-            2.0
-            * dt
-            * nu_y[col, nlev - 1]
-            / (h[col, nlev] + h[col, nlev - 1])
-            / h[col, nlev]
+@numba.njit(parallel=True, cache=True)
+def diff_center_batch(
+    batch_size: int,
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    posconc: int,
+    h: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    nu_y: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    tau_r: np.ndarray,
+    y_obs: np.ndarray,
+    y: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
+    """Batch variant: process batch_size columns in parallel with numba.prange."""
+    for b in numba.prange(batch_size):
+        diff_center(
+            nlev,
+            dt,
+            cnpar,
+            posconc,
+            h[b],
+            bc_up,
+            bc_down,
+            y_up,
+            y_down,
+            nu_y[b],
+            l_sour[b],
+            q_sour[b],
+            tau_r[b],
+            y_obs[b],
+            y[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
         )
-        linear_source = dt * l_sour[col, nlev]
-
-        au[col, nlev] = -cnpar * a
-        if posconc == 1 and y_up < 0.0:
-            # Patankar (1980): move negative flux to the implicit diagonal term.
-            # Requires y[col, nlev] > 0 — same assumption as Fortran diff_center.F90.
-            # Division by zero if y goes exactly to zero.
-            # Guard: callers must ensure y > 0 when posconc=1 and y_up < 0.
-            bu[col, nlev] = (
-                1.0
-                - au[col, nlev]
-                - linear_source
-                - dt * y_up / y[col, nlev] / h[col, nlev]
-            )
-            du[col, nlev] = y[col, nlev] + dt * q_sour[col, nlev]
-            du[col, nlev] += (1.0 - cnpar) * a * (y[col, nlev - 1] - y[col, nlev])
-        else:
-            bu[col, nlev] = 1.0 - au[col, nlev] - linear_source
-            du[col, nlev] = y[col, nlev] + dt * (
-                q_sour[col, nlev] + y_up / h[col, nlev]
-            )
-            du[col, nlev] += (1.0 - cnpar) * a * (y[col, nlev - 1] - y[col, nlev])
-    else:
-        au[col, nlev] = 0.0
-        bu[col, nlev] = 1.0
-        du[col, nlev] = y_up
-
-    if bc_down == NEUMANN:
-        c = 2.0 * dt * nu_y[col, 1] / (h[col, 1] + h[col, 2]) / h[col, 1]
-        linear_source = dt * l_sour[col, 1]
-
-        cu[col, 1] = -cnpar * c
-        if posconc == 1 and y_down < 0.0:
-            # Patankar (1980): move negative flux to the implicit diagonal term.
-            # Requires y[col, 1] > 0 — same assumption as Fortran diff_center.F90.
-            # Division by zero if y goes exactly to zero.
-            # Guard: callers must ensure y > 0 when posconc=1 and y_down < 0.
-            bu[col, 1] = (
-                1.0
-                - cu[col, 1]
-                - linear_source
-                - dt * y_down / y[col, 1] / h[col, 1]
-            )
-            du[col, 1] = y[col, 1] + dt * q_sour[col, 1]
-            du[col, 1] += (1.0 - cnpar) * c * (y[col, 2] - y[col, 1])
-        else:
-            bu[col, 1] = 1.0 - cu[col, 1] - linear_source
-            du[col, 1] = y[col, 1] + dt * (q_sour[col, 1] + y_down / h[col, 1])
-            du[col, 1] += (1.0 - cnpar) * c * (y[col, 2] - y[col, 1])
-    else:
-        cu[col, 1] = 0.0
-        bu[col, 1] = 1.0
-        du[col, 1] = y_down
-
-    apply_relaxation = 0
-    for i in range(1, nlev + 1):
-        if tau_r[col, i] < 1.0e10:
-            apply_relaxation = 1
-
-    if apply_relaxation == 1:
-        for i in range(1, nlev + 1):
-            bu[col, i] += dt / tau_r[col, i]
-            du[col, i] += dt / tau_r[col, i] * y_obs[col, i]
-
-    tridiagonal_column(col, au, bu, cu, du, ru, qu, y, 1, nlev)

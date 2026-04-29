@@ -175,15 +175,17 @@ r"""
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import math
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+import numba
+import numpy as np
+
+from pygotm.arrays import ColumnWorkspace, make_column_array
 from pygotm.turbulence.turbulence import Dirichlet as _DIRICHLET
 from pygotm.turbulence.turbulence import Neumann as _NEUMANN
 from pygotm.turbulence.turbulence import injection as _INJECTION
 from pygotm.turbulence.turbulence import logarithmic as _LOGARITHMIC
-from pygotm.util.diff_face import diff_face_column
+from pygotm.util.diff_face import diff_face
 
 __all__ = [
     "LengthScaleEquationWorkspace",
@@ -194,309 +196,385 @@ _CNPAR: float = 1.0
 _SQRT2: float = 1.4142135623730951
 
 
-class LengthScaleEquationWorkspace(TaichiFieldCollection):
-    """Taichi fields for the translated q2l length-scale equation."""
+class LengthScaleEquationWorkspace(ColumnWorkspace):
+    """Workspace arrays for the translated q2l length-scale equation."""
 
-    tke: ti.Field
-    tkeo: ti.Field
-    eps: ti.Field
-    L: ti.Field
-    h: ti.Field
-    NN: ti.Field
-    SS: ti.Field
-    P: ti.Field
-    B: ti.Field
-    Px: ti.Field
-    PSTK: ti.Field
-    sl_var: ti.Field
-    depth: ti.Field
-    u_taus: ti.Field
-    u_taub: ti.Field
-    z0s: ti.Field
-    z0b: ti.Field
-    q2l: ti.Field
-    avh: ti.Field
-    l_sour: ti.Field
-    q_sour: ti.Field
-    au: ti.Field
-    bu: ti.Field
-    cu: ti.Field
-    du: ti.Field
-    ru: ti.Field
-    qu: ti.Field
+    tke: np.ndarray
+    tkeo: np.ndarray
+    eps: np.ndarray
+    L: np.ndarray
+    h: np.ndarray
+    NN: np.ndarray
+    SS: np.ndarray
+    P: np.ndarray
+    B: np.ndarray
+    Px: np.ndarray
+    PSTK: np.ndarray
+    sl_var: np.ndarray
+    depth: np.ndarray
+    u_taus: np.ndarray
+    u_taub: np.ndarray
+    z0s: np.ndarray
+    z0b: np.ndarray
+    q2l: np.ndarray
+    avh: np.ndarray
+    l_sour: np.ndarray
+    q_sour: np.ndarray
+    au: np.ndarray
+    bu: np.ndarray
+    cu: np.ndarray
+    du: np.ndarray
+    ru: np.ndarray
+    qu: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "tkeo", "eps", "L", "h", "NN", "SS"))
-        self.allocate_many(("P", "B", "Px", "PSTK", "sl_var"))
-        self.allocate_many(("depth", "u_taus", "u_taub", "z0s", "z0b"))
-        self.allocate_many(("q2l", "avh", "l_sour", "q_sour"))
-        self.allocate_many(("au", "bu", "cu", "du", "ru", "qu"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.tkeo = make_column_array(nlev, n_cols=n_cols)
+        self.eps = make_column_array(nlev, n_cols=n_cols)
+        self.L = make_column_array(nlev, n_cols=n_cols)
+        self.h = make_column_array(nlev, n_cols=n_cols)
+        self.NN = make_column_array(nlev, n_cols=n_cols)
+        self.SS = make_column_array(nlev, n_cols=n_cols)
+        self.P = make_column_array(nlev, n_cols=n_cols)
+        self.B = make_column_array(nlev, n_cols=n_cols)
+        self.Px = make_column_array(nlev, n_cols=n_cols)
+        self.PSTK = make_column_array(nlev, n_cols=n_cols)
+        self.sl_var = make_column_array(nlev, n_cols=n_cols)
+        self.depth = make_column_array(nlev, n_cols=n_cols)
+        self.u_taus = make_column_array(nlev, n_cols=n_cols)
+        self.u_taub = make_column_array(nlev, n_cols=n_cols)
+        self.z0s = make_column_array(nlev, n_cols=n_cols)
+        self.z0b = make_column_array(nlev, n_cols=n_cols)
+        self.q2l = make_column_array(nlev, n_cols=n_cols)
+        self.avh = make_column_array(nlev, n_cols=n_cols)
+        self.l_sour = make_column_array(nlev, n_cols=n_cols)
+        self.q_sour = make_column_array(nlev, n_cols=n_cols)
+        self.au = make_column_array(nlev, n_cols=n_cols)
+        self.bu = make_column_array(nlev, n_cols=n_cols)
+        self.cu = make_column_array(nlev, n_cols=n_cols)
+        self.du = make_column_array(nlev, n_cols=n_cols)
+        self.ru = make_column_array(nlev, n_cols=n_cols)
+        self.qu = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti.func
-def _fk_craig(u_tau, eta):  # type: ignore[no-untyped-def]
+@numba.njit(cache=True)
+def _fk_craig(u_tau: float, eta: float) -> float:
     return eta * u_tau**3
 
 
-@ti_kernel
-def step_lengthscaleeq(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    dt: ti.f64,
-    k_min: ti.f64,
-    eps_min: ti.f64,
-    kappa: ti.f64,
-    e1: ti.f64,
-    e2: ti.f64,
-    e3: ti.f64,
-    ex: ti.f64,
-    e6: ti.f64,
-    b1: ti.f64,
-    cde: ti.f64,
-    my_length: ti.i32,
-    galp: ti.f64,
-    length_lim: ti.i32,
-    psi_ubc: ti.i32,
-    psi_lbc: ti.i32,
-    ubc_type: ti.i32,
-    lbc_type: ti.i32,
-    sl: ti.f64,
-    sq: ti.f64,
-    cw: ti.f64,
-    gen_alpha: ti.f64,
-    gen_l: ti.f64,
-    tke: TemplateArg,
-    tkeo: TemplateArg,
-    eps: TemplateArg,
-    L: TemplateArg,
-    h: TemplateArg,
-    NN: TemplateArg,
-    SS: TemplateArg,
-    P: TemplateArg,
-    B: TemplateArg,
-    Px: TemplateArg,
-    PSTK: TemplateArg,
-    sl_var: TemplateArg,
-    depth: TemplateArg,
-    u_taus: TemplateArg,
-    u_taub: TemplateArg,
-    z0s: TemplateArg,
-    z0b: TemplateArg,
-    q2l: TemplateArg,
-    avh: TemplateArg,
-    l_sour: TemplateArg,
-    q_sour: TemplateArg,
-    au: TemplateArg,
-    bu: TemplateArg,
-    cu: TemplateArg,
-    du: TemplateArg,
-    ru: TemplateArg,
-    qu: TemplateArg,
-):
+@numba.njit(cache=True)
+def _q2l_bc_value(
+    bc: int,
+    type_: int,
+    zi: float,
+    ki: float,
+    z0: float,
+    u_tau: float,
+    kappa: float,
+    sl: float,
+    sq: float,
+    cw: float,
+    gen_alpha: float,
+    gen_l: float,
+) -> float:
+    value = 0.0
+
+    if type_ == _LOGARITHMIC:
+        if bc == _DIRICHLET:
+            value = 2.0 * kappa * ki * (zi + z0)
+        else:
+            value = -2.0 * _SQRT2 * sl * kappa * kappa * ki**1.5 * (zi + z0)
+
+    if type_ == _INJECTION:
+        f_k = _fk_craig(u_tau, cw)
+        capital_k = ((-f_k / (_SQRT2 * sq * gen_alpha * gen_l)) ** (2.0 / 3.0)) / (
+            z0**gen_alpha
+        )
+        if bc == _DIRICHLET:
+            value = 2.0 * capital_k * gen_l * (zi + z0) ** (gen_alpha + 1.0)
+        else:
+            value = (
+                -2.0
+                * _SQRT2
+                * sl
+                * (gen_alpha + 1.0)
+                * capital_k**1.5
+                * gen_l
+                * gen_l
+                * (zi + z0) ** (1.5 * gen_alpha + 1.0)
+            )
+
+    return value
+
+
+@numba.njit(cache=True)
+def _step_lengthscaleeq(
+    nlev: int,
+    dt: float,
+    k_min: float,
+    eps_min: float,
+    kappa: float,
+    e1: float,
+    e2: float,
+    e3: float,
+    ex: float,
+    e6: float,
+    b1: float,
+    cde: float,
+    my_length: int,
+    galp: float,
+    length_lim: int,
+    psi_ubc: int,
+    psi_lbc: int,
+    ubc_type: int,
+    lbc_type: int,
+    sl: float,
+    sq: float,
+    cw: float,
+    gen_alpha: float,
+    gen_l: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    h: np.ndarray,
+    NN: np.ndarray,
+    SS: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    PSTK: np.ndarray,
+    sl_var: np.ndarray,
+    depth: float,
+    u_taus: float,
+    u_taub: float,
+    z0s: float,
+    z0b: float,
+    q2l: np.ndarray,
+    avh: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
+    r"""Advance the dynamic q2l-equation for a single column."""
+
+    l_min = cde * math.sqrt(k_min * k_min * k_min) / eps_min
+
+    for i in range(nlev + 1):
+        q2l[i] = 0.0
+        avh[i] = 0.0
+        l_sour[i] = 0.0
+        q_sour[i] = 0.0
+
+    for i in range(1, nlev):
+        q2l[i] = 2.0 * tkeo[i] * L[i]
+
+    db = 0.0
+    for i in range(1, nlev):
+        db += h[i]
+        ds = depth - db
+
+        lz = 0.0
+        if my_length == 1:
+            lz = kappa * (ds + z0s) * (db + z0b) / (ds + z0s + db + z0b)
+        if my_length == 2:
+            lz = kappa * min(ds + z0s, db + z0b)
+        if my_length == 3:
+            lz = kappa * (ds + z0s)
+
+        avh[i] = sl_var[i] * math.sqrt(2.0 * tkeo[i]) * L[i]
+
+        prod = L[i] * (e1 * P[i] + ex * Px[i] + e6 * PSTK[i])
+        buoyan = e3 * L[i] * B[i]
+        q3 = math.sqrt(8.0 * tkeo[i] * tkeo[i] * tkeo[i])
+        diss = q3 / b1 * (1.0 + e2 * (L[i] / lz) * (L[i] / lz))
+
+        if prod + buoyan > 0.0:
+            q_sour[i] = prod + buoyan
+            l_sour[i] = -diss / q2l[i]
+        else:
+            q_sour[i] = prod
+            l_sour[i] = -(diss - buoyan) / q2l[i]
+
+    ki = tke[nlev - 1]
+    pos_bc = h[nlev]
+    if psi_ubc == _NEUMANN:
+        pos_bc = 0.5 * h[nlev]
+    diff_q2l_up = _q2l_bc_value(
+        psi_ubc, ubc_type, pos_bc, ki, z0s, u_taus,
+        kappa, sl, sq, cw, gen_alpha, gen_l,
+    )
+
+    ki = tke[1]
+    pos_bc = h[1]
+    if psi_lbc == _NEUMANN:
+        pos_bc = 0.5 * h[1]
+    diff_q2l_down = _q2l_bc_value(
+        psi_lbc, lbc_type, pos_bc, ki, z0b, u_taub,
+        kappa, sl, sq, cw, gen_alpha, gen_l,
+    )
+
+    diff_face(
+        nlev,
+        dt,
+        _CNPAR,
+        h,
+        psi_ubc,
+        psi_lbc,
+        diff_q2l_up,
+        diff_q2l_down,
+        avh,
+        l_sour,
+        q_sour,
+        q2l,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+    )
+
+    q2l[nlev] = _q2l_bc_value(
+        _DIRICHLET, ubc_type, z0s, tke[nlev], z0s, u_taus,
+        kappa, sl, sq, cw, gen_alpha, gen_l,
+    )
+    q2l[0] = _q2l_bc_value(
+        _DIRICHLET, lbc_type, z0b, tke[0], z0b, u_taub,
+        kappa, sl, sq, cw, gen_alpha, gen_l,
+    )
+
+    for i in range(nlev + 1):
+        L[i] = q2l[i] / (2.0 * tke[i])
+
+        if NN[i] > 0.0 and length_lim != 0:
+            l_crit = math.sqrt(2.0 * galp * galp * tke[i] / NN[i])
+            if L[i] > l_crit:
+                L[i] = l_crit
+
+        if L[i] < l_min:
+            L[i] = l_min
+
+        eps[i] = cde * math.sqrt(tke[i] * tke[i] * tke[i]) / L[i]
+
+        if eps[i] < eps_min:
+            eps[i] = eps_min
+            L[i] = cde * math.sqrt(tke[i] * tke[i] * tke[i]) / eps_min
+
+
+@numba.njit(parallel=True, cache=True)
+def step_lengthscaleeq(
+    batch_size: int,
+    nlev: int,
+    dt: float,
+    k_min: float,
+    eps_min: float,
+    kappa: float,
+    e1: float,
+    e2: float,
+    e3: float,
+    ex: float,
+    e6: float,
+    b1: float,
+    cde: float,
+    my_length: int,
+    galp: float,
+    length_lim: int,
+    psi_ubc: int,
+    psi_lbc: int,
+    ubc_type: int,
+    lbc_type: int,
+    sl: float,
+    sq: float,
+    cw: float,
+    gen_alpha: float,
+    gen_l: float,
+    tke: np.ndarray,
+    tkeo: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    h: np.ndarray,
+    NN: np.ndarray,
+    SS: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    PSTK: np.ndarray,
+    sl_var: np.ndarray,
+    depth: np.ndarray,
+    u_taus: np.ndarray,
+    u_taub: np.ndarray,
+    z0s: np.ndarray,
+    z0b: np.ndarray,
+    q2l: np.ndarray,
+    avh: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
     r"""Advance the dynamic q2l-equation for one or more columns."""
-
-    for col in range(n_cols):
-        l_min = cde * ti.sqrt(k_min * k_min * k_min) / eps_min
-
-        for i in range(nlev + 1):
-            q2l[col, i] = 0.0
-            avh[col, i] = 0.0
-            l_sour[col, i] = 0.0
-            q_sour[col, i] = 0.0
-
-        for i in range(1, nlev):
-            q2l[col, i] = 2.0 * tkeo[col, i] * L[col, i]
-
-        db = 0.0
-        for i in range(1, nlev):
-            db += h[col, i]
-            ds = depth[col, 0] - db
-
-            lz = 0.0
-            if my_length == 1:
-                lz = (
-                    kappa
-                    * (ds + z0s[col, 0])
-                    * (db + z0b[col, 0])
-                    / (ds + z0s[col, 0] + db + z0b[col, 0])
-                )
-            if my_length == 2:
-                lz = kappa * ti.min(ds + z0s[col, 0], db + z0b[col, 0])
-            if my_length == 3:
-                lz = kappa * (ds + z0s[col, 0])
-
-            avh[col, i] = sl_var[col, i] * ti.sqrt(2.0 * tkeo[col, i]) * L[col, i]
-
-            prod = L[col, i] * (e1 * P[col, i] + ex * Px[col, i] + e6 * PSTK[col, i])
-            buoyan = e3 * L[col, i] * B[col, i]
-            q3 = ti.sqrt(8.0 * tkeo[col, i] * tkeo[col, i] * tkeo[col, i])
-            diss = q3 / b1 * (1.0 + e2 * (L[col, i] / lz) * (L[col, i] / lz))
-
-            if prod + buoyan > 0.0:
-                q_sour[col, i] = prod + buoyan
-                l_sour[col, i] = -diss / q2l[col, i]
-            else:
-                q_sour[col, i] = prod
-                l_sour[col, i] = -(diss - buoyan) / q2l[col, i]
-
-        ki = tke[col, nlev - 1]
-        pos_bc = h[col, nlev]
-        if psi_ubc == _NEUMANN:
-            pos_bc = 0.5 * h[col, nlev]
-        diff_q2l_up = 0.0
-        if ubc_type == _LOGARITHMIC:
-            if psi_ubc == _DIRICHLET:
-                diff_q2l_up = 2.0 * kappa * ki * (pos_bc + z0s[col, 0])
-            else:
-                diff_q2l_up = (
-                    -2.0
-                    * _SQRT2
-                    * sl
-                    * kappa
-                    * kappa
-                    * ti.pow(ki, 1.5)
-                    * (pos_bc + z0s[col, 0])
-                )
-        if ubc_type == _INJECTION:
-            f_k = _fk_craig(u_taus[col, 0], cw)
-            capital_k = ti.pow(
-                -f_k / (_SQRT2 * sq * gen_alpha * gen_l),
-                2.0 / 3.0,
-            ) / ti.pow(z0s[col, 0], gen_alpha)
-            if psi_ubc == _DIRICHLET:
-                diff_q2l_up = (
-                    2.0
-                    * capital_k
-                    * gen_l
-                    * ti.pow(pos_bc + z0s[col, 0], gen_alpha + 1.0)
-                )
-            else:
-                diff_q2l_up = (
-                    -2.0
-                    * _SQRT2
-                    * sl
-                    * (gen_alpha + 1.0)
-                    * ti.pow(capital_k, 1.5)
-                    * gen_l
-                    * gen_l
-                    * ti.pow(pos_bc + z0s[col, 0], 1.5 * gen_alpha + 1.0)
-                )
-
-        ki = tke[col, 1]
-        pos_bc = h[col, 1]
-        if psi_lbc == _NEUMANN:
-            pos_bc = 0.5 * h[col, 1]
-        diff_q2l_down = 0.0
-        if lbc_type == _LOGARITHMIC:
-            if psi_lbc == _DIRICHLET:
-                diff_q2l_down = 2.0 * kappa * ki * (pos_bc + z0b[col, 0])
-            else:
-                diff_q2l_down = (
-                    -2.0
-                    * _SQRT2
-                    * sl
-                    * kappa
-                    * kappa
-                    * ti.pow(ki, 1.5)
-                    * (pos_bc + z0b[col, 0])
-                )
-        if lbc_type == _INJECTION:
-            f_k = _fk_craig(u_taub[col, 0], cw)
-            capital_k = ti.pow(
-                -f_k / (_SQRT2 * sq * gen_alpha * gen_l),
-                2.0 / 3.0,
-            ) / ti.pow(z0b[col, 0], gen_alpha)
-            if psi_lbc == _DIRICHLET:
-                diff_q2l_down = (
-                    2.0
-                    * capital_k
-                    * gen_l
-                    * ti.pow(pos_bc + z0b[col, 0], gen_alpha + 1.0)
-                )
-            else:
-                diff_q2l_down = (
-                    -2.0
-                    * _SQRT2
-                    * sl
-                    * (gen_alpha + 1.0)
-                    * ti.pow(capital_k, 1.5)
-                    * gen_l
-                    * gen_l
-                    * ti.pow(pos_bc + z0b[col, 0], 1.5 * gen_alpha + 1.0)
-                )
-
-        diff_face_column(
-            col,
+    for b in numba.prange(batch_size):
+        _step_lengthscaleeq(
             nlev,
             dt,
-            _CNPAR,
-            h,
+            k_min,
+            eps_min,
+            kappa,
+            e1,
+            e2,
+            e3,
+            ex,
+            e6,
+            b1,
+            cde,
+            my_length,
+            galp,
+            length_lim,
             psi_ubc,
             psi_lbc,
-            diff_q2l_up,
-            diff_q2l_down,
-            avh,
-            l_sour,
-            q_sour,
-            q2l,
-            au,
-            bu,
-            cu,
-            du,
-            ru,
-            qu,
+            ubc_type,
+            lbc_type,
+            sl,
+            sq,
+            cw,
+            gen_alpha,
+            gen_l,
+            tke[b],
+            tkeo[b],
+            eps[b],
+            L[b],
+            h[b],
+            NN[b],
+            SS[b],
+            P[b],
+            B[b],
+            Px[b],
+            PSTK[b],
+            sl_var[b],
+            depth[b, 0],
+            u_taus[b, 0],
+            u_taub[b, 0],
+            z0s[b, 0],
+            z0b[b, 0],
+            q2l[b],
+            avh[b],
+            l_sour[b],
+            q_sour[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
         )
-
-        q2l[col, nlev] = 0.0
-        if ubc_type == _LOGARITHMIC:
-            q2l[col, nlev] = 2.0 * kappa * tke[col, nlev] * (z0s[col, 0] + z0s[col, 0])
-        if ubc_type == _INJECTION:
-            f_k = _fk_craig(u_taus[col, 0], cw)
-            capital_k = ti.pow(
-                -f_k / (_SQRT2 * sq * gen_alpha * gen_l),
-                2.0 / 3.0,
-            ) / ti.pow(z0s[col, 0], gen_alpha)
-            q2l[col, nlev] = (
-                2.0
-                * capital_k
-                * gen_l
-                * ti.pow(z0s[col, 0] + z0s[col, 0], gen_alpha + 1.0)
-            )
-
-        q2l[col, 0] = 0.0
-        if lbc_type == _LOGARITHMIC:
-            q2l[col, 0] = 2.0 * kappa * tke[col, 0] * (z0b[col, 0] + z0b[col, 0])
-        if lbc_type == _INJECTION:
-            f_k = _fk_craig(u_taub[col, 0], cw)
-            capital_k = ti.pow(
-                -f_k / (_SQRT2 * sq * gen_alpha * gen_l),
-                2.0 / 3.0,
-            ) / ti.pow(z0b[col, 0], gen_alpha)
-            q2l[col, 0] = (
-                2.0
-                * capital_k
-                * gen_l
-                * ti.pow(z0b[col, 0] + z0b[col, 0], gen_alpha + 1.0)
-            )
-
-        for i in range(nlev + 1):
-            L[col, i] = q2l[col, i] / (2.0 * tke[col, i])
-
-            if NN[col, i] > 0.0 and length_lim != 0:
-                l_crit = ti.sqrt(2.0 * galp * galp * tke[col, i] / NN[col, i])
-                if L[col, i] > l_crit:
-                    L[col, i] = l_crit
-
-            if L[col, i] < l_min:
-                L[col, i] = l_min
-
-            eps[col, i] = (
-                cde * ti.sqrt(tke[col, i] * tke[col, i] * tke[col, i]) / L[col, i]
-            )
-
-            if eps[col, i] < eps_min:
-                eps[col, i] = eps_min
-                L[col, i] = (
-                    cde * ti.sqrt(tke[col, i] * tke[col, i] * tke[col, i]) / eps_min
-                )

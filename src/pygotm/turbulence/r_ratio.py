@@ -5,75 +5,61 @@ r"""
 !
 ! !ROUTINE: Update time scale ratio
 !
-! !INTERFACE:
-   subroutine r_ratio(nlev)
-!
-! !DESCRIPTION:
-! This routine updates the ratio $r$ of the dissipation
-! time scales as defined in \eq{DefR}.
-!
-! !USES:
-  use turbulence,  only:     tke,eps,kb,epsb
-  use turbulence,  only:     r
-!
-  IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-  integer, intent(in)        :: nlev
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!-----------------------------------------------------------------------
-!BOC
-!
-   r = kb*eps/(epsb*tke)
-!
-   return
-end subroutine r_ratio
-!
-!EOC
-!
 !-----------------------------------------------------------------------
 ! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import numba
+import numpy as np
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = ["RRatioWorkspace", "step_r_ratio"]
 
 
-class RRatioWorkspace(TaichiFieldCollection):
-    """Taichi fields for the translated dissipation-time-scale ratio update."""
+class RRatioWorkspace(ColumnWorkspace):
+    """Workspace arrays for dissipation-time-scale ratio updates."""
 
-    tke: ti.Field
-    eps: ti.Field
-    kb: ti.Field
-    epsb: ti.Field
-    r: ti.Field
+    tke: np.ndarray
+    eps: np.ndarray
+    kb: np.ndarray
+    epsb: np.ndarray
+    r: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "eps", "kb", "epsb", "r"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.eps = make_column_array(nlev, n_cols=n_cols)
+        self.kb = make_column_array(nlev, n_cols=n_cols)
+        self.epsb = make_column_array(nlev, n_cols=n_cols)
+        self.r = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti_kernel
-def step_r_ratio(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    tke: TemplateArg,
-    eps: TemplateArg,
-    kb: TemplateArg,
-    epsb: TemplateArg,
-    r: TemplateArg,
-):
-    r"""Update the dissipation-time-scale ratio ``r`` for one or more columns."""
+@numba.njit(cache=True)
+def _step_r_ratio(
+    nlev: int,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    kb: np.ndarray,
+    epsb: np.ndarray,
+    r: np.ndarray,
+) -> None:
+    r"""Update the dissipation-time-scale ratio r (single column)."""
+    for i in range(nlev + 1):
+        r[i] = kb[i] * eps[i] / (epsb[i] * tke[i])
 
-    for col in range(n_cols):
-        for i in range(nlev + 1):
-            r[col, i] = kb[col, i] * eps[col, i] / (epsb[col, i] * tke[col, i])
+
+@numba.njit(parallel=True, cache=True)
+def step_r_ratio(
+    batch_size: int,
+    nlev: int,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    kb: np.ndarray,
+    epsb: np.ndarray,
+    r: np.ndarray,
+) -> None:
+    r"""Update the dissipation-time-scale ratio r (batch)."""
+    for b in numba.prange(batch_size):
+        _step_r_ratio(nlev, tke[b], eps[b], kb[b], epsb[b], r[b])

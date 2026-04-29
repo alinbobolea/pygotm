@@ -38,12 +38,12 @@ def test_gpu_count_is_non_negative() -> None:
 
 def test_hardware_dict_has_required_keys() -> None:
     info = detect_platform()
-    for key in ("cpu_model", "cpu_count", "taichi_version", "python_version", "platform"):
+    for key in ("cpu_model", "cpu_count", "numba_version", "python_version", "platform"):
         assert key in info.hardware, f"missing key: {key}"
 
 
-def test_available_archs_are_valid_taichi_archs() -> None:
-    valid = {"cpu", "cuda", "vulkan", "metal", "amdgpu"}
+def test_available_archs_are_valid_numba_backends() -> None:
+    valid = {"cpu"}
     info = detect_platform()
     assert set(info.available_archs).issubset(valid)
 
@@ -90,7 +90,7 @@ def test_detect_platform_with_nvidia_gpu() -> None:
          patch("pygotm.validation.hardware._probe_amd", return_value=(False, 0, "")), \
          patch("pygotm.validation.hardware._probe_vulkan", return_value=False):
         info = detect_platform()
-    assert "cuda" in info.available_archs
+    assert info.available_archs == ["cpu"]
     assert info.gpu_count == 1
     assert "gpu_info" in info.hardware
     assert "RTX 4090" in info.hardware["gpu_info"]
@@ -120,7 +120,7 @@ def test_detect_platform_with_amd_gpu() -> None:
          patch("pygotm.validation.hardware._probe_amd", return_value=(True, 1, "MI250X")), \
          patch("pygotm.validation.hardware._probe_vulkan", return_value=False):
         info = detect_platform()
-    assert "amdgpu" in info.available_archs
+    assert info.available_archs == ["cpu"]
     assert info.gpu_count == 1
 
 
@@ -144,7 +144,8 @@ def test_detect_platform_vulkan_only_when_no_cuda_amd() -> None:
          patch("pygotm.validation.hardware._probe_amd", return_value=(False, 0, "")), \
          patch("pygotm.validation.hardware._probe_vulkan", return_value=True):
         info = detect_platform()
-    assert "vulkan" in info.available_archs
+    assert info.available_archs == ["cpu"]
+    assert info.gpu_count == 1
 
 
 def test_detect_platform_no_vulkan_when_cuda_present() -> None:
@@ -153,7 +154,7 @@ def test_detect_platform_no_vulkan_when_cuda_present() -> None:
          patch("pygotm.validation.hardware._probe_vulkan", return_value=True):
         info = detect_platform()
     assert "vulkan" not in info.available_archs
-    assert "cuda" in info.available_archs
+    assert info.available_archs == ["cpu"]
 
 
 def test_detect_platform_metal_on_darwin() -> None:
@@ -163,7 +164,8 @@ def test_detect_platform_metal_on_darwin() -> None:
          patch("pygotm.validation.hardware._probe_vulkan", return_value=False):
         mock_sys.platform = "darwin"
         info = detect_platform()
-    assert "metal" in info.available_archs
+    assert info.available_archs == ["cpu"]
+    assert info.gpu_count == 1
 
 
 def test_detect_platform_no_metal_on_linux() -> None:

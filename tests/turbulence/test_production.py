@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, read_field_array
 from type_helpers import ReadyTurbulenceState, require_turbulence_state
 
 from pygotm.turbulence.production import ProductionWorkspace, step_production
@@ -49,27 +48,19 @@ def _run_step_production(
     )
 
     for col in range(n_cols):
-        fill_field_from_array(ws.NN, NN, col=col)
-        fill_field_from_array(ws.SS, SS, col=col)
-        fill_field_from_array(ws.xP, xP if xP is not None else _zeros(nlev), col=col)
-        fill_field_from_array(
-            ws.SSCSTK,
-            SSCSTK if SSCSTK is not None else _zeros(nlev),
-            col=col,
-        )
-        fill_field_from_array(
-            ws.SSSTK,
-            SSSTK if SSSTK is not None else _zeros(nlev),
-            col=col,
-        )
-        fill_field_from_array(ws.num, state.num, col=col)
-        fill_field_from_array(ws.nuh, state.nuh, col=col)
-        fill_field_from_array(ws.nucl, state.nucl, col=col)
-        fill_field_from_array(ws.P, state.P, col=col)
-        fill_field_from_array(ws.B, state.B, col=col)
-        fill_field_from_array(ws.Pb, state.Pb, col=col)
-        fill_field_from_array(ws.Px, state.Px, col=col)
-        fill_field_from_array(ws.PSTK, state.PSTK, col=col)
+        ws.NN[col] = NN
+        ws.SS[col] = SS
+        ws.xP[col] = xP if xP is not None else _zeros(nlev)
+        ws.SSCSTK[col] = SSCSTK if SSCSTK is not None else _zeros(nlev)
+        ws.SSSTK[col] = SSSTK if SSSTK is not None else _zeros(nlev)
+        ws.num[col] = state.num
+        ws.nuh[col] = state.nuh
+        ws.nucl[col] = state.nucl
+        ws.P[col] = state.P
+        ws.B[col] = state.B
+        ws.Pb[col] = state.Pb
+        ws.Px[col] = state.Px
+        ws.PSTK[col] = state.PSTK
 
     step_production(
         n_cols,
@@ -94,11 +85,11 @@ def _run_step_production(
         ws.PSTK,
     )
 
-    state.P[:] = read_field_array(ws.P)
-    state.B[:] = read_field_array(ws.B)
-    state.Pb[:] = read_field_array(ws.Pb)
-    state.Px[:] = read_field_array(ws.Px)
-    state.PSTK[:] = read_field_array(ws.PSTK)
+    state.P[:] = ws.P[0]
+    state.B[:] = ws.B[0]
+    state.Pb[:] = ws.Pb[0]
+    state.Px[:] = ws.Px[0]
+    state.PSTK[:] = ws.PSTK[0]
     return ws
 
 
@@ -289,9 +280,9 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     )
 
     for name in ("P", "B", "Pb", "Px", "PSTK"):
-        single_arr = read_field_array(getattr(single, name), col=0)
-        multi_0 = read_field_array(getattr(multi, name), col=0)
-        multi_1 = read_field_array(getattr(multi, name), col=1)
+        single_arr = getattr(single, name)[0]
+        multi_0 = getattr(multi, name)[0]
+        multi_1 = getattr(multi, name)[1]
         np.testing.assert_allclose(multi_0, single_arr, rtol=1e-12)
         np.testing.assert_allclose(multi_1, single_arr, rtol=1e-12)
 

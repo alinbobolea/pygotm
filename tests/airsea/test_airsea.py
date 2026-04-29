@@ -148,6 +148,38 @@ def test_do_airsea_bulk_fluxes_matches_component_routines() -> None:
     assert state.w == pytest.approx(math.hypot(_U10, _V10), rel=1.0e-12)
 
 
+def test_do_airsea_applies_calculated_flux_scale_factors() -> None:
+    state = _make_driver()
+    init_airsea(
+        state,
+        fluxes_method=KONDO,
+        shortwave_method=3,
+        albedo_method=PAYNE,
+        longwave_method=CLARK,
+        heat_scale_factor=1.2,
+        shortwave_scale_factor=0.97,
+    )
+    set_sst(state, _SST)
+    do_airsea(
+        state,
+        yearday=_YEARDAY,
+        secs=_SECS,
+        airp=_AIRP,
+        airt=_AIRT,
+        hum=_HUM,
+        cloud=_CLOUD,
+        u10=_U10,
+        v10=_V10,
+    )
+
+    unscaled_heat = state.ql + state.qe + state.qh
+    zenith = solar_zenith_angle(_YEARDAY, _SECS / 3600.0, _LON, _LAT)
+    unscaled_shortwave = shortwave_radiation(zenith, _YEARDAY, _LON, _LAT, _CLOUD)
+
+    assert state.heat == pytest.approx(1.2 * unscaled_heat, rel=1.0e-12)
+    assert state.shortwave == pytest.approx(0.97 * unscaled_shortwave, rel=1.0e-12)
+
+
 def test_ssuv_absolute_ignores_surface_current() -> None:
     """ssuv_method=0 (absolute): set_ssuv is a no-op; effective wind equals the 10-m wind."""
     state = _make_driver()
@@ -254,6 +286,18 @@ def test_integrated_fluxes_accumulate_running_totals() -> None:
     assert state.int_swr == pytest.approx(2000.0)
     assert state.int_heat == pytest.approx(-500.0)
     assert state.int_total == pytest.approx(1500.0)
+
+
+def test_integrated_fluxes_can_use_net_shortwave_after_albedo() -> None:
+    state = _make_driver()
+    state.shortwave = 200.0
+    state.heat = -50.0
+
+    integrated_fluxes(state, 10.0, shortwave=160.0)
+
+    assert state.int_swr == pytest.approx(1600.0)
+    assert state.int_heat == pytest.approx(-500.0)
+    assert state.int_total == pytest.approx(1100.0)
 
 
 def test_sst_obs_overrides_output_sst() -> None:

@@ -67,9 +67,10 @@ r"""!-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import numba
+import numpy as np
 
-from pygotm.util.tridiagonal import tridiagonal, tridiagonal_column
+from pygotm.util.tridiagonal import tridiagonal
 from pygotm.util.util import Dirichlet as DIRICHLET
 from pygotm.util.util import Neumann as NEUMANN
 
@@ -77,34 +78,34 @@ __all__ = [
     "DIRICHLET",
     "NEUMANN",
     "diff_face",
-    "diff_face_column",
+    "diff_face_batch",
 ]
 
 
-
-@ti.func
-def diff_face(  # type: ignore[no-untyped-def]
-    nlev,
-    dt,
-    cnpar,
-    h,
-    bc_up,
-    bc_down,
-    y_up,
-    y_down,
-    nu_y,
-    l_sour,
-    q_sour,
-    y,
-    au,
-    bu,
-    cu,
-    du,
-    ru,
-    qu,
-):
+@numba.njit(cache=True)
+def diff_face(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    h: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    nu_y: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    y: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
     r"""! !ROUTINE: Diffusion schemes --- grid faces"""
 
+    # Bug fix Georg Umgiesser: set boundary nu and y values for nlev==2
     if nlev == 2:
         nu_y[0] = nu_y[1]
         nu_y[nlev] = nu_y[1]
@@ -157,84 +158,33 @@ def diff_face(  # type: ignore[no-untyped-def]
     tridiagonal(au, bu, cu, du, ru, qu, y, 1, nlev - 1)
 
 
-@ti.func
-def diff_face_column(  # type: ignore[no-untyped-def]
-    col,
-    nlev,
-    dt,
-    cnpar,
-    h,
-    bc_up,
-    bc_down,
-    y_up,
-    y_down,
-    nu_y,
-    l_sour,
-    q_sour,
-    y,
-    au,
-    bu,
-    cu,
-    du,
-    ru,
-    qu,
-):
-    r"""! !ROUTINE: Diffusion schemes --- grid faces"""
-
-    if nlev == 2:
-        nu_y[col, 0] = nu_y[col, 1]
-        nu_y[col, nlev] = nu_y[col, 1]
-        y[col, 0] = y[col, 1]
-        y[col, nlev] = y[col, 1]
-
-    for i in range(2, nlev - 1):
-        c = dt * (nu_y[col, i + 1] + nu_y[col, i]) / (h[col, i] + h[col, i + 1])
-        c /= h[col, i + 1]
-        a = dt * (nu_y[col, i] + nu_y[col, i - 1]) / (h[col, i] + h[col, i + 1])
-        a /= h[col, i]
-        linear_source = dt * l_sour[col, i]
-
-        cu[col, i] = -cnpar * c
-        au[col, i] = -cnpar * a
-        bu[col, i] = 1.0 + cnpar * (a + c) - linear_source
-        du[col, i] = (1.0 - (1.0 - cnpar) * (a + c)) * y[col, i]
-        du[col, i] += (1.0 - cnpar) * (a * y[col, i - 1] + c * y[col, i + 1])
-        du[col, i] += dt * q_sour[col, i]
-
-    if bc_up == NEUMANN:
-        a = (
-            dt
-            * (nu_y[col, nlev - 1] + nu_y[col, nlev - 2])
-            / (h[col, nlev - 1] + h[col, nlev])
-            / h[col, nlev - 1]
+@numba.njit(parallel=True, cache=True)
+def diff_face_batch(
+    batch_size: int,
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    h: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    nu_y: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    y: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
+    """Batch variant: process batch_size columns in parallel with numba.prange."""
+    for b in numba.prange(batch_size):
+        diff_face(
+            nlev, dt, cnpar,
+            h[b], bc_up, bc_down, y_up, y_down,
+            nu_y[b], l_sour[b], q_sour[b], y[b],
+            au[b], bu[b], cu[b], du[b], ru[b], qu[b],
         )
-        linear_source = dt * l_sour[col, nlev - 1]
-
-        au[col, nlev - 1] = -cnpar * a
-        bu[col, nlev - 1] = 1.0 + cnpar * a - linear_source
-        du[col, nlev - 1] = (1.0 - (1.0 - cnpar) * a) * y[col, nlev - 1]
-        du[col, nlev - 1] += (1.0 - cnpar) * a * y[col, nlev - 2]
-        du[col, nlev - 1] += dt * q_sour[col, nlev - 1]
-        du[col, nlev - 1] += 2.0 * dt * y_up / (h[col, nlev - 1] + h[col, nlev])
-    else:
-        au[col, nlev - 1] = 0.0
-        bu[col, nlev - 1] = 1.0
-        du[col, nlev - 1] = y_up
-
-    if bc_down == NEUMANN:
-        c = dt * (nu_y[col, 2] + nu_y[col, 1]) / (h[col, 1] + h[col, 2])
-        c /= h[col, 2]
-        linear_source = dt * l_sour[col, 1]
-
-        cu[col, 1] = -cnpar * c
-        bu[col, 1] = 1.0 + cnpar * c - linear_source
-        du[col, 1] = (1.0 - (1.0 - cnpar) * c) * y[col, 1]
-        du[col, 1] += (1.0 - cnpar) * c * y[col, 2]
-        du[col, 1] += dt * q_sour[col, 1]
-        du[col, 1] += 2.0 * dt * y_down / (h[col, 1] + h[col, 2])
-    else:
-        bu[col, 1] = 1.0
-        cu[col, 1] = 0.0
-        du[col, 1] = y_down
-
-    tridiagonal_column(col, au, bu, cu, du, ru, qu, y, 1, nlev - 1)

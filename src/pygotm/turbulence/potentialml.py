@@ -197,10 +197,12 @@ r"""
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import math
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+import numba
+import numpy as np
+
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = ["PotentialMLWorkspace", "step_potentialml"]
 
@@ -208,119 +210,150 @@ _NN_MIN: float = 1.0e-8
 _SQRT_TWO: float = 1.4142135623730951
 
 
-class PotentialMLWorkspace(TaichiFieldCollection):
-    """Taichi fields for the translated two-master-scale closure."""
+class PotentialMLWorkspace(ColumnWorkspace):
+    """Workspace arrays for the translated two-master-scale closure."""
 
-    tke: ti.Field
-    eps: ti.Field
-    L: ti.Field
-    h: ti.Field
-    NN: ti.Field
-    depth: ti.Field
-    z0b: ti.Field
-    z0s: ti.Field
+    tke: np.ndarray
+    eps: np.ndarray
+    L: np.ndarray
+    h: np.ndarray
+    NN: np.ndarray
+    depth: np.ndarray
+    z0b: np.ndarray
+    z0s: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "eps", "L", "h", "NN"))
-        self.allocate_many(("depth", "z0b", "z0s"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.eps = make_column_array(nlev, n_cols=n_cols)
+        self.L = make_column_array(nlev, n_cols=n_cols)
+        self.h = make_column_array(nlev, n_cols=n_cols)
+        self.NN = make_column_array(nlev, n_cols=n_cols)
+        self.depth = make_column_array(nlev, n_cols=n_cols)
+        self.z0b = make_column_array(nlev, n_cols=n_cols)
+        self.z0s = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti_kernel
-def step_potentialml(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    kappa: ti.f64,
-    cde: ti.f64,
-    galp: ti.f64,
-    length_lim: ti.i32,
-    eps_min: ti.f64,
-    tke: TemplateArg,
-    eps: TemplateArg,
-    L: TemplateArg,
-    h: TemplateArg,
-    NN: TemplateArg,
-    depth: TemplateArg,
-    z0b: TemplateArg,
-    z0s: TemplateArg,
-):
+@numba.njit(cache=True)
+def _step_potentialml(
+    nlev: int,
+    kappa: float,
+    cde: float,
+    galp: float,
+    length_lim: int,
+    eps_min: float,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    h: np.ndarray,
+    NN: np.ndarray,
+    depth: float,
+    z0b: float,
+    z0s: float,
+) -> None:
     r"""Update the potential mixed-layer length scale and dissipation."""
 
-    for col in range(n_cols):
-        local_z0b = z0b[col, 0]
-        local_z0s = z0s[col, 0]
+    for i in range(1, nlev):
+        lu = 0.0
+        integral = 0.0
+        buoydiff = 0.0
+        found = 0
 
-        for i in range(1, nlev):
-            lu = 0.0
-            integral = 0.0
-            buoydiff = 0.0
-            found = 0
-
-            for j in range(i + 1, nlev + 1):
-                if found == 0:
-                    buoydiff = buoydiff + NN[col, j - 1] * 0.5 * (
-                        h[col, j] + h[col, j - 1]
-                    )
-                    integral = integral + buoydiff * h[col, j]
-                    if integral >= tke[col, i]:
-                        if j != nlev:
-                            if j != i + 1:
-                                lu = lu - (integral - tke[col, i]) / buoydiff
-                            else:
-                                if NN[col, i] > _NN_MIN:
-                                    lu = (
-                                        _SQRT_TWO
-                                        * ti.sqrt(tke[col, i])
-                                        / ti.sqrt(NN[col, i])
-                                    )
-                                else:
-                                    lu = h[col, i]
-                            found = 1
-                    if found == 0:
-                        lu = lu + h[col, j]
-
-            ld = 0.0
-            integral = 0.0
-            buoydiff = 0.0
-            found = 0
-
-            for offset in range(i):
-                j = i - 1 - offset
-                if j >= 1 and found == 0:
-                    buoydiff = buoydiff + NN[col, j] * 0.5 * (
-                        h[col, j + 1] + h[col, j]
-                    )
-                    integral = integral - buoydiff * h[col, j]
-                    if integral >= tke[col, i]:
-                        if j != i - 1:
-                            ld = ld - (integral - tke[col, i]) / buoydiff
+        for j in range(i + 1, nlev + 1):
+            if found == 0:
+                buoydiff = buoydiff + NN[j - 1] * 0.5 * (h[j] + h[j - 1])
+                integral = integral + buoydiff * h[j]
+                if integral >= tke[i]:
+                    if j != nlev:
+                        if j != i + 1:
+                            lu = lu - (integral - tke[i]) / buoydiff
                         else:
-                            if NN[col, i] > _NN_MIN:
-                                ld = (
-                                    _SQRT_TWO
-                                    * ti.sqrt(tke[col, i])
-                                    / ti.sqrt(NN[col, i])
-                                )
+                            if NN[i] > _NN_MIN:
+                                lu = _SQRT_TWO * math.sqrt(tke[i]) / math.sqrt(NN[i])
                             else:
-                                ld = h[col, i]
+                                lu = h[i]
                         found = 1
-                    if found == 0:
-                        ld = ld + h[col, j]
+                if found == 0:
+                    lu = lu + h[j]
 
-            L[col, i] = ti.sqrt(lu * ld)
+        ld = 0.0
+        integral = 0.0
+        buoydiff = 0.0
+        found = 0
 
-        L[col, 0] = kappa * local_z0b
-        L[col, nlev] = kappa * local_z0s
+        for offset in range(i):
+            j = i - 1 - offset
+            if j >= 1 and found == 0:
+                buoydiff = buoydiff + NN[j] * 0.5 * (h[j + 1] + h[j])
+                integral = integral - buoydiff * h[j]
+                if integral >= tke[i]:
+                    if j != i - 1:
+                        ld = ld - (integral - tke[i]) / buoydiff
+                    else:
+                        if NN[i] > _NN_MIN:
+                            ld = _SQRT_TWO * math.sqrt(tke[i]) / math.sqrt(NN[i])
+                        else:
+                            ld = h[i]
+                    found = 1
+                if found == 0:
+                    ld = ld + h[j]
 
-        for i in range(nlev + 1):
-            if NN[col, i] > 0.0 and length_lim != 0:
-                lcrit = ti.sqrt(2.0 * galp * galp * tke[col, i] / NN[col, i])
-                if L[col, i] > lcrit:
-                    L[col, i] = lcrit
+        L[i] = math.sqrt(lu * ld)
 
-            tke32 = ti.sqrt(tke[col, i] * tke[col, i] * tke[col, i])
-            eps[col, i] = cde * tke32 / L[col, i]
+    L[0] = kappa * z0b
+    L[nlev] = kappa * z0s
 
-            if eps[col, i] < eps_min:
-                eps[col, i] = eps_min
-                L[col, i] = cde * tke32 / eps_min
+    for i in range(nlev + 1):
+        if NN[i] > 0.0 and length_lim != 0:
+            lcrit = math.sqrt(2.0 * galp * galp * tke[i] / NN[i])
+            if L[i] > lcrit:
+                L[i] = lcrit
+
+        tke32 = math.sqrt(tke[i] * tke[i] * tke[i])
+        if L[i] == 0.0:
+            eps[i] = math.inf
+        else:
+            eps[i] = cde * tke32 / L[i]
+
+        if eps[i] < eps_min:
+            eps[i] = eps_min
+            L[i] = cde * tke32 / eps_min
+
+
+@numba.njit(parallel=True, cache=True)
+def step_potentialml(
+    batch_size: int,
+    nlev: int,
+    kappa: float,
+    cde: float,
+    galp: float,
+    length_lim: int,
+    eps_min: float,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    L: np.ndarray,
+    h: np.ndarray,
+    NN: np.ndarray,
+    depth: np.ndarray,
+    z0b: np.ndarray,
+    z0s: np.ndarray,
+) -> None:
+    r"""Update the potential mixed-layer length scale for one or more columns."""
+
+    for b in numba.prange(batch_size):
+        _step_potentialml(
+            nlev,
+            kappa,
+            cde,
+            galp,
+            length_lim,
+            eps_min,
+            tke[b],
+            eps[b],
+            L[b],
+            h[b],
+            NN[b],
+            depth[b, 0],
+            z0b[b, 0],
+            z0s[b, 0],
+        )

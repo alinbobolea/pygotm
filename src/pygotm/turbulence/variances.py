@@ -5,110 +5,15 @@ r"""
 !
 ! !ROUTINE: The algebraic velocity variances \label{sec:variances}
 !
-! !INTERFACE:
-   subroutine variances(nlev,SSU,SSV)
-!
-! !DESCRIPTION:
-!
-!  Using \eq{bijVertical} and the solution shown in \eq{b13} and
-!  the variances of the turbulent velocity fluctations can be
-!  evaluated according to
-!  \begin{equation}
-!    \label{variances}
-!    \begin{array}{rcl}
-!      \dfrac{\langle u'^2 \rangle}{k}
-!      &=& \dfrac23 + \dfrac{1}{\mathcal{N}\eps} \left(
-!        \left(\dfrac{a_2}{3}+a_3\right) \nu_t \left( \partder{U}{z} \right)^2
-!                          -\dfrac23 a_2 \nu_t \left( \partder{V}{z} \right)^2
-!                          -\dfrac43 a_5 G \right)
-!      \comma
-!      \\[7mm]
-!      \dfrac{\langle v'^2 \rangle}{k}
-!      &=& \dfrac23
-!      +\dfrac{1}{\mathcal{N}\eps} \left(
-!        \left(\dfrac{a_2}{3}+a_3\right) \nu_t \left(\partder{V}{z}\right)^2
-!                          -\dfrac23 a_2 \nu_t \left(\partder{U}{z}\right)^2
-!                          -\dfrac43 a_5 G \right)
-!      \comma
-!      \\[7mm]
-!      \dfrac{\langle w'^2 \rangle}{k}
-!      &=& \dfrac23
-!      +\dfrac{1}{\mathcal{N}\eps} \left(
-!        \left(\dfrac{a_2}{3}-a_3\right) P
-!        +\dfrac83 a_5 G
-!      \right)
-!      \comma
-!    \end{array}
-!  \end{equation}
-!  where the diffusivities are computed according to \eq{nu}
-!  (also see \sect{sec:cmueC} and \sect{sec:cmueD}),
-!  and the buoyancy production, $G$, follows from \eq{computeG}.
-!
-! !USES:
-  use turbulence,  only:     uu,vv,ww
-  use turbulence,  only:     tke,eps,P,B,Px,num
-  use turbulence,  only:     cc1,ct1,a2,a3,a5
-  IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!
-! number of vertical layers
-  integer,  intent(in)                 :: nlev
-!
-! square of shear frequency (1/s^2)
-! (from u- and v-component)
-  REALTYPE, intent(in)                :: SSU(0:nlev),SSV(0:nlev)
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!-----------------------------------------------------------------------
-! !LOCAL VARIABLES:
-!
-   integer                             :: i
-   REALTYPE                            :: N,Nt
-   REALTYPE                            :: fac1,fac2,fac3,fac4,fac5
-!
-!
-!-----------------------------------------------------------------------
-!BOC
-!
-   N    =   0.5*cc1
-   Nt   =   ct1
-!
-   do i=0,nlev
-!
-      fac1 = 2./3.
-      fac2 = 1.0/( N*eps(i) )
-      fac3 = a2/3.0 + a3
-      fac4 = a2/3.0 - a3
-      fac5 = 2./3.*a2
-!
-      uu(i) = tke(i)*( fac1 + fac2*( fac3*num(i)*SSU(i)                &
-                          - fac5*num(i)*SSV(i) - 4./3.*a5*B(i) ) )
-!
-      vv(i) = tke(i)*( fac1 + fac2*( fac3*num(i)*SSV(i)                &
-                          - fac5*num(i)*SSU(i) - 4./3.*a5*B(i) ) )
-!
-      ww(i) = tke(i)*( fac1 + fac2*( fac4*(P(i)+Px(i)) + 8./3.*a5*B(i) ) )
-!
-   enddo
-!
-   return
-   end subroutine variances
-!
-!EOC
-!
 !-----------------------------------------------------------------------
 ! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
 !-----------------------------------------------------------------------
 """
 
-import taichi as ti
+import numba
+import numpy as np
 
-from pygotm.fields import ColumnLayout, TaichiFieldCollection
-from pygotm.taichi_typing import TemplateArg, ti_kernel
+from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = ["VariancesWorkspace", "step_variances"]
 
@@ -117,85 +22,126 @@ _FOUR_THIRDS = 4.0 / 3.0
 _EIGHT_THIRDS = 8.0 / 3.0
 
 
-class VariancesWorkspace(TaichiFieldCollection):
-    """Taichi fields for the algebraic turbulent-velocity variances."""
+class VariancesWorkspace(ColumnWorkspace):
+    """Workspace arrays for algebraic velocity variances."""
 
-    tke: ti.Field
-    eps: ti.Field
-    P: ti.Field
-    B: ti.Field
-    Px: ti.Field
-    num: ti.Field
-    SSU: ti.Field
-    SSV: ti.Field
-    uu: ti.Field
-    vv: ti.Field
-    ww: ti.Field
+    tke: np.ndarray
+    eps: np.ndarray
+    P: np.ndarray
+    B: np.ndarray
+    Px: np.ndarray
+    num: np.ndarray
+    SSU: np.ndarray
+    SSV: np.ndarray
+    uu: np.ndarray
+    vv: np.ndarray
+    ww: np.ndarray
 
-    def __init__(self, nlev: int, *, n_cols: int = 1) -> None:
-        super().__init__(ColumnLayout(nlev=nlev, n_cols=n_cols))
-        self.allocate_many(("tke", "eps", "P", "B", "Px", "num", "SSU", "SSV"))
-        self.allocate_many(("uu", "vv", "ww"))
+    def __init__(self, nlev: int, *, n_cols: int | None = None) -> None:
+        super().__init__(nlev, n_cols=n_cols)
+        self.tke = make_column_array(nlev, n_cols=n_cols)
+        self.eps = make_column_array(nlev, n_cols=n_cols)
+        self.P = make_column_array(nlev, n_cols=n_cols)
+        self.B = make_column_array(nlev, n_cols=n_cols)
+        self.Px = make_column_array(nlev, n_cols=n_cols)
+        self.num = make_column_array(nlev, n_cols=n_cols)
+        self.SSU = make_column_array(nlev, n_cols=n_cols)
+        self.SSV = make_column_array(nlev, n_cols=n_cols)
+        self.uu = make_column_array(nlev, n_cols=n_cols)
+        self.vv = make_column_array(nlev, n_cols=n_cols)
+        self.ww = make_column_array(nlev, n_cols=n_cols)
 
 
-@ti_kernel
-def step_variances(  # type: ignore[no-untyped-def]
-    n_cols: ti.i32,
-    nlev: ti.i32,
-    cc1: ti.f64,
-    ct1: ti.f64,
-    a2: ti.f64,
-    a3: ti.f64,
-    a5: ti.f64,
-    tke: TemplateArg,
-    eps: TemplateArg,
-    P: TemplateArg,
-    B: TemplateArg,
-    Px: TemplateArg,
-    num: TemplateArg,
-    SSU: TemplateArg,
-    SSV: TemplateArg,
-    uu: TemplateArg,
-    vv: TemplateArg,
-    ww: TemplateArg,
-):
-    r"""Update the algebraic velocity variances for one or more columns."""
-
+@numba.njit(cache=True)
+def _step_variances(
+    nlev: int,
+    cc1: float,
+    ct1: float,
+    a2: float,
+    a3: float,
+    a5: float,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    num: np.ndarray,
+    SSU: np.ndarray,
+    SSV: np.ndarray,
+    uu: np.ndarray,
+    vv: np.ndarray,
+    ww: np.ndarray,
+) -> None:
+    r"""Update the algebraic velocity variances (single column)."""
     n_value = 0.5 * cc1
-    _ = ct1
     fac3 = a2 / 3.0 + a3
     fac4 = a2 / 3.0 - a3
     fac5 = _TWO_THIRDS * a2
 
-    for col in range(n_cols):
-        for i in range(nlev + 1):
-            fac2 = 1.0 / (n_value * eps[col, i])
+    for i in range(nlev + 1):
+        if eps[i] <= 0.0 or n_value <= 0.0:
+            uu[i] = _TWO_THIRDS * tke[i]
+            vv[i] = _TWO_THIRDS * tke[i]
+            ww[i] = _TWO_THIRDS * tke[i]
+            continue
 
-            uu[col, i] = tke[col, i] * (
-                _TWO_THIRDS
-                + fac2
-                * (
-                    fac3 * num[col, i] * SSU[col, i]
-                    - fac5 * num[col, i] * SSV[col, i]
-                    - _FOUR_THIRDS * a5 * B[col, i]
-                )
-            )
+        fac2 = 1.0 / (n_value * eps[i])
 
-            vv[col, i] = tke[col, i] * (
-                _TWO_THIRDS
-                + fac2
-                * (
-                    fac3 * num[col, i] * SSV[col, i]
-                    - fac5 * num[col, i] * SSU[col, i]
-                    - _FOUR_THIRDS * a5 * B[col, i]
-                )
+        uu[i] = tke[i] * (
+            _TWO_THIRDS
+            + fac2
+            * (
+                fac3 * num[i] * SSU[i]
+                - fac5 * num[i] * SSV[i]
+                - _FOUR_THIRDS * a5 * B[i]
             )
+        )
 
-            ww[col, i] = tke[col, i] * (
-                _TWO_THIRDS
-                + fac2
-                * (
-                    fac4 * (P[col, i] + Px[col, i])
-                    + _EIGHT_THIRDS * a5 * B[col, i]
-                )
+        vv[i] = tke[i] * (
+            _TWO_THIRDS
+            + fac2
+            * (
+                fac3 * num[i] * SSV[i]
+                - fac5 * num[i] * SSU[i]
+                - _FOUR_THIRDS * a5 * B[i]
             )
+        )
+
+        ww[i] = tke[i] * (
+            _TWO_THIRDS
+            + fac2
+            * (
+                fac4 * (P[i] + Px[i])
+                + _EIGHT_THIRDS * a5 * B[i]
+            )
+        )
+
+
+@numba.njit(parallel=True, cache=True)
+def step_variances(
+    batch_size: int,
+    nlev: int,
+    cc1: float,
+    ct1: float,
+    a2: float,
+    a3: float,
+    a5: float,
+    tke: np.ndarray,
+    eps: np.ndarray,
+    P: np.ndarray,
+    B: np.ndarray,
+    Px: np.ndarray,
+    num: np.ndarray,
+    SSU: np.ndarray,
+    SSV: np.ndarray,
+    uu: np.ndarray,
+    vv: np.ndarray,
+    ww: np.ndarray,
+) -> None:
+    r"""Update the algebraic velocity variances (batch)."""
+    for b in numba.prange(batch_size):
+        _step_variances(
+            nlev, cc1, ct1, a2, a3, a5,
+            tke[b], eps[b], P[b], B[b], Px[b], num[b], SSU[b], SSV[b],
+            uu[b], vv[b], ww[b],
+        )

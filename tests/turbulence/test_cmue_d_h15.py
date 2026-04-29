@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-from taichi_helpers import fill_field_from_array, read_field_array
 
 from pygotm.turbulence.cmue_d_h15 import CmueDH15Workspace, step_cmue_d_h15
 from pygotm.turbulence.turbulence import (
@@ -227,36 +226,16 @@ def _run_step_cmue_d_h15(
 
     ws = CmueDH15Workspace(nlev, n_cols=n_cols)
     for col in range(n_cols):
-        fill_field_from_array(ws.as_, as_, col=col)
-        fill_field_from_array(ws.an, an, col=col)
-        fill_field_from_array(ws.av, av, col=col)
-        fill_field_from_array(ws.aw, aw, col=col)
-        fill_field_from_array(ws.SPF, SPF, col=col)
-        fill_field_from_array(
-            ws.cmue1,
-            cmue1 if cmue1 is not None else state.cmue1,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.cmue2,
-            cmue2 if cmue2 is not None else state.cmue2,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.cmue3,
-            cmue3 if cmue3 is not None else state.cmue3,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.sq_var,
-            sq_var if sq_var is not None else state.sq_var,
-            col=col,
-        )
-        fill_field_from_array(
-            ws.sl_var,
-            sl_var if sl_var is not None else state.sl_var,
-            col=col,
-        )
+        ws.as_[col] = as_
+        ws.an[col] = an
+        ws.av[col] = av
+        ws.aw[col] = aw
+        ws.SPF[col] = SPF
+        ws.cmue1[col] = cmue1 if cmue1 is not None else state.cmue1
+        ws.cmue2[col] = cmue2 if cmue2 is not None else state.cmue2
+        ws.cmue3[col] = cmue3 if cmue3 is not None else state.cmue3
+        ws.sq_var[col] = sq_var if sq_var is not None else state.sq_var
+        ws.sl_var[col] = sl_var if sl_var is not None else state.sl_var
 
     step_cmue_d_h15(
         n_cols,
@@ -276,11 +255,11 @@ def _run_step_cmue_d_h15(
         ws.sl_var,
     )
 
-    state.cmue1[:] = read_field_array(ws.cmue1)
-    state.cmue2[:] = read_field_array(ws.cmue2)
-    state.cmue3[:] = read_field_array(ws.cmue3)
-    state.sq_var[:] = read_field_array(ws.sq_var)
-    state.sl_var[:] = read_field_array(ws.sl_var)
+    state.cmue1[:] = ws.cmue1[0]
+    state.cmue2[:] = ws.cmue2[0]
+    state.cmue3[:] = ws.cmue3[0]
+    state.sq_var[:] = ws.sq_var[0]
+    state.sl_var[:] = ws.sl_var[0]
     return ws
 
 
@@ -397,10 +376,10 @@ def test_multicolumn_parity_for_identical_columns() -> None:
     )
 
     for name in ("cmue1", "cmue2", "cmue3", "sq_var", "sl_var"):
-        single_arr = read_field_array(getattr(single, name), col=0)
+        single_arr = getattr(single, name)[0]
         for col in range(2):
             np.testing.assert_allclose(
-                read_field_array(getattr(multi, name), col=col),
+                getattr(multi, name)[col],
                 single_arr,
                 rtol=1.0e-12,
             )
