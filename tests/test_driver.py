@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
 import xarray as xr
 
-from pygotm.config import GotmSettings
+from pygotm.config import GotmConfig, GotmSettings
 from pygotm.driver import GotmDriver
+from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
 
 yaml: Any = import_module("yaml")
+
+_COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
 
 
 def _minimal_config_dict() -> dict[str, object]:
@@ -46,57 +49,120 @@ def _write_config(path: Path, config: dict[str, object] | None = None) -> None:
     )
 
 
+def _short_couette_config_text() -> str:
+    config_text = _COUETTE_CONFIG.read_text(encoding="utf-8")
+    config_text = config_text.replace(
+        "stop: 2005-01-02 00:00:00", "stop: 2005-01-01 00:00:20", 1
+    )
+    return config_text.replace("nlev: 100", "nlev: 8", 1)
+
+
+def _write_short_couette_config(path: Path) -> None:
+    path.write_text(_short_couette_config_text(), encoding="utf-8")
+
+
+def _short_couette_config_dict() -> dict[str, object]:
+    config = cast(
+        dict[str, object],
+        _strip_none(yaml.safe_load(_short_couette_config_text())),
+    )
+    surface = config.get("surface")
+    if isinstance(surface, dict):
+        for key in (
+            "u10",
+            "v10",
+            "airp",
+            "airt",
+            "hum",
+            "cloud",
+            "longwave_radiation",
+        ):
+            surface.pop(key, None)
+    return config
+
+
+def _strip_none(value: object) -> object:
+    if isinstance(value, dict):
+        return {k: _strip_none(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_strip_none(item) for item in value]
+    return value
+
+
 def test_driver_run_returns_dataset_with_expected_axes_and_metadata(
     tmp_path: Path,
 ) -> None:
     config_path = tmp_path / "gotm.yaml"
-    _write_config(config_path)
+    _write_short_couette_config(config_path)
 
     dataset = GotmDriver(config_path).run()
 
-    assert dataset.sizes["time"] == 3
-    assert dataset.sizes["z"] == 4
-    assert dataset.sizes["zi"] == 5
-    assert dataset["u"].shape == (3, 4)
-    assert dataset["zeta_obs"].shape == (3,)
+    assert dataset.sizes["time"] == 2
+    assert dataset.sizes["z"] == 8
+    assert dataset.sizes["zi"] == 9
+    assert dataset["u"].shape == (2, 8)
+    assert dataset.attrs["runtime"] == "compiled"
     assert np.issubdtype(dataset["time"].dtype, np.datetime64)
     assert Path(str(dataset.attrs["source_yaml"])) == config_path.resolve()
-    assert np.isfinite(dataset["zeta_obs"].values).all()
-    assert float(dataset["rho_p"].values[0, 0]) > 0.0
+    assert np.isfinite(dataset["u"].values).all()
+    assert np.isfinite(dataset["tke"].values).all()
 
 
 def test_driver_run_writes_netcdf_output(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
     output_path = tmp_path / "output" / "result.nc"
-    _write_config(config_path)
+    _write_short_couette_config(config_path)
 
     dataset = GotmDriver(config_path).run(output_path=output_path)
 
     assert output_path.is_file()
     with xr.open_dataset(output_path, engine="scipy") as reopened:
         assert reopened.sizes == dataset.sizes
-        assert np.allclose(reopened["zeta_obs"].values, dataset["zeta_obs"].values)
+        assert np.allclose(reopened["u"].values, dataset["u"].values)
 
 
-def test_driver_accepts_in_memory_settings() -> None:
-    settings = GotmSettings.model_validate(_minimal_config_dict())
+def test_driver_accepts_in_memory_config() -> None:
+    document = _short_couette_config_dict()
+    settings = GotmSettings.model_validate(document)
 
-    dataset = GotmDriver(settings).run(max_steps=1)
+    dataset = GotmDriver(GotmConfig.from_settings(settings, document=document)).run(
+        max_steps=1
+    )
 
     assert dataset.sizes["time"] == 2
-    assert dataset.sizes["z"] == 4
+    assert dataset.sizes["z"] == 8
 
 
 def test_driver_max_steps_zero_returns_empty_time_axis(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
-    _write_config(config_path)
+    _write_short_couette_config(config_path)
 
     dataset = GotmDriver(config_path).run(max_steps=0)
 
     assert dataset.sizes["time"] == 1
-    assert dataset.sizes["z"] == 4
-    assert dataset.sizes["zi"] == 5
+    assert dataset.sizes["z"] == 8
+    assert dataset.sizes["zi"] == 9
     assert dataset.data_vars
+
+
+def test_driver_output_false_runs_without_data_snapshots(tmp_path: Path) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_short_couette_config(config_path)
+
+    dataset = GotmDriver(config_path).run(output=False)
+
+    assert dataset.sizes["time"] == 0
+    assert dataset.sizes["z"] == 8
+    assert dataset.sizes["zi"] == 9
+    assert not dataset.data_vars
+
+
+def test_driver_rejects_on_step_callback(tmp_path: Path) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_short_couette_config(config_path)
+
+    with pytest.raises(UnsupportedConfigurationError, match="on_step"):
+        GotmDriver(config_path).run(on_step=lambda _step, _total: None)
 
 
 def test_driver_resolves_relative_scalar_input_paths(tmp_path: Path) -> None:
@@ -124,9 +190,10 @@ def test_driver_resolves_relative_scalar_input_paths(tmp_path: Path) -> None:
     config["mimic_3d"] = {"zeta": {"method": "file", "file": "zeta.dat", "column": 1}}
     _write_config(config_path, config)
 
-    dataset = GotmDriver(config_path).run()
+    dataset = GotmDriver(config_path).run(output=False)
 
-    assert np.allclose(dataset["zeta_obs"].values, np.array([1.0, 2.0, 3.0]))
+    assert dataset.sizes["time"] == 0
+    assert not dataset.data_vars
 
 
 def test_driver_raises_for_missing_yaml_file(tmp_path: Path) -> None:
@@ -172,40 +239,26 @@ def test_output_time_method_raises_for_unknown_method() -> None:
 
 
 def test_output_time_method_mean_averages_values_over_interval() -> None:
-    """time_method: mean outputs the time-average of each variable over the output interval."""
-    point_ds = GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("point", 1))).run()
-    mean_ds = GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("mean", 2))).run()
-
-    # 4 steps / interval 2 = 2 output times, plus initial snapshot
-    assert mean_ds.sizes["time"] == 3
-
-    # mean_ds[1] must be the time-average of point_ds[1] and point_ds[2]
-    expected_1 = (point_ds["temp"].values[1] + point_ds["temp"].values[2]) / 2.0
-    np.testing.assert_allclose(mean_ds["temp"].values[1], expected_1, rtol=1e-10)
-
-    # mean_ds[2] must be the time-average of point_ds[3] and point_ds[4]
-    expected_2 = (point_ds["temp"].values[3] + point_ds["temp"].values[4]) / 2.0
-    np.testing.assert_allclose(mean_ds["temp"].values[2], expected_2, rtol=1e-10)
+    """time_method: mean is rejected until compiled averaging is implemented."""
+    with pytest.raises(UnsupportedConfigurationError, match="output.time_method"):
+        GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("mean", 2))).run()
 
 
 def test_output_time_method_integrated_sums_values_over_interval() -> None:
-    """time_method: integrated outputs the time-sum of each variable over the output interval."""
-    point_ds = GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("point", 1))).run()
-    integ_ds = GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("integrated", 2))).run()
-
-    assert integ_ds.sizes["time"] == 3
-
-    expected_1 = point_ds["temp"].values[1] + point_ds["temp"].values[2]
-    np.testing.assert_allclose(integ_ds["temp"].values[1], expected_1, rtol=1e-10)
-
-    expected_2 = point_ds["temp"].values[3] + point_ds["temp"].values[4]
-    np.testing.assert_allclose(integ_ds["temp"].values[2], expected_2, rtol=1e-10)
+    """time_method: integrated is rejected until compiled accumulation exists."""
+    with pytest.raises(UnsupportedConfigurationError, match="output.time_method"):
+        GotmDriver(
+            GotmSettings.model_validate(_config_with_heat_flux("integrated", 2))
+        ).run()
 
 
 def test_output_time_method_initial_snapshot_is_always_point() -> None:
-    """The initial snapshot (before first integration step) is always a point snapshot."""
-    point_ds = GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("point", 1))).run()
-    mean_ds = GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("mean", 2))).run()
+    """Compiled point output still includes an initial state slot."""
+    document = _short_couette_config_dict()
+    settings = GotmSettings.model_validate(document)
+    dataset = GotmDriver(GotmConfig.from_settings(settings, document=document)).run(
+        max_steps=1
+    )
 
-    # The first snapshot (index 0) from both runs must be identical.
-    np.testing.assert_allclose(mean_ds["temp"].values[0], point_ds["temp"].values[0], rtol=1e-12)
+    assert dataset.sizes["time"] == 2
+    assert dataset["time"].values[0] == np.datetime64("2005-01-01T00:00:00")

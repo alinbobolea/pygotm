@@ -9,6 +9,9 @@ import pytest
 import yaml  # type: ignore[import-untyped,unused-ignore]
 
 from pygotm.gotm.gotm import finalize_gotm, initialize_gotm, integrate_gotm
+from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
+
+_COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
 
 
 def _write_config(path: Path) -> None:
@@ -38,6 +41,15 @@ def _write_config(path: Path) -> None:
     )
 
 
+def _write_short_couette_config(path: Path) -> None:
+    config_text = _COUETTE_CONFIG.read_text(encoding="utf-8")
+    config_text = config_text.replace(
+        "stop: 2005-01-02 00:00:00", "stop: 2005-01-01 00:00:20", 1
+    )
+    config_text = config_text.replace("nlev: 100", "nlev: 8", 1)
+    path.write_text(config_text, encoding="utf-8")
+
+
 def test_initialize_and_finalize_gotm(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
     _write_config(config_path)
@@ -48,21 +60,42 @@ def test_initialize_and_finalize_gotm(tmp_path: Path) -> None:
     assert not run.initialized
 
 
-def test_integrate_gotm_collects_snapshots(tmp_path: Path) -> None:
+def test_integrate_gotm_uses_compiled_runtime_without_snapshots(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
-    _write_config(config_path)
+    _write_short_couette_config(config_path)
     run = initialize_gotm(config_path)
     try:
         integrate_gotm(run)
-        assert len(run.snapshots) == run.time.MaxN + 1
-        assert run.snapshot_times == [
-            "2000-01-01 00:00:00",
-            "2000-01-01 00:10:00",
-            "2000-01-01 00:20:00",
-        ]
-        zeta_values = [snapshot["zeta_obs"] for snapshot in run.snapshots]
-        assert max(zeta_values) > min(zeta_values)
-        assert np.isfinite(run.snapshots[0]["rho_p"]).all()
+        assert run.snapshots == []
+        assert run.snapshot_times == []
+        assert run.time.timestr == "2005-01-01 00:00:20"
+        assert run.meanflow.u is not None
+        assert np.isfinite(run.meanflow.u).all()
+    finally:
+        finalize_gotm(run)
+
+
+def test_integrate_gotm_can_skip_snapshots(tmp_path: Path) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_short_couette_config(config_path)
+    run = initialize_gotm(config_path)
+    try:
+        integrate_gotm(run, output=False)
+
+        assert run.snapshots == []
+        assert run.snapshot_times == []
+        assert run.time.timestr == "2005-01-01 00:00:20"
+    finally:
+        finalize_gotm(run)
+
+
+def test_integrate_gotm_rejects_on_step_callback(tmp_path: Path) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_short_couette_config(config_path)
+    run = initialize_gotm(config_path)
+    try:
+        with pytest.raises(UnsupportedConfigurationError, match="on_step"):
+            integrate_gotm(run, on_step=lambda _step, _total: None)
     finally:
         finalize_gotm(run)
 
@@ -74,7 +107,7 @@ def test_integrate_gotm_collects_snapshots(tmp_path: Path) -> None:
 def test_initialize_gotm_accepts_teos10_equation_of_state_variants(
     tmp_path: Path, eqstate_method: str
 ) -> None:
-    """full_teos-10 / full_teos_10 (reference YAML form) must not raise NotImplementedError."""
+    """TEOS-10 spelling variants should initialize cleanly."""
     config = {
         "version": 7,
         "location": {"latitude": 55.0, "longitude": 12.0, "depth": 10.0},

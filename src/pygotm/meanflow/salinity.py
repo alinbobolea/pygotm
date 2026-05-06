@@ -1,12 +1,73 @@
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The salinity equation \label{sec:salinity}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Salinity transport equation.
+
+Implements GOTM Section 3.2.11 — advances salinity :math:`S` by one timestep
+using an advection–diffusion solver with Neumann surface and bottom boundary
+conditions.
+
+The salinity satisfies the general scalar transport equation (Eq. 30):
+
+.. math::
+
+   \\dot{S} = \\mathcal{D}_S - \\frac{1}{\\tau_R^S}(S - S_{\\mathrm{obs}}) \\comma
+
+where :math:`\\mathcal{D}_S` is the turbulent diffusion operator (Eq. 31):
+
+.. math::
+
+   \\mathcal{D}_S = \\frac{\\partial}{\\partial z}
+       \\left( (\\nu_t^S + \\nu^S) \\frac{\\partial S}{\\partial z}
+       - \\tilde{\\Gamma}_S \\right) \\comma
+
+with turbulent scalar diffusivity :math:`\\nu_t^S = \\nu_t^{\\Theta}` (the same
+as for temperature in the current GOTM implementation), molecular diffusivity
+:math:`\\nu^S`, and counter-gradient flux :math:`\\tilde{\\Gamma}_S`.
+
+The optional :math:`-\\tau_R^{-1}(S - S_{\\mathrm{obs}})` term relaxes the
+modelled salinity towards an observed profile :math:`S_{\\mathrm{obs}}` with
+time scale :math:`\\tau_R^S`.
+
+Surface boundary condition
+--------------------------
+
+At the sea surface :math:`z = \\zeta` a Neumann (prescribed flux) condition
+is applied (Eq. 32):
+
+.. math::
+
+   (\\nu_t^S + \\nu^S) \\frac{\\partial S}{\\partial z} = S (P - E) \\comma
+
+where :math:`P - E` is precipitation minus evaporation [m s⁻¹].  In the code
+this is passed as ``sflux = S_sfc * (P - E)`` [psu m s⁻¹] —
+**positive when precipitation exceeds evaporation** (P > E, dilution regime),
+**negative when evaporation dominates** (E > P, concentration regime).
+
+.. note::
+
+   **Sign convention vs. the GOTM manual (Eq. 32).**  The manual writes the
+   surface BC as :math:`(\\nu_t^S + \\nu^S)\\,\\partial S/\\partial z = S(P-E)`
+   at :math:`z = \\zeta`, where the right-hand side is the diffusive flux in the
+   *upward* (+z) direction — positive means salt leaves the water column (P > E,
+   dilution).  The ``diff_center`` kernel, however, uses the opposite sign
+   convention: the upper Neumann argument ``Yup`` is the flux *entering* the top
+   cell (positive = salt gains the surface layer).  Because these two conventions
+   have opposite signs, the code negates ``sflux`` before passing it to the
+   kernel::
+
+       diff_s_up = -sflux = -S*(P-E) = S*(E-P)
+
+   For evaporation (E > P): ``diff_s_up > 0`` → flux entering the top cell →
+   surface salinity increases. ✓
+   For precipitation (P > E): ``diff_s_up < 0`` → flux leaving the top cell →
+   surface salinity decreases. ✓
+
+   This matches the Fortran verbatim (``DiffSup = -sflux`` in
+   ``salinity.F90``).
+
+Both surface and bottom boundary conditions are of Neumann type; the bottom
+flux is zero.
+
+Authors (original Fortran): Lars Umlauf (scalar transport), Hans Burchard, Karsten Bolding.
 """
 
 import numba
@@ -21,6 +82,7 @@ from pygotm.util.util import oneSided as _ONE_SIDED
 __all__ = [
     "salinity",
     "step_salinity",
+    "step_salinity_single",
 ]
 
 _ADV_MODE: int = 0
@@ -150,7 +212,32 @@ def salinity(
     w_adv_discr: int = 4,
     s_adv: bool = False,
 ) -> None:
-    """Advance the salinity equation for one column."""
+    """Advance the salinity equation for one column.
+
+    Parameters
+    ----------
+    state:
+        MeanflowState with S, h, w, u, v, Sobs, avh, avmolS.
+    nlev:
+        Number of model layers.
+    dt:
+        Time step [s].
+    cnpar:
+        Crank–Nicolson implicitness (0 = explicit, 1 = fully implicit).
+    wflux:
+        Freshwater flux at the surface [m s⁻¹] (positive = precipitation). Not
+        used directly; kept for API symmetry with ``temperature()``.
+    sflux:
+        Virtual salinity flux ``S_surface · (P − E)`` [psu m s⁻¹].
+        Positive when P > E (precipitation-dominated, dilution);
+        negative when E > P (evaporation-dominated, concentration).
+        The kernel receives ``-sflux`` as the upper Neumann boundary condition;
+        see the module docstring for the sign-convention note.
+    nus:
+        Turbulent salinity diffusivity profile [m² s⁻¹], shape (nlev+1,).
+    gams:
+        Counter-gradient salinity flux :math:`\\tilde{\\Gamma}_S`, shape (nlev+1,).
+    """
     assert state.S is not None
     assert state.h is not None
     assert state.w is not None
@@ -184,3 +271,6 @@ def salinity(
         _dsdx, _dsdy,
         state.avh, q_sour, l_sour, au, bu, cu, du, ru, qu, adv_cu,
     )
+
+
+step_salinity_single = _step_salinity

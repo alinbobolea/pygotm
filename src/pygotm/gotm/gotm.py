@@ -71,6 +71,11 @@ from pygotm.gotm.register_all_variables import (
     fm,
     snapshot_registry,
 )
+from pygotm.gotm.runtime_builder import (
+    RuntimeBundle,
+    UnsupportedConfigurationError,
+    build_runtime_from_run,
+)
 from pygotm.input.input import (
     ProfileInput,
     ScalarInput,
@@ -191,6 +196,7 @@ __all__ = [
     "initialize_gotm",
     "initialize_gotm_from_settings",
     "integrate_gotm",
+    "integrate_gotm_compiled",
 ]
 
 _GRID_METHOD = {"analytical": 0, "file_sigma": 1, "file_h": 2}
@@ -1218,13 +1224,14 @@ def initialize_gotm(
     )
 
 
-def integrate_gotm(
+def _integrate_gotm_python(
     run: GotmRun,
     *,
     max_steps: int | None = None,
     on_step: Callable[[int, int], None] | None = None,
+    output: bool = True,
 ) -> None:
-    """Advance the single-column GOTM state and capture scheduled snapshots."""
+    """Legacy Python timestep loop retained for focused migration parity tests."""
 
     if not run.initialized:
         raise RuntimeError("run has not been initialised")
@@ -1281,7 +1288,7 @@ def integrate_gotm(
     run.snapshots.clear()
     last_step = run.time.MaxN if max_steps is None else min(run.time.MaxN, max_steps)
 
-    if run.output_schedule.capture_initial:
+    if output and run.output_schedule.capture_initial:
         _save_snapshot(run)
     if last_step < run.time.MinN:
         return
@@ -1510,9 +1517,7 @@ def integrate_gotm(
             -meanflow.zi,
         )
         buoyancy[1 : run.nlev + 1] = (
-            -meanflow.gravity
-            * (rho_p[1 : run.nlev + 1] - density.rho0)
-            / density.rho0
+            -meanflow.gravity * (rho_p[1 : run.nlev + 1] - density.rho0) / density.rho0
         )
         stratification(meanflow, density, run.nlev)
         do_turbulence(
@@ -1552,11 +1557,79 @@ def integrate_gotm(
         if on_step is not None:
             on_step(step - run.time.MinN + 1, last_step - run.time.MinN + 1)
 
-        if run.output_schedule.time_method != "point":
+        if output and run.output_schedule.time_method != "point":
             _accumulate_snapshot(run)
 
-        if step % run.output_schedule.interval_steps == 0 or step == last_step:
+        if output and (
+            step % run.output_schedule.interval_steps == 0 or step == last_step
+        ):
             _save_snapshot(run)
+
+
+def integrate_gotm(
+    run: GotmRun,
+    *,
+    max_steps: int | None = None,
+    on_step: Callable[[int, int], None] | None = None,
+    output: bool = True,
+) -> None:
+    """Advance supported single-column cases through the compiled runtime."""
+
+    if not run.initialized:
+        raise RuntimeError("run has not been initialised")
+    if on_step is not None:
+        msg = "compiled GOTM runtime does not yet support on_step callbacks"
+        raise UnsupportedConfigurationError(msg)
+    integrate_gotm_compiled(run, max_steps=max_steps, output=output)
+
+
+def integrate_gotm_compiled(
+    run: GotmRun,
+    *,
+    max_steps: int | None = None,
+    output: bool = True,
+) -> RuntimeBundle:
+    """Advance supported single-column cases through the compiled runtime."""
+
+    if not run.initialized:
+        raise RuntimeError("run has not been initialised")
+
+    bundle = build_runtime_from_run(run, max_steps=max_steps, output=output)
+    written = bundle.run()
+    if written < 0:
+        msg = f"compiled GOTM runtime failed with status {written}"
+        raise RuntimeError(msg)
+    if output and written != bundle.output.nout:
+        msg = (
+            f"compiled GOTM runtime wrote {written} outputs, "
+            f"expected {bundle.output.nout}"
+        )
+        raise RuntimeError(msg)
+
+    _copy_runtime_state_to_run(run, bundle)
+    run.time.update_time(bundle.params.nt)
+    return bundle
+
+
+def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:
+    state = bundle.state
+    for name, array in state.iter_profile_arrays():
+        if hasattr(run.meanflow, name):
+            target = getattr(run.meanflow, name)
+        elif hasattr(run.turbulence, name):
+            target = getattr(run.turbulence, name)
+        else:
+            continue
+        if isinstance(target, np.ndarray):
+            np.copyto(target, array)
+
+    run.meanflow.z0b = float(state.z0b[0])
+    run.meanflow.z0s = float(state.z0s[0])
+    run.meanflow.za = float(state.za[0])
+    run.meanflow.u_taub = float(state.u_taub[0])
+    run.meanflow.u_taubo = float(state.u_taubo[0])
+    run.meanflow.u_taus = float(state.u_taus[0])
+    run.meanflow.taub = float(state.taub[0])
 
 
 def finalize_gotm(run: GotmRun) -> None:

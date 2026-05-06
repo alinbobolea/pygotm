@@ -1,158 +1,51 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The dynamic epsilon-equation \label{sec:dissipationeq}
-!
-! !INTERFACE:
-!   subroutine omegaeq(nlev,dt,u_taus,u_taub,z0s,z0b,h,NN,SS)
-!
-! !DESCRIPTION:
-! The $k$-$\omega$ model described by \cite{UmlaufEtAl3003} solves
-! a transport equation for the inverse turbulence time scale,
-! $ \omega = (c_\mu^0)^4 \varepsilon /k$, of the following form:
-! \begin{equation}
-!   \label{omega}
-!   \dot{\omega}
-!   =
-!   {\cal D}_\omega
-!   + \frac{\omega}{k} ( c_{\omega 1} P + c_{\omega 3} G
-!                        + c_{\omega x} P_x
-!                        + c_{\omega 4} P_s
-!                        - c_{\omega 2} \varepsilon )
-!   \comma
-! \end{equation}
-! where $\dot{\omega}$ denotes the material derivative of $\omega$.
-! The production terms $P$ and $G$ follow from \eq{PandG}.
-! $P_s$ is Stokes shear production defined in \eq{computePs}
-! and $P_x$ accounts for extra turbulence production.
-! ${\cal D}_\omega$ represents the sum of the viscous and turbulent
-! transport terms.
-!
-! For horizontally homogeneous flows, the transport term ${\cal D}_\omega$
-! appearing in \eq{dissipation} is presently expressed by a simple
-! gradient formulation,
-! \begin{equation}
-!   \label{diffusionOmega}
-!   {\cal D}_\omega = \frstder{z}
-!    \left( \dfrac{\nu_t}{\sigma_\omega} \partder{\omega}{z} \right)
-!  \comma
-! \end{equation}
-! where $\sigma_\omega$ is the constant Schmidt-number for $\omega$.
-!
-! Model constants are summarized in \tab{tab:KW_constants}. Similar
-! to the two-equations models, the model parameter $c_{omega 3}$
-! determines the value of the stationory Richardson number. It is
-! computed numerically by solving \eq{Ri_st}.
-! \begin{table}[ht]
-!   \begin{center}
-! \begin{tabular}{cccccc}
-!     & $c_\mu^0$ & $\sigma_k$  & $\sigma_\omega$
-!     & $c_{\omega 1}$ & $c_{\omega 2}$  \\[1mm] \hline
-!     \cite{Rodi87} & $0.55$ & $2.0$ &  $2.0$ & $0.56$ & $0.83$ \\
-!   \end{tabular}
-!   \caption{\label{tab:KW_constants} Constants appearing in
-!    \eq{omega} and \eq{diffusionOmega}.}
-!   \end{center}
-! \end{table}
-!
-! At the end of this routine the length-scale can be constrained according to a
-! suggestion of \cite{Galperinetal88}. This feature is optional and can be activated
-! by setting {\tt length\_lim = .true.} in {\tt gotm.yaml}.
-!
-! !USES:
-!   use turbulence, only: P,B,Px,PSTK,num
-!   use turbulence, only: tke,tkeo,k_min,eps,eps_min,L
-!   use turbulence, only: cw1,cw2,cw3plus,cw3minus,cwx,cw4
-!   use turbulence, only: cm0,cde,galp,length_lim
-!   use turbulence, only: omega_bc, psi_ubc, psi_lbc, ubc_type, lbc_type
-!   use turbulence, only: sig_w
-!   use util,       only: Dirichlet,Neumann
-!
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!
-!  number of vertical layers
-!   integer,  intent(in)                :: nlev
-!
-!  time step (s)
-!   REALTYPE, intent(in)                :: dt
-!
-!  surface and bottom
-!  friction velocity (m/s)
-!   REALTYPE, intent(in)                :: u_taus,u_taub
-!
-!  surface and bottom
-!  roughness length (m)
-!   REALTYPE, intent(in)                :: z0s,z0b
-!
-!  layer thickness (m)
-!   REALTYPE, intent(in)                :: h(0:nlev)
-!
-!  square of shear and buoyancy
-!  frequency (1/s^2)
-!   REALTYPE, intent(in)                :: NN(0:nlev),SS(0:nlev)
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!------------------------------------------------------------------------
-!
-! !LOCAL VARIABLES:
-!   REALTYPE                  :: DiffOmgUp,DiffOmgDw,pos_bc
-!   REALTYPE                  :: prod,buoyan,diss
-!   REALTYPE                  :: prod_pos,prod_neg,buoyan_pos,buoyan_neg
-!   REALTYPE                  :: ki,epslim,OmgOverTke,NN_pos
-!   REALTYPE                  :: cnpar=_ONE_
-!   REALTYPE                  :: omega(0:nlev)
-!   REALTYPE                  :: avh(0:nlev)
-!   REALTYPE                  :: Lsour(0:nlev),Qsour(0:nlev)
-!   REALTYPE                  :: cw3
-!
-!   integer                   :: i
-!
-!------------------------------------------------------------------------
-!BOC
-!
-!  re-construct omega at "old" timestep
-!
-!  compute RHS
-!
-!  TKE and position for upper BC
-!
-!  obtain BC for upper boundary of type "ubc_type"
-!
-!  TKE and position for lower BC
-!
-!  obtain BC for lower boundary of type "lbc_type"
-!
-!  do diffusion step
-!
-!  fill top and bottom value with something nice
-!  (only for output)
-!
-!     recover dissipation rate from k and omega
-!
-!     clip at eps_min
-!
-!  limit dissipation rate under stable stratification,
-!  see Galperin et al. (1988)
-!
-!        look for N^2 > 0
-!
-!        compute limit
-!
-!        clip at limit
-!
-!        compute dissipative scale
-!EOC
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Dynamic transport equation for the specific dissipation rate :math:`\\omega`.
+
+Implements GOTM Section 4.7.28 (genericeq.F90, k–ω branch) — solves the
+:math:`k`–:math:`\\omega` model of Umlauf et al. (2003).  The inverse
+turbulence time scale is
+
+.. math::
+
+   \\omega = \\frac{\\sqrt{k}}{c_\\mu^0 l} \\comma
+
+and its transport equation (Eq. 168) is:
+
+.. math::
+
+   \\dot{\\omega} = \\mathcal{D}_\\omega
+   + \\frac{\\omega}{k}\\bigl(
+       c_{\\omega 1}\\,P + c_{\\omega 3}\\,G
+       + c_{\\omega x}\\,P_x + c_{\\omega 4}\\,P_s
+       - c_{\\omega 2}\\,\\varepsilon
+     \\bigr) \\comma
+
+with diffusive transport:
+
+.. math::
+
+   \\mathcal{D}_\\omega = \\frac{\\partial}{\\partial z}\\left(
+       \\frac{\\nu_t}{\\sigma_\\omega} \\frac{\\partial \\omega}{\\partial z}
+   \\right) \\comma
+
+and Schmidt number :math:`\\sigma_\\omega`.  After solving the :math:`\\omega`
+transport, the dissipation rate and turbulent length scale are recovered as:
+
+.. math::
+
+   \\varepsilon = (c_\\mu^0)^4 k\\,\\omega, \\quad
+   l = c_{de} \\frac{k^{3/2}}{\\varepsilon} \\point
+
+An optional Galperin et al. (1988) length-scale limiter can be activated via
+``length_lim``, restricting :math:`\\varepsilon` from below in stably stratified
+flows.
+
+The k–ω model constants (Umlauf et al. 2003) correspond to GLS exponents
+:math:`p = 0`, :math:`m = 1/2`, :math:`n = -1` in the GLS framework
+(Eq. 165: :math:`\\psi = (c_\\mu^0)^p k^m l^n`).
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import math
@@ -170,6 +63,7 @@ from pygotm.util.diff_face import diff_face
 __all__ = [
     "OmegaEquationWorkspace",
     "step_omegaeq",
+    "step_omegaeq_single",
 ]
 
 _CNPAR: float = 1.0
@@ -267,9 +161,9 @@ def _omega_bc_value(
 
     if type_ == _INJECTION:
         f_k = _fk_craig(u_tau, cw)
-        capital_k = (
-            (-sig_k * f_k / (cmsf * gen_alpha * gen_l)) ** (2.0 / 3.0)
-        ) / (z0**gen_alpha)
+        capital_k = ((-sig_k * f_k / (cmsf * gen_alpha * gen_l)) ** (2.0 / 3.0)) / (
+            z0**gen_alpha
+        )
 
         if bc == _DIRICHLET:
             value = (
@@ -589,3 +483,6 @@ def step_omegaeq(
             ru[b],
             qu[b],
         )
+
+
+step_omegaeq_single = _step_omegaeq

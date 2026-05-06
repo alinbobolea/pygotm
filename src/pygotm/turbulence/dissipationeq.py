@@ -1,13 +1,80 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The dynamic epsilon-equation \label{sec:dissipationeq}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Dynamic transport equation for the dissipation rate :math:`\\varepsilon`.
+
+Implements GOTM Section 4.7.27 (dissipationeq.F90) — solves the
+:math:`k`–:math:`\\varepsilon` dissipation equation (Eq. 163):
+
+.. math::
+
+   \\dot{\\varepsilon} = \\mathcal{D}_\\varepsilon
+   + \\frac{\\varepsilon}{k}\\bigl(
+       c_{\\varepsilon 1}\\,P + c_{\\varepsilon 3}\\,G
+       + c_{\\varepsilon x}\\,P_x + c_{\\varepsilon 4}\\,P_s
+       - c_{\\varepsilon 2}\\,\\varepsilon
+     \\bigr) \\comma
+
+with diffusive transport (Eq. 164):
+
+.. math::
+
+   \\mathcal{D}_\\varepsilon = \\frac{\\partial}{\\partial z}
+       \\left( \\frac{\\nu_t}{\\sigma_\\varepsilon}
+               \\frac{\\partial \\varepsilon}{\\partial z} \\right) \\comma
+
+and Schmidt number :math:`\\sigma_\\varepsilon`.  After the transport step the
+turbulent length scale is recovered as:
+
+.. math::
+
+   l = c_{de} \\frac{k^{3/2}}{\\varepsilon} \\point
+
+Model constants (Rodi 1987)
+-----------------------------
+
+The default constants for the :math:`k`–:math:`\\varepsilon` model are:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Constant
+     - Value
+   * - :math:`c_\\mu^0`
+     - 0.5477
+   * - :math:`\\sigma_k`
+     - 1.0
+   * - :math:`\\sigma_\\varepsilon`
+     - 1.3
+   * - :math:`c_{\\varepsilon 1}`
+     - 1.44
+   * - :math:`c_{\\varepsilon 2}`
+     - 1.92
+
+Length-scale limiter
+--------------------
+
+When ``length_lim`` is active, Galperin et al. (1988) stability criterion:
+
+.. math::
+
+   \\varepsilon \\ge \\frac{c_{de}}{\\sqrt{2}\\,\\gamma}
+       k \\sqrt{\\max(N^2, 0)}
+
+is enforced after the transport step, preventing excessive length scales in
+stably stratified flows.
+
+Boundary conditions
+-------------------
+
+Boundary conditions follow logarithmic-layer theory (Dirichlet):
+
+.. math::
+
+   \\varepsilon = \\frac{c_{de}\\, k^{3/2}}{\\kappa\\,(z + z_0)} \\comma
+
+or Craig–Banner wave-breaking injection.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import math
@@ -25,6 +92,7 @@ from pygotm.util.diff_face import diff_face
 __all__ = [
     "DissipationEquationWorkspace",
     "step_dissipationeq",
+    "step_dissipationeq_single",
 ]
 
 _CNPAR: float = 1.0
@@ -358,3 +426,6 @@ def step_dissipationeq(
             u_taus[b, 0], u_taub[b, 0], z0s[b, 0], z0b[b, 0],
             au[b], bu[b], cu[b], du[b], ru[b], qu[b],
         )
+
+
+step_dissipationeq_single = _step_dissipationeq

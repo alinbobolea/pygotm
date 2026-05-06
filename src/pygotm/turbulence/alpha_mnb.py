@@ -1,13 +1,32 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Update dimensionless alpha's\label{sec:alpha}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Dimensionless stability parameters :math:`\\alpha_M`, :math:`\\alpha_N`, :math:`\\alpha_b`.
+
+Implements GOTM Section 4.7.21 — updates the non-dimensional shear and
+buoyancy parameters used by the algebraic stress models (Eq. 149):
+
+.. math::
+
+   \\alpha_M = \\frac{k^2}{\\varepsilon^2} M^2, \\quad
+   \\alpha_N = \\frac{k^2}{\\varepsilon^2} N^2, \\quad
+   \\alpha_b = \\frac{k}{\\varepsilon^2} \\langle b'^2 \\rangle \\comma
+
+where :math:`k/\\varepsilon` is the turbulence time scale :math:`\\tau`.
+In the code, ``at`` stores :math:`\\alpha_b = (k/\\varepsilon)(k_b/\\varepsilon)`.
+
+When Stokes drift is active, two additional parameters are computed:
+
+.. math::
+
+   \\alpha_v = \\frac{k^2}{\\varepsilon^2} \\cdot \\mathrm{SSCSTK}, \\quad
+   \\alpha_w = \\frac{k^2}{\\varepsilon^2} \\cdot \\mathrm{SSSTK} \\comma
+
+stored in ``av`` and ``aw`` respectively.
+
+All parameters are floored at :math:`10^{-10}` to prevent numerical
+singularities in the stability-function evaluations.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import numba
@@ -18,6 +37,7 @@ from pygotm.arrays import ColumnWorkspace, make_column_array
 __all__ = [
     "AlphaMNBWorkspace",
     "step_alpha_mnb",
+    "step_alpha_mnb_single",
 ]
 
 _MIN_NONNEGATIVE_ALPHA: float = 1.0e-10
@@ -103,7 +123,22 @@ def step_alpha_mnb(
     r"""Update alpha_M, alpha_N, alpha_b, and optional Stokes terms (batch)."""
     for b in numba.prange(batch_size):
         _step_alpha_mnb(
-            nlev, has_sscstk, has_ssstk,
-            tke[b], eps[b], kb[b], NN[b], SS[b], SSCSTK[b], SSSTK[b],
-            as_[b], an[b], at[b], av[b], aw[b],
+            nlev,
+            has_sscstk,
+            has_ssstk,
+            tke[b],
+            eps[b],
+            kb[b],
+            NN[b],
+            SS[b],
+            SSCSTK[b],
+            SSSTK[b],
+            as_[b],
+            an[b],
+            at[b],
+            av[b],
+            aw[b],
         )
+
+
+step_alpha_mnb_single = _step_alpha_mnb

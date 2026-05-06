@@ -1,190 +1,54 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The dynamic k-equation \label{sec:tkeeq}
-!
-! !INTERFACE:
-!   subroutine tkeeq(nlev,dt,u_taus,u_taub,z0s,z0b,h,NN,SS)
-!
-! !DESCRIPTION:
-! The transport equation for the turbulent kinetic energy, $k$,
-! follows immediately from the contraction of the Reynolds-stress
-! tensor. In the case of a Boussinesq-fluid, this equation can
-! be written as
-! \begin{equation}
-!   \label{tkeA}
-!   \dot{k}
-!   =
-!   {\cal D}_k +  P + G + P_x + P_s - \epsilon
-!   \comma
-! \end{equation}
-! where $\dot{k}$ denotes the material derivative of $k$. $P$ and $G$ are
-! the production of $k$ by mean shear and buoyancy, respectively, and
-! $\epsilon$ the rate of dissipation.
-! $P_s$ is Stokes shear production defined in \eq{computePs}
-! and $P_x$ accounts for extra turbulence production.
-! ${\cal D}_k$ represents the sum of
-! the viscous and turbulent transport terms.
-! For horizontally homogeneous flows, the transport term ${\cal D}_k$
-! appearing in \eq{tkeA} is presently expressed by a simple
-! gradient formulation,
-! \begin{equation}
-!   \label{diffusionTKE}
-!   {\cal D}_k = \frstder{z} \left( \dfrac{\nu_t}{\sigma_k} \partder{k}{z} \right)
-!  \comma
-! \end{equation}
-! where $\sigma_k$ is the constant Schmidt-number for $k$.
-!
-! In horizontally homogeneous flows, the shear and the buoyancy
-! production, $P$ and $G$, can be written as
-! \begin{equation}
-!   \label{PandG}
-!   \begin{array}{rcl}
-!   P &=& - \mean{u'w'} \partder{U}{z} - \mean{v'w'} \partder{V}{z}  \comma \\[3mm]
-!   G &=&  \mean{w'b'}                                               \comma
-!   \end{array}
-! \end{equation}
-! see \eq{PG}. Their computation is discussed in \sect{sec:production}.
-!
-! The rate of dissipation, $\epsilon$, can be either obtained directly
-! from its parameterised transport equation as discussed in
-! \sect{sec:dissipationeq}, or from any other model yielding
-! an appropriate description of the dissipative length-scale, $l$.
-! Then, $\epsilon$ follows from the well-known cascading relation
-! of turbulence,
-! \begin{equation}
-!   \label{epsilon}
-!   \epsilon = (c_\mu^0)^3 \frac{k^{\frac{3}{2}}}{l}
-!   \comma
-! \end{equation}
-! where $c_\mu^0$ is a constant of the model.
-!
-! !USES:
-!   use turbulence,   only: P,B,Px,PSTK,num
-!   use turbulence,   only: tke,tkeo,k_min,eps
-!   use turbulence,   only: k_bc, k_ubc, k_lbc, ubc_type, lbc_type
-!   use turbulence,   only: sig_k
-!   use util,         only: Dirichlet,Neumann
-!
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!
-!  number of vertical layers
-!   integer,  intent(in)                :: nlev
-!
-!  time step (s)
-!   REALTYPE, intent(in)                :: dt
-!
-!  surface and bottom
-!  friction velocity (m/s)
-!   REALTYPE, intent(in)                :: u_taus,u_taub
-!
-!  surface and bottom
-!  roughness length (m)
-!   REALTYPE, intent(in)                :: z0s,z0b
-!
-!  layer thickness (m)
-!   REALTYPE, intent(in)                :: h(0:nlev)
-!
-!  square of shear and buoyancy
-!  frequency (1/s^2)
-!   REALTYPE, intent(in)                :: NN(0:nlev),SS(0:nlev)
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!                     (re-write after first version of
-!                      H. Burchard and K. Bolding)
-!EOP
-!------------------------------------------------------------------------
-!
-! !LOCAL VARIABLES:
-!   REALTYPE                  :: DiffKup,DiffKdw,pos_bc
-!   REALTYPE                  :: prod,buoyan,diss
-!   REALTYPE                  :: prod_pos,prod_neg,buoyan_pos,buoyan_neg
-!   REALTYPE                  :: cnpar=_ONE_
-!   REALTYPE                  :: avh(0:nlev)
-!   REALTYPE                  :: Lsour(0:nlev),Qsour(0:nlev)
-!
-!   integer                   :: i
-!
-!------------------------------------------------------------------------
-!BOC
-!
-!   tkeo=tke
-!
-!   do i=1,nlev-1
-!
-! !     compute diffusivity
-!      avh(i) = num(i)/sig_k
-!
-! !     compute production terms in k-equation
-!      prod     = P(i) + Px(i) + PSTK(i)
-!      buoyan   = B(i)
-!      diss     = eps(i)
-!
-!
-!      if (prod+buoyan.gt.0) then
-!         Qsour(i)  = prod+buoyan
-!         Lsour(i) = -diss/tke(i)
-!      else
-!         Qsour(i)  = prod
-!         Lsour(i) = -(diss-buoyan)/tke(i)
-!      end if
-!
-!   end do
-!
-!
-! !  position for upper BC
-!   if (k_ubc.eq.Neumann) then
-! !     flux at center "nlev"
-!      pos_bc = 0.5*h(nlev)
-!   else
-! !     value at face "nlev-1"
-!      pos_bc = h(nlev)
-!   end if
-!
-! !  obtain BC for upper boundary of type "ubc_type"
-!   DiffKup  = k_bc(k_ubc,ubc_type,pos_bc,z0s,u_taus)
-!
-!
-! !  position for lower BC
-!   if (k_lbc.eq.Neumann) then
-! !     flux at center "1"
-!      pos_bc = 0.5*h(1)
-!   else
-! !     value at face "1"
-!      pos_bc = h(1)
-!   end if
-!
-! !  obtain BC for lower boundary of type "lbc_type"
-!   DiffKdw  = k_bc(k_lbc,lbc_type,pos_bc,z0b,u_taub)
-!
-!
-! !  do diffusion step
-!   call diff_face(nlev,dt,cnpar,h,k_ubc,k_lbc,                          &
-!                  DiffKup,DiffKdw,avh,Lsour,Qsour,tke)
-!
-!
-! !  fill top and bottom value with something nice
-! !  (only for output)
-!   tke(nlev)  = k_bc(Dirichlet,ubc_type,z0s,z0s,u_taus)
-!   tke(0   )  = k_bc(Dirichlet,lbc_type,z0b,z0b,u_taub)
-!
-! !  clip at k_min
-!   do i=0,nlev
-!      tke(i) = max(tke(i),k_min)
-!   enddo
-!
-!   return
-!   end subroutine tkeeq
-!EOC
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Dynamic transport equation for turbulent kinetic energy :math:`k`.
+
+Implements GOTM Section 4.7.23 (tkeeq.F90) — solves the :math:`k`-equation for
+a Boussinesq fluid in horizontally homogeneous flow (Eq. 150):
+
+.. math::
+
+   \\dot{k} = \\mathcal{D}_k + P + G + P_x + P_s - \\varepsilon \\comma
+
+where :math:`P` is shear production, :math:`G` is buoyancy production
+(negative in stable stratification), :math:`P_s` is Stokes shear production,
+:math:`P_x` is extra production, and :math:`\\varepsilon` is the dissipation
+rate.  The diffusive transport is (Eq. 151):
+
+.. math::
+
+   \\mathcal{D}_k = \\frac{\\partial}{\\partial z}\\left(
+       \\frac{\\nu_t}{\\sigma_k} \\frac{\\partial k}{\\partial z}\\right) \\comma
+
+with Schmidt number :math:`\\sigma_k`.  The dissipation rate
+:math:`\\varepsilon` is supplied either from the dynamic
+:mod:`~pygotm.turbulence.dissipationeq` or :mod:`~pygotm.turbulence.omegaeq`,
+or from a prescribed length-scale closure (Eq. 153):
+
+.. math::
+
+   \\varepsilon = (c_\\mu^0)^3 \\frac{k^{3/2}}{l} \\point
+
+Boundary conditions
+-------------------
+
+At solid boundaries (surface and bottom), boundary conditions follow
+logarithmic-layer theory (Dirichlet):
+
+.. math::
+
+   k = \\frac{u_\\tau^2}{(c_\\mu^0)^{1/2}} \\comma
+
+or wave-breaking injection following Craig and Banner (1994):
+
+.. math::
+
+   F_k = \\eta u_{\\tau s}^3 \\comma
+
+where :math:`\\eta \\approx 100` is the Craig–Banner coefficient.  The
+injection boundary condition results in a non-trivial k-profile near the
+surface (Dirichlet or Neumann depending on ``k_ubc``/``k_lbc``).
+
+Authors (original Fortran): Lars Umlauf (rewrite), Hans Burchard, Karsten Bolding.
 """
 
 import numba
@@ -208,6 +72,7 @@ from pygotm.util.diff_face import diff_face
 __all__ = [
     "TKEEquationWorkspace",
     "step_tkeeq",
+    "step_tkeeq_single",
 ]
 
 _CNPAR: float = 1.0
@@ -294,9 +159,9 @@ def _k_bc_value(
 
     if type_ == _INJECTION:
         f_k = _fk_craig(u_tau, cw)
-        capital_k = (
-            (-sig_k * f_k / (cmsf * gen_alpha * gen_l)) ** (2.0 / 3.0)
-        ) / (z0**gen_alpha)
+        capital_k = ((-sig_k * f_k / (cmsf * gen_alpha * gen_l)) ** (2.0 / 3.0)) / (
+            z0**gen_alpha
+        )
 
         if bc == _DIRICHLET:
             value = capital_k * (zi + z0) ** gen_alpha
@@ -539,3 +404,6 @@ def step_tkeeq(
             ru[col],
             qu[col],
         )
+
+
+step_tkeeq_single = _step_tkeeq

@@ -182,7 +182,7 @@ def test_positive_shf_gives_negative_t_flux() -> None:
 
 
 def test_positive_ssf_gives_negative_s_flux() -> None:
-    """sFlux = -ssf, so positive ssf (evaporation > precip) gives negative sFlux."""
+    """sFlux = -ssf, so positive ssf (precipitation > evaporation) gives negative sFlux."""
     state = _make_state(METHOD_LINEAR_TEOS10)
     rad = _flat_rad(NLEV, 0.0)
     _, s_flux, _, _, _, _ = convert_fluxes(

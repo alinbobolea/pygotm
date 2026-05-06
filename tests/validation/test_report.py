@@ -90,7 +90,7 @@ def _make_case(name: str, status: str = "PASS") -> CaseResult:
 def _make_report(cases: list[CaseResult]) -> Report:
     return Report(
         generated_at="2026-04-26T10:00:00Z",
-        rtol=1e-6,
+        rtol=5e-6,
         atol=1e-12,
         hardware={"cpu_model": "Test CPU", "cpu_count": "8", "numba_version": "0.59",
                   "python_version": "3.12.0", "platform": "Linux", "execution_backend": "cpu"},

@@ -1,13 +1,47 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The algebraic velocity variances \label{sec:variances}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Algebraic velocity-variance components :math:`\\langle u'^2\\rangle`,
+:math:`\\langle v'^2\\rangle`, :math:`\\langle w'^2\\rangle`.
+
+Implements GOTM Section 4.7.33 (variances.F90) — derives the three diagonal
+Reynolds-stress components from algebraic expressions (Eq. 180) using the
+solution of the second-moment closure Eqs. 70 and 74:
+
+.. math::
+
+   \\frac{\\langle u'^2 \\rangle}{k} &=
+     \\frac{2}{3} + \\frac{1}{\\mathcal{N}\\varepsilon}
+     \\left[
+       \\left(\\frac{a_2}{3} + a_3\\right) \\nu_t
+       \\left(\\frac{\\partial U}{\\partial z}\\right)^2
+       - \\frac{2 a_2}{3} \\nu_t
+       \\left(\\frac{\\partial V}{\\partial z}\\right)^2
+       - \\frac{4}{3} a_5 G
+     \\right] \\comma \\\\
+   \\frac{\\langle v'^2 \\rangle}{k} &=
+     \\frac{2}{3} + \\frac{1}{\\mathcal{N}\\varepsilon}
+     \\left[
+       \\left(\\frac{a_2}{3} + a_3\\right) \\nu_t
+       \\left(\\frac{\\partial V}{\\partial z}\\right)^2
+       - \\frac{2 a_2}{3} \\nu_t
+       \\left(\\frac{\\partial U}{\\partial z}\\right)^2
+       - \\frac{4}{3} a_5 G
+     \\right] \\comma \\\\
+   \\frac{\\langle w'^2 \\rangle}{k} &=
+     \\frac{2}{3} + \\frac{1}{\\mathcal{N}\\varepsilon}
+     \\left[
+       \\left(\\frac{a_2}{3} - a_3\\right)(P + P_x)
+       + \\frac{8}{3} a_5 G
+     \\right] \\comma
+
+where :math:`\\mathcal{N} = c_1/2` is the rapid-return-to-isotropy parameter.
+In the code: ``n_value = 0.5 * cc1``.  The directional shear components
+``SSU`` and ``SSV`` enter the :math:`u'` and :math:`v'` variance expressions.
+
+The variances fall back to the isotropic value :math:`2k/3` when
+:math:`\\varepsilon \\le 0` or :math:`\\mathcal{N} \\le 0`.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import numba
@@ -15,7 +49,7 @@ import numpy as np
 
 from pygotm.arrays import ColumnWorkspace, make_column_array
 
-__all__ = ["VariancesWorkspace", "step_variances"]
+__all__ = ["VariancesWorkspace", "step_variances", "step_variances_single"]
 
 _TWO_THIRDS = 2.0 / 3.0
 _FOUR_THIRDS = 4.0 / 3.0
@@ -145,3 +179,6 @@ def step_variances(
             tke[b], eps[b], P[b], B[b], Px[b], num[b], SSU[b], SSV[b],
             uu[b], vv[b], ww[b],
         )
+
+
+step_variances_single = _step_variances

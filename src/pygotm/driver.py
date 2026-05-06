@@ -14,9 +14,13 @@ from pygotm.gotm.gotm import (
     GotmRun,
     finalize_gotm,
     initialize_gotm_from_settings,
-    integrate_gotm,
+    integrate_gotm_compiled,
 )
 from pygotm.gotm.register_all_variables import FieldRecord
+from pygotm.gotm.runtime_builder import (
+    UnsupportedConfigurationError,
+    runtime_output_to_dataset,
+)
 
 __all__ = ["GotmDriver"]
 
@@ -156,6 +160,19 @@ def _dataset_from_run(run: GotmRun) -> xr.Dataset:
     return xr.Dataset(data_vars=data_vars, coords=coords, attrs=_dataset_attrs(run))
 
 
+def _empty_dataset_from_run(run: GotmRun) -> xr.Dataset:
+    coords: dict[str, Any] = {
+        "time": np.array([], dtype="datetime64[s]"),
+        "lat": float(run.latitude),
+        "lon": float(run.longitude),
+    }
+    assert run.meanflow.z is not None
+    assert run.meanflow.zi is not None
+    coords["z"] = np.asarray(run.meanflow.z[1:], dtype=np.float64)
+    coords["zi"] = np.asarray(run.meanflow.zi, dtype=np.float64)
+    return xr.Dataset(coords=coords, attrs=_dataset_attrs(run))
+
+
 def _dataset_attrs(run: GotmRun) -> dict[str, str | int | float]:
     return {
         "title": run.settings.title,
@@ -176,9 +193,14 @@ class GotmDriver:
         *,
         max_steps: int | None = None,
         output_path: str | Path | None = None,
+        output: bool = True,
         on_step: Callable[[int, int], None] | None = None,
     ) -> xr.Dataset:
         """Execute a single-column run and return the resulting dataset."""
+
+        if on_step is not None:
+            msg = "compiled GOTM runtime does not yet support on_step callbacks"
+            raise UnsupportedConfigurationError(msg)
 
         run = initialize_gotm_from_settings(
             self.config.resolved_settings(),
@@ -186,8 +208,12 @@ class GotmDriver:
             document=self.config.resolved_document(),
         )
         try:
-            integrate_gotm(run, max_steps=max_steps, on_step=on_step)
-            dataset = _dataset_from_run(run)
+            bundle = integrate_gotm_compiled(run, max_steps=max_steps, output=output)
+            dataset = (
+                runtime_output_to_dataset(run, bundle)
+                if output
+                else _empty_dataset_from_run(run)
+            )
         finally:
             finalize_gotm(run)
 

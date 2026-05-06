@@ -1,8 +1,11 @@
 # pyGOTM
 
-**Python reimplementation of the General Ocean Turbulence Model (GOTM) using Taichi for GPU-accelerated physics.**
+**Python reimplementation of the General Ocean Turbulence Model (GOTM) using
+Numba-compiled CPU physics.**
 
-GOTM is the world's most widely used 1D ocean turbulence model. pyGOTM brings it to the browser — no Fortran compiler, no command line, no local installation required.
+GOTM is a widely used 1D ocean turbulence model. pyGOTM translates the Fortran
+source layout into Python while keeping scientific validation against GOTM
+reference cases at the center of development.
 
 ## What it does
 
@@ -10,7 +13,7 @@ GOTM is the world's most widely used 1D ocean turbulence model. pyGOTM brings it
 - Supports six turbulence closure models: k-ε, k-ω, GLS, Mellor-Yamada 2.5, KPP
 - Reads GOTM 6.x YAML configuration files natively
 - All 22 official GOTM validation cases built in
-- Runs on CPU or GPU (CUDA/Vulkan/Metal) via Taichi
+- Runs single-column physics through a compiled Numba runtime
 - Outputs NetCDF (CF conventions) compatible with xarray, MATLAB, and all ocean toolboxes
 
 ## Why it exists
@@ -24,8 +27,8 @@ Target users: aquaculture site engineers, limnologists, coastal ocean researcher
 
 | Feature | Description |
 |---------|-------------|
-| GPU acceleration | Taichi JIT, runs 10,000 independent columns in parallel |
-| GOTM parity | Validated against Fortran GOTM 6.0.7 to double precision (rtol=1e-6) |
+| Compiled runtime | Numba JIT single-column timestep loop with flat float64 arrays |
+| GOTM parity | Validated against Fortran GOTM 6.0.7 with the project range-aware tolerance |
 | Built-in cases | All 22 official GOTM test cases loadable in one click |
 | REST API | FastAPI with async job submission + WebSocket progress streaming |
 | Browser UI | NiceGUI + Plotly interactive vertical profiles and Hövmoller diagrams |
@@ -49,18 +52,16 @@ Target users: aquaculture site engineers, limnologists, coastal ocean researcher
 ┌────────────────▼─────────────────────┐
 │  GotmDriver (driver.py)              │
 │  YAML → Pydantic config              │
-│  Time loop → calls Taichi kernels    │
+│  Runtime setup → compiled loop       │
 │  xarray output → NetCDF writer       │
 └────────────────┬─────────────────────┘
-                 │ ti.kernel calls
+                 │ Numba call
 ┌────────────────▼─────────────────────┐
-│  Taichi Kernels (kernels/)           │
-│  tridiagonal.py  — Thomas algorithm  │
-│  meanflow.py     — u, v, T, S        │
-│  keps.py         — k-epsilon         │
-│  kpp.py          — KPP               │
-│  airsea.py       — COARE fluxes      │
-│  (CPU / CUDA / Vulkan / Metal)       │
+│  gotm/time_loop.py                   │
+│  compiled timestep runner            │
+│  direct 1D physics routines          │
+│  dense output buffers                │
+│  post-run xarray conversion          │
 └──────────────────────────────────────┘
 ```
 
@@ -70,12 +71,11 @@ Target users: aquaculture site engineers, limnologists, coastal ocean researcher
 # Install
 pip install pygotm
 
-# Run OWS Papa test case (Pacific mixed layer, 1 year)
-pygotm run --case ows_papa
+# Run validation for a supported reference case
+pygotm validate --case couette
 
-# Start the web UI
-pygotm serve
-# → open http://localhost:8080
+# Benchmark the compiled runtime
+pygotm benchmark --cases couette,channel
 ```
 
 ## Example Use Cases
@@ -89,7 +89,7 @@ pygotm serve
 
 | Component | Technology |
 |-----------|-----------|
-| Physics kernels | [Taichi](https://taichi-lang.org/) ≥ 1.7.4 |
+| Physics kernels | [Numba](https://numba.pydata.org/) >= 0.59 |
 | API | [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn |
 | UI | [NiceGUI](https://nicegui.io/) |
 | Charts | [Plotly](https://plotly.com/python/) |
@@ -107,10 +107,10 @@ GPL-2.0 — same as the original GOTM Fortran model.
 
 ## Roadmap
 
-- [ ] Phase 1: Tridiagonal kernel + field layout
-- [ ] Phase 2: Mean-flow equations (u, v, T, S), Couette validation
-- [ ] Phase 3: All turbulence closures validated
-- [ ] Phase 4: Surface forcing (COARE, Kondo, solar), OWS Papa validation
-- [ ] Phase 5: Multi-column GPU mode (3D coupling API)
+- [x] Phase 1: Numba infrastructure and core utility kernels
+- [x] Phase 2: Compiled Couette/channel runner for core emitted fields
+- [ ] Phase 3: Expand compiled runtime forcing and profile-input support
+- [ ] Phase 4: All turbulence closures validated
+- [ ] Phase 5: Multi-column Dask + Numba batch mode
 - [ ] Phase 6: FastAPI + NiceGUI web application
-- [ ] Phase 7: SaaS deployment (Docker, cloud GPU)
+- [ ] Phase 7: SaaS deployment

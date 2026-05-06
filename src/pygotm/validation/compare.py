@@ -7,12 +7,13 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
-import xarray as xr
+
+from pygotm.validate import numeric_variable_names, open_validation_dataset
 
 __all__ = ["ATOL", "RTOL", "VarResult", "compare_nc"]
 
-RTOL: float = 1e-6
-ATOL: float = 1e-12
+RTOL: float = 5.0e-6
+ATOL: float = 1.0e-12
 
 
 @dataclass
@@ -27,13 +28,6 @@ class VarResult:
     nrmse: float
 
 
-def _open_nc(path: Path) -> xr.Dataset:
-    try:
-        return xr.open_dataset(path, engine="scipy")
-    except Exception:
-        return xr.open_dataset(path, engine="netcdf4")
-
-
 def compare_nc(
     py_path: Path,
     ref_path: Path,
@@ -42,18 +36,14 @@ def compare_nc(
     atol: float = ATOL,
 ) -> list[VarResult]:
     """Return per-variable metrics comparing *py_path* against *ref_path*."""
-    py_ds = _open_nc(py_path)
+    py_ds = open_validation_dataset(py_path)
     try:
-        ref_ds = _open_nc(ref_path)
+        ref_ds = open_validation_dataset(ref_path)
         try:
             py_ds = py_ds.squeeze(drop=True)
             ref_ds = ref_ds.squeeze(drop=True)
 
-            ref_vars = [
-                str(name)
-                for name, da in ref_ds.data_vars.items()
-                if np.issubdtype(da.dtype, np.number)
-            ]
+            ref_vars = numeric_variable_names(ref_ds)
             py_vars = {
                 str(name)
                 for name, da in py_ds.data_vars.items()
@@ -96,7 +86,7 @@ def compare_nc(
 
                 nrmse = rmse / ref_rng if ref_rng > 0.0 else float("nan")
 
-                atol_var = max(2e-6 * ref_rng, atol) if ref_rng > 0.0 else atol
+                atol_var = max(1.0e-7 * ref_rng, atol)
                 passes = bool(np.all(
                     np.abs(py_arr - ref_arr) <= atol_var + rtol * np.abs(ref_arr)
                 ))

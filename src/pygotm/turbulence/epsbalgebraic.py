@@ -1,13 +1,28 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The algebraic epsilonb-equation\label{sec:epsbalgebraic}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Algebraic closure for buoyancy-variance dissipation :math:`\\varepsilon_b`.
+
+Implements GOTM Section 4.7.32 (epsbalgebraic.F90) — computes the molecular
+rate of destruction of buoyancy variance :math:`\\varepsilon_b` under the
+algebraic equilibrium assumption.
+
+Assuming a constant time-scale ratio :math:`r = c_b` (Eq. 66), the
+production–dissipation balance for :math:`k_b` gives (Eq. 179):
+
+.. math::
+
+   \\varepsilon_b = \\frac{1}{c_b} \\frac{\\varepsilon}{k} k_b \\point
+
+In the code, :math:`c_b` is passed as ``ctt`` (scalar turbulence time-scale
+ratio), so:
+
+.. math::
+
+   \\varepsilon_b = \\frac{1}{c_{tt}} \\frac{\\varepsilon}{k} k_b \\point
+
+The result is clipped to ``epsb_min``.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import numba
@@ -18,6 +33,7 @@ from pygotm.arrays import ColumnWorkspace, make_column_array
 __all__ = [
     "EpsBAlgebraicWorkspace",
     "step_epsbalgebraic",
+    "step_epsbalgebraic_single",
 ]
 
 
@@ -71,3 +87,6 @@ def step_epsbalgebraic(
     r"""Advance the algebraic buoyancy-destruction closure (batch)."""
     for b in numba.prange(batch_size):
         _step_epsbalgebraic(nlev, ctt, epsb_min, tke[b], eps[b], kb[b], epsb[b])
+
+
+step_epsbalgebraic_single = _step_epsbalgebraic

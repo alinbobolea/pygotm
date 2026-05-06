@@ -13,11 +13,7 @@ from pathlib import Path
 
 import click
 
-# run_validation lives one directory up from this file's parent when invoked
-# from the repo root, so we resolve relative to this file.
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from run_validation import load_json, render_html  # noqa: E402
+from pygotm.validation.report import load_json, render_html
 
 
 @click.command()
@@ -36,10 +32,10 @@ from run_validation import load_json, render_html  # noqa: E402
 def cli(results_json: Path | None, output_path: Path | None) -> None:
     """Render pyGOTM validation HTML report from results JSON."""
     if results_json is None:
-        results_json = Path(__file__).parent / "results.json"
+        results_json = Path("validation/results.json")
         if not results_json.exists():
             raise click.ClickException(
-                "No results.json found. Run run_validation.py first."
+                "No validation/results.json found. Run validation first."
             )
 
     report = load_json(results_json)

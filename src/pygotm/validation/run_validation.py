@@ -23,7 +23,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -306,7 +306,7 @@ def cli(
         verdict = "FAILED VALIDATION"
 
     report = Report(
-        generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         rtol=rtol,
         atol=atol,
         hardware=hw,

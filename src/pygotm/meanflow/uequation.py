@@ -1,12 +1,53 @@
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The U-momentum equation\label{sec:uequation}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+U-momentum (east–west) equation.
+
+Implements GOTM Section 3.2.5 — advances the depth-varying eastward velocity
+:math:`U` by one timestep using a Crank–Nicolson scheme.
+
+Governing equation
+------------------
+
+The horizontally-averaged, incompressible U-momentum equation reads (Eq. 12):
+
+.. math::
+
+   \\frac{\\partial U}{\\partial t} - f V =
+     -g \\frac{\\partial \\zeta}{\\partial x}
+     + \\frac{\\partial}{\\partial z}
+       \\left[ (\\nu_t + \\nu) \\frac{\\partial U}{\\partial z}
+               - \\tilde{\\Gamma}_U \\right]
+     + \\int_z^\\eta \\frac{\\partial B}{\\partial x}\\,dz'
+     - \\frac{1}{\\tau_R}(U - U_{\\mathrm{obs}})
+     - C_f U \\sqrt{U^2 + V^2} \\comma
+
+where :math:`f` is the Coriolis parameter (handled separately by
+:mod:`pygotm.meanflow.coriolis`), :math:`\\nu_t` is the turbulent eddy
+viscosity, :math:`\\nu` is the molecular viscosity, :math:`\\tilde{\\Gamma}_U`
+is the counter-gradient momentum flux (Langmuir/Stokes correction),
+:math:`B = -g(\\rho - \\rho_0)/\\rho_0` is the buoyancy, and :math:`C_f` is
+a quadratic bottom drag coefficient.
+
+The external (barotropic) pressure gradient from sea-surface slope is
+:math:`-g \\partial\\zeta/\\partial x` (active when ``ext_method = 0``).
+Internal (baroclinic) pressure gradients from horizontal density gradients
+enter through ``idpdx``.
+
+Numerics
+--------
+
+The Crank–Nicolson scheme (implicitness :math:`\\sigma`, set to 1 for fully
+implicit) discretises the vertical diffusion term, producing an unconditionally
+stable tridiagonal system solved by the Thomas algorithm at each time step
+(see :mod:`pygotm.util.diff_center`).
+
+Bottom drag is treated as a linearised source term
+:math:`l_1 = -C_f \\sqrt{U_1^2 + V_1^2} / h_1` applied at the lowest layer.
+
+When ``w_adv_active`` is True, vertical advection is applied using the
+scheme given by ``w_adv_discr`` (upwind, Superbee, etc.) from
+:mod:`pygotm.util.adv_center`.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import math
@@ -23,6 +64,7 @@ from pygotm.util.util import oneSided as _ONE_SIDED
 __all__ = [
     "uequation",
     "step_uequation",
+    "step_uequation_single",
 ]
 
 _ADV_MODE: int = 0
@@ -97,16 +139,43 @@ def _step_uequation(
 
     if w_adv_active == 1:
         adv_center(
-            nlev, dt, h, h, w,
-            _ONE_SIDED, _ONE_SIDED, 0.0, 0.0,
-            w_adv_discr, _ADV_MODE, u, adv_cu,
+            nlev,
+            dt,
+            h,
+            h,
+            w,
+            _ONE_SIDED,
+            _ONE_SIDED,
+            0.0,
+            0.0,
+            w_adv_discr,
+            _ADV_MODE,
+            u,
+            adv_cu,
         )
 
     diff_center(
-        nlev, dt, cnpar, _POS_CONC, h,
-        _NEUMANN, _NEUMANN, tx_val, 0.0,
-        avh, l_sour, q_sour, tau_r, uprof, u,
-        au, bu, cu, du, ru, qu,
+        nlev,
+        dt,
+        cnpar,
+        _POS_CONC,
+        h,
+        _NEUMANN,
+        _NEUMANN,
+        tx_val,
+        0.0,
+        avh,
+        l_sour,
+        q_sour,
+        tau_r,
+        uprof,
+        u,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
     )
 
 
@@ -151,14 +220,44 @@ def step_uequation(
     """Batch variant: process batch_size columns in parallel."""
     for b in numba.prange(batch_size):
         _step_uequation(
-            nlev, dt, cnpar, avmolu, gravity,
-            ext_method, w_adv_active, w_adv_discr, seagrass_active, plume_active,
-            tx[b], dzetadx[b],
-            u[b], uo[b], v[b], h[b], w[b], drag[b],
-            num[b], nucl[b], dusdz[b], idpdx[b], uprof[b], tau_r[b],
-            avh[b], q_sour[b], l_sour[b],
-            au[b], bu[b], cu[b], du[b], ru[b], qu[b], adv_cu[b],
+            nlev,
+            dt,
+            cnpar,
+            avmolu,
+            gravity,
+            ext_method,
+            w_adv_active,
+            w_adv_discr,
+            seagrass_active,
+            plume_active,
+            tx[b],
+            dzetadx[b],
+            u[b],
+            uo[b],
+            v[b],
+            h[b],
+            w[b],
+            drag[b],
+            num[b],
+            nucl[b],
+            dusdz[b],
+            idpdx[b],
+            uprof[b],
+            tau_r[b],
+            avh[b],
+            q_sour[b],
+            l_sour[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
+            adv_cu[b],
         )
+
+
+step_uequation_single = _step_uequation
 
 
 def uequation(
@@ -182,7 +281,37 @@ def uequation(
     plume_active: bool = False,
     seagrass_active: bool = False,
 ) -> None:
-    """Advance the U-momentum equation for one column."""
+    """Advance the U-momentum equation for one column.
+
+    Parameters
+    ----------
+    state:
+        MeanflowState with h, u, uo, v, w, drag, avh, gravity, avmolu.
+    nlev:
+        Number of model layers.
+    dt:
+        Time step [s].
+    cnpar:
+        Crank–Nicolson implicitness (0=explicit, 1=fully implicit).
+    tx:
+        Surface wind stress in x [m² s⁻²] (Neumann BC at surface).
+    num:
+        Turbulent eddy viscosity [m² s⁻¹], shape (nlev+1,).
+    nucl:
+        Non-local eddy viscosity (Stokes/Langmuir correction) [m² s⁻¹],
+        shape (nlev+1,).
+    gamu:
+        Counter-gradient momentum flux (not currently used; reserved).
+    ext_method:
+        External pressure treatment (0 = barotropic slope from dpdx).
+    dpdx:
+        Barotropic pressure gradient :math:`g\\partial\\zeta/\\partial x`
+        [m s⁻²].
+    idpdx:
+        Baroclinic pressure gradient profile [m s⁻²], shape (nlev+1,).
+    dusdz:
+        Stokes drift shear in x [s⁻¹], shape (nlev+1,).
+    """
     _ = gamu
 
     assert state.h is not None
@@ -220,11 +349,38 @@ def uequation(
     adv_cu = np.zeros(n, dtype=np.float64)
 
     _step_uequation(
-        nlev, dt, cnpar, state.avmolu, state.gravity,
-        ext_method, int(w_adv_active), w_adv_discr,
-        int(seagrass_active), int(plume_active),
-        tx, dpdx,
-        state.u, state.uo, state.v, state.h, state.w, state.drag,
-        num, nucl, _dusdz, _idpdx, _uprof, u_relax_tau,
-        state.avh, q_sour, l_sour, au, bu, cu, du, ru, qu, adv_cu,
+        nlev,
+        dt,
+        cnpar,
+        state.avmolu,
+        state.gravity,
+        ext_method,
+        int(w_adv_active),
+        w_adv_discr,
+        int(seagrass_active),
+        int(plume_active),
+        tx,
+        dpdx,
+        state.u,
+        state.uo,
+        state.v,
+        state.h,
+        state.w,
+        state.drag,
+        num,
+        nucl,
+        _dusdz,
+        _idpdx,
+        _uprof,
+        u_relax_tau,
+        state.avh,
+        q_sour,
+        l_sour,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+        adv_cu,
     )

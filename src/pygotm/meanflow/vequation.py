@@ -1,12 +1,38 @@
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The V-momentum equation\label{sec:vequation}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+V-momentum (north–south) equation.
+
+Implements GOTM Section 3.2.6 — advances the depth-varying northward velocity
+:math:`V` by one timestep using a Crank–Nicolson scheme identical to that of
+:mod:`pygotm.meanflow.uequation`.
+
+Governing equation
+------------------
+
+The northward momentum equation reads (Eq. 14):
+
+.. math::
+
+   \\frac{\\partial V}{\\partial t} + f U =
+     \\mathcal{D}_V
+     -g \\frac{\\partial \\zeta}{\\partial y}
+     + \\int_z^\\eta \\frac{\\partial B}{\\partial y}\\,dz'
+     - \\frac{1}{\\tau_R}(V - V_{\\mathrm{obs}})
+     - C_f V \\sqrt{U^2 + V^2} \\comma
+
+where the diffusion operator is (Eq. 15):
+
+.. math::
+
+   \\mathcal{D}_V = \\frac{\\partial}{\\partial z}
+       \\left[ (\\nu_t + \\nu) \\frac{\\partial V}{\\partial z}
+               - \\tilde{\\Gamma}_V \\right] \\point
+
+The Coriolis term :math:`+fU` is handled separately by
+:mod:`pygotm.meanflow.coriolis` before this equation is solved.  All other
+terms are identical in structure to the U-equation; see
+:mod:`pygotm.meanflow.uequation` for details.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import math
@@ -23,6 +49,7 @@ from pygotm.util.util import oneSided as _ONE_SIDED
 __all__ = [
     "vequation",
     "step_vequation",
+    "step_vequation_single",
 ]
 
 _ADV_MODE: int = 0
@@ -91,16 +118,43 @@ def _step_vequation(
 
     if w_adv_active == 1:
         adv_center(
-            nlev, dt, h, h, w,
-            _ONE_SIDED, _ONE_SIDED, 0.0, 0.0,
-            w_adv_discr, _ADV_MODE, v, adv_cv,
+            nlev,
+            dt,
+            h,
+            h,
+            w,
+            _ONE_SIDED,
+            _ONE_SIDED,
+            0.0,
+            0.0,
+            w_adv_discr,
+            _ADV_MODE,
+            v,
+            adv_cv,
         )
 
     diff_center(
-        nlev, dt, cnpar, _POS_CONC, h,
-        _NEUMANN, _NEUMANN, ty_val, 0.0,
-        avh, l_sour, q_sour, tau_r, vprof, v,
-        av, bv, cv, dv, rv, qv,
+        nlev,
+        dt,
+        cnpar,
+        _POS_CONC,
+        h,
+        _NEUMANN,
+        _NEUMANN,
+        ty_val,
+        0.0,
+        avh,
+        l_sour,
+        q_sour,
+        tau_r,
+        vprof,
+        v,
+        av,
+        bv,
+        cv,
+        dv,
+        rv,
+        qv,
     )
 
 
@@ -144,14 +198,43 @@ def step_vequation(
     """Batch variant: process batch_size columns in parallel."""
     for b in numba.prange(batch_size):
         _step_vequation(
-            nlev, dt, cnpar, avmolu, gravity,
-            ext_method, w_adv_active, w_adv_discr, plume_active,
-            ty[b], dzetady[b],
-            v[b], vo[b], u[b], h[b], w[b], drag[b],
-            num[b], nucl[b], dvsdz[b], idpdy[b], vprof[b], tau_r[b],
-            avh[b], q_sour[b], l_sour[b],
-            av[b], bv[b], cv[b], dv[b], rv[b], qv[b], adv_cv[b],
+            nlev,
+            dt,
+            cnpar,
+            avmolu,
+            gravity,
+            ext_method,
+            w_adv_active,
+            w_adv_discr,
+            plume_active,
+            ty[b],
+            dzetady[b],
+            v[b],
+            vo[b],
+            u[b],
+            h[b],
+            w[b],
+            drag[b],
+            num[b],
+            nucl[b],
+            dvsdz[b],
+            idpdy[b],
+            vprof[b],
+            tau_r[b],
+            avh[b],
+            q_sour[b],
+            l_sour[b],
+            av[b],
+            bv[b],
+            cv[b],
+            dv[b],
+            rv[b],
+            qv[b],
+            adv_cv[b],
         )
+
+
+step_vequation_single = _step_vequation
 
 
 def vequation(
@@ -212,10 +295,37 @@ def vequation(
     adv_cv = np.zeros(n, dtype=np.float64)
 
     _step_vequation(
-        nlev, dt, cnpar, state.avmolu, state.gravity,
-        ext_method, int(w_adv_active), w_adv_discr, int(plume_active),
-        ty, dpdy,
-        state.v, state.vo, state.u, state.h, state.w, state.drag,
-        num, nucl, _dvsdz, _idpdy, _vprof, v_relax_tau,
-        state.avh, q_sour, l_sour, av, bv, cv, dv, rv, qv, adv_cv,
+        nlev,
+        dt,
+        cnpar,
+        state.avmolu,
+        state.gravity,
+        ext_method,
+        int(w_adv_active),
+        w_adv_discr,
+        int(plume_active),
+        ty,
+        dpdy,
+        state.v,
+        state.vo,
+        state.u,
+        state.h,
+        state.w,
+        state.drag,
+        num,
+        nucl,
+        _dvsdz,
+        _idpdy,
+        _vprof,
+        v_relax_tau,
+        state.avh,
+        q_sour,
+        l_sour,
+        av,
+        bv,
+        cv,
+        dv,
+        rv,
+        qv,
+        adv_cv,
     )

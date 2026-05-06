@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -27,8 +28,7 @@ def run_case(
     runs_dir: Path,
     on_step: Callable[[int, int], None] | None = None,
 ) -> tuple[Path, float]:
-    """Run GotmDriver for *case_name*, write NetCDF, return (path, elapsed_s)."""
-    import time
+    """Run a compiled parity case, write NetCDF, return (path, elapsed_s)."""
     from pygotm.driver import GotmDriver
 
     case_dir = runs_dir / case_name
@@ -36,8 +36,21 @@ def run_case(
     nc_path = case_dir / f"{case_name}.nc"
 
     t0 = time.monotonic()
-    GotmDriver(_yaml_path(case_name)).run(output_path=nc_path, on_step=on_step)
-    return nc_path, time.monotonic() - t0
+    if on_step is not None:
+        on_step(0, 1)
+    dataset = GotmDriver(_yaml_path(case_name)).run(output_path=nc_path)
+    try:
+        if dataset.attrs.get("runtime") != "compiled":
+            msg = (
+                f"parity case {case_name!r} did not use the Numba compiled runtime"
+            )
+            raise RuntimeError(msg)
+    finally:
+        dataset.close()
+    elapsed = time.monotonic() - t0
+    if on_step is not None:
+        on_step(1, 1)
+    return nc_path, elapsed
 
 
 def validate_case(

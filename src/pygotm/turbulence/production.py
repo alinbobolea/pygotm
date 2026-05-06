@@ -1,13 +1,51 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Update turbulence production\label{sec:production}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Turbulence shear and buoyancy production.
+
+Implements GOTM Sections 4.3 and 4.7.20 — computes the mechanical shear
+production :math:`P`, buoyancy production :math:`G`, buoyancy-variance
+production :math:`P_b`, and extra production :math:`P_x`.
+
+Shear production (Eq. 146):
+
+.. math::
+
+   P = \\nu_t (M^2 + \\alpha_w N^2) + P_{\\mathrm{STK}} \\comma
+
+where :math:`\\alpha_w` is the angle between the wave and current vectors
+(internal wave model coupling, active only when ``iw_model == 1``), and
+:math:`P_{\\mathrm{STK}} = \\nu_{\\mathrm{cl}} \\cdot \\mathrm{SSCSTK}` is the
+Stokes-drift shear production cross-term.
+
+Buoyancy production (Eq. 147):
+
+.. math::
+
+   G = -\\nu_t^B \\left(N^2 - \\tilde{\\Gamma}_B\\right) \\comma
+
+where :math:`\\nu_t^B = \\kappa_t` is the turbulent scalar diffusivity and
+:math:`\\tilde{\\Gamma}_B` is the counter-gradient buoyancy flux.
+This implementation sets :math:`\\tilde{\\Gamma}_B = 0` (standard GOTM behaviour),
+so in practice :math:`G = -\\kappa_t N^2`.
+:math:`G` is negative (destruction) in stable stratification.
+
+Buoyancy-variance production (Eq. 148):
+
+.. math::
+
+   P_b = -G N^2 = \\nu_t^B N^4 \\point
+
+The total Stokes production (used in the turbulence transport equations) is:
+
+.. math::
+
+   P_{\\mathrm{STK}} = \\nu_t \\cdot \\mathrm{SSCSTK}
+                     + \\nu_{\\mathrm{cl}} \\cdot \\mathrm{SSSTK} \\comma
+
+where ``SSCSTK`` and ``SSSTK`` are the Stokes-drift cross-shear and
+Stokes-shear-squared terms from :mod:`pygotm.meanflow.shear`.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import numba
@@ -18,6 +56,7 @@ from pygotm.arrays import ColumnWorkspace, make_column_array
 __all__ = [
     "ProductionWorkspace",
     "step_production",
+    "step_production_single",
 ]
 
 
@@ -112,7 +151,26 @@ def step_production(
     r"""Update turbulence production terms (batch)."""
     for b in numba.prange(batch_size):
         _step_production(
-            nlev, iw_model, alpha, has_xP, has_sscstk, has_ssstk,
-            NN[b], SS[b], xP[b], SSCSTK[b], SSSTK[b],
-            num[b], nuh[b], nucl[b], P[b], B[b], Pb[b], Px[b], PSTK[b],
+            nlev,
+            iw_model,
+            alpha,
+            has_xP,
+            has_sscstk,
+            has_ssstk,
+            NN[b],
+            SS[b],
+            xP[b],
+            SSCSTK[b],
+            SSSTK[b],
+            num[b],
+            nuh[b],
+            nucl[b],
+            P[b],
+            B[b],
+            Pb[b],
+            Px[b],
+            PSTK[b],
         )
+
+
+step_production_single = _step_production

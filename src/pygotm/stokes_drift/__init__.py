@@ -1,4 +1,12 @@
-"""Stokes-drift modules."""
+"""
+Stokes-drift forcing for Langmuir turbulence.
+
+Provides Stokes drift profiles :math:`u_s(z)` and :math:`v_s(z)` from
+several sources: a constant profile, an exponential wave-spectrum
+approximation, directional wave spectra read from file, or theoretical
+monochromatic wave theory.  The Langmuir number
+:math:`La = \\sqrt{u_\\tau / u_s^{\\rm surface}}` is diagnosed for output.
+"""
 
 from pygotm.stokes_drift.stokes_drift import (
     CONSTANT,

@@ -98,6 +98,16 @@ def _fmt_full(v: float | None) -> str:
     return repr(v)
 
 
+def _rtol_latex(rtol: float) -> str:
+    """Format rtol as a LaTeX string, e.g. '5 \\times 10^{-6}'."""
+    exp = int(math.floor(math.log10(abs(rtol))))
+    mantissa = rtol / 10.0 ** exp
+    mantissa_str = f"{mantissa:.6g}".rstrip("0").rstrip(".")
+    if mantissa_str == "1":
+        return f"10^{{{exp}}}"
+    return f"{mantissa_str} \\times 10^{{{exp}}}"
+
+
 def _fmt_time(s: float) -> str:
     if s < 60:
         return f"{s:.1f}s"
@@ -170,6 +180,7 @@ def _hardware_section(hw: dict[str, str]) -> str:
 
 def render_html(report: Report) -> str:
     """Render the validation report as a standalone HTML page."""
+    rtol_latex = _rtol_latex(report.rtol)
     cases_passed = sum(1 for c in report.cases if c.status == "PASS")
     total_cases  = len(report.cases)
     verdict_colour = "#2e7d32" if report.verdict == "FULL PARITY" else (
@@ -381,7 +392,7 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
   </div>
   <div class="pass-criterion">
     <strong>Pass criterion:</strong>
-    \\[|a_i - b_i| \\leq \\max\\!\\left(2 \\times 10^{{-6}} \\cdot \\text{{range}}(b),\\; 10^{{-12}}\\right) + 10^{{-6}} \\cdot |b_i|\\]
+    \\[|a_i - b_i| \\leq \\max\\!\\left(10^{{-7}} \\cdot \\text{{range}}(b),\\; 10^{{-12}}\\right) + {rtol_latex} \\cdot |b_i|\\]
   </div>
 </div>
 

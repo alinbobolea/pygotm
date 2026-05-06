@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from pygotm.validation.compare import ATOL, RTOL, VarResult, compare_nc
+from pygotm.validation.compare import ATOL, VarResult, compare_nc
 
 
 def _write_nc(path: Path, arrays: dict[str, np.ndarray]) -> None:
@@ -105,7 +105,7 @@ def test_worst_index_points_to_max_abs_error(tmp_path: Path) -> None:
 def test_value_at_tolerance_boundary_passes(tmp_path: Path) -> None:
     ref = np.linspace(0.0, 1.0, 100)
     ref_rng = float(np.max(ref) - np.min(ref))
-    atol_var = max(2e-6 * ref_rng, ATOL)
+    atol_var = max(1.0e-7 * ref_rng, ATOL)
     py = ref + atol_var * 0.999
     _write_nc(tmp_path / "py.nc", {"u": py})
     _write_nc(tmp_path / "ref.nc", {"u": ref})
@@ -116,7 +116,7 @@ def test_value_at_tolerance_boundary_passes(tmp_path: Path) -> None:
 def test_value_just_outside_tolerance_fails(tmp_path: Path) -> None:
     ref = np.linspace(0.0, 1.0, 100)
     ref_rng = float(np.max(ref) - np.min(ref))
-    atol_var = max(2e-6 * ref_rng, ATOL)
+    atol_var = max(1.0e-7 * ref_rng, ATOL)
     py = ref + atol_var * 1.001
     _write_nc(tmp_path / "py.nc", {"u": py})
     _write_nc(tmp_path / "ref.nc", {"u": ref})
@@ -129,8 +129,10 @@ def test_custom_rtol_affects_pass_fail(tmp_path: Path) -> None:
     py  = ref * (1 + 1e-4)
     _write_nc(tmp_path / "py.nc", {"u": py})
     _write_nc(tmp_path / "ref.nc", {"u": ref})
-    assert compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", rtol=1e-6)[0].status == "FAIL"
-    assert compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", rtol=1e-3)[0].status == "PASS"
+    fail_result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", rtol=5e-6)
+    pass_result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", rtol=1e-3)
+    assert fail_result[0].status == "FAIL"
+    assert pass_result[0].status == "PASS"
 
 
 def test_multiple_variables_reported_independently(tmp_path: Path) -> None:

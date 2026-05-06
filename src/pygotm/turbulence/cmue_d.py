@@ -1,13 +1,33 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The quasi-equilibrium stability functions \label{sec:cmueD}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Quasi-equilibrium stability functions :math:`c_\\mu` and :math:`c_\\mu'`.
+
+Implements GOTM Section 4.7.39 (cmue_d.F90) — computes the stability functions
+under the **quasi-equilibrium (QE)** assumption (Umlauf and Burchard 2005).
+Compared to :mod:`pygotm.turbulence.cmue_c`, the quasi-equilibrium closure
+retains an additional constraint: the TKE equilibrium condition (Eq. 195):
+
+.. math::
+
+   \\frac{P + G}{\\varepsilon}
+   = \\hat{c}_\\mu(\\alpha_M, \\alpha_N)\\,\\alpha_M
+   - \\hat{c}_\\mu'(\\alpha_M, \\alpha_N)\\,\\alpha_N = 1 \\comma
+
+where (149) has been used.  This is an implicit relation for :math:`\\alpha_M`
+as a function of :math:`\\alpha_N`.  The solution :math:`\\alpha_M(\\alpha_N)`
+is a quadratic polynomial that is solved analytically.  The resulting
+:math:`\\alpha_M` is substituted back into the stability functions from
+Section 4.7.38 (:mod:`pygotm.turbulence.cmue_c`).
+
+For negative :math:`\\alpha_N` (convection) the QE :math:`\\alpha_M` may
+become negative; the limiter ``anLimitFact = 0.5`` prevents this from
+happening (see Umlauf and Burchard 2005).
+
+The quasi-equilibrium variant is more accurate than the local variant in
+strongly stratified flows, but slightly more expensive due to the additional
+algebraic solve.
+
+Author (original Fortran): Lars Umlauf.
 """
 
 import math
@@ -20,6 +40,7 @@ from pygotm.arrays import ColumnWorkspace, make_column_array
 __all__ = [
     "CmueDWorkspace",
     "step_cmue_d",
+    "step_cmue_d_single",
 ]
 
 _AN_LIMIT_FACT: float = 0.5
@@ -159,3 +180,6 @@ def step_cmue_d(
             nlev, cm0, cc1, ct1, a1, a2, a3, a5, at1, at2, at3, at5,
             as_[b], an[b], cmue1[b], cmue2[b],
         )
+
+
+step_cmue_d_single = _step_cmue_d

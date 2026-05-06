@@ -1,13 +1,67 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The vertical friction \label{sec:friction}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Vertical friction and boundary-layer drag.
+
+Implements GOTM Section 3.2.9 — computes bottom friction velocity
+:math:`u_{\\tau b}` from a logarithmic drag law and surface stress from
+wind forcing, then applies them as Neumann boundary conditions for the
+momentum equations.
+
+Bottom roughness and friction velocity
+--------------------------------------
+
+The bottom roughness length combines hydraulically smooth, hydraulically rough,
+and moveable-bed (sediment) contributions (Eq. 23):
+
+.. math::
+
+   z_{0b} = \\frac{0.1\\nu}{u_{\\tau b}} + 0.03 h_{0b} + z_a \\comma
+
+where :math:`\\nu` is the molecular viscosity, :math:`h_{0b}` is the physical
+roughness height, and :math:`z_a` is a moveable bed roughness.  When
+:math:`\\nu \\le 0` the smooth-wall term is omitted.
+
+The bottom friction velocity is (Eq. 24):
+
+.. math::
+
+   u_{\\tau b} = r \\sqrt{U_1^2 + V_1^2} \\comma
+
+where :math:`U_1, V_1` are the velocities in the lowest model layer, and the
+drag coefficient :math:`r` is (Eq. 25):
+
+.. math::
+
+   r = \\frac{\\kappa}{\\ln\\bigl((z_{0b} + h_1/2) / z_{0b}\\bigr)} \\comma
+
+with :math:`h_1` the thickness of the lowest model layer and
+:math:`\\kappa = 0.4` the von Kármán constant.
+Because :math:`z_{0b}` itself depends on :math:`u_{\\tau b}` through
+the smooth-wall term, the equations are iterated up to ``MaxItz0b``
+times.
+
+Surface roughness
+-----------------
+
+When Charnock's formula is activated (Eq. 26):
+
+.. math::
+
+   z_{0s} = \\frac{\\alpha_c\\, u_{\\tau s}^2}{g} \\comma
+
+where :math:`\\alpha_c` is the Charnock coefficient (``charnock_val``) and
+:math:`g` is gravitational acceleration.  Otherwise :math:`z_{0s}` is set
+to the fixed minimum value ``z0s_min``.
+
+When ``plume_type = 1`` the surface friction velocity is computed
+analogously to the bottom, from the top-layer velocity.  Otherwise it is
+derived from the prescribed wind-stress components :math:`(\\tau_x, \\tau_y)`:
+
+.. math::
+
+   u_{\\tau s} = (\\tau_x^2 + \\tau_y^2)^{1/4} \\point
+
+Authors (original Fortran): Hans Burchard, Karsten Bolding.
 """
 
 import math
@@ -23,6 +77,7 @@ __all__ = [
     "KAPPA",
     "friction",
     "step_friction_batch",
+    "step_friction_single",
 ]
 
 KAPPA: float = 0.4
@@ -127,6 +182,9 @@ def _step_friction_kernel(
         u_taus[0] = (tx_val * tx_val + ty_val * ty_val) ** 0.25
 
 
+step_friction_single = _step_friction_kernel
+
+
 @numba.njit(parallel=True, cache=True)
 def step_friction_batch(
     batch_size: int,
@@ -160,12 +218,32 @@ def step_friction_batch(
     """Batch variant: process batch_size columns in parallel."""
     for b in numba.prange(batch_size):
         _step_friction_kernel(
-            nlev, kappa, avmolu, rho0, gravity, h0b, z0s_min,
-            charnock, charnock_val, calc_bottom_stress, MaxItz0b, plume_type, first,
-            h[b], u[b], v[b], drag[b],
-            z0b[b : b + 1], z0s[b : b + 1], za[b : b + 1],
-            u_taub[b : b + 1], u_taubo[b : b + 1], u_taus[b : b + 1], taub[b : b + 1],
-            tx[b : b + 1], ty[b : b + 1],
+            nlev,
+            kappa,
+            avmolu,
+            rho0,
+            gravity,
+            h0b,
+            z0s_min,
+            charnock,
+            charnock_val,
+            calc_bottom_stress,
+            MaxItz0b,
+            plume_type,
+            first,
+            h[b],
+            u[b],
+            v[b],
+            drag[b],
+            z0b[b : b + 1],
+            z0s[b : b + 1],
+            za[b : b + 1],
+            u_taub[b : b + 1],
+            u_taubo[b : b + 1],
+            u_taus[b : b + 1],
+            taub[b : b + 1],
+            tx[b : b + 1],
+            ty[b : b + 1],
         )
 
 

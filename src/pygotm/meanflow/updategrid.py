@@ -73,11 +73,48 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+import numba
 import numpy as np
 
 from pygotm.meanflow.meanflow import MeanflowState
 
-__all__ = ["updategrid"]
+__all__ = ["step_updategrid_single", "updategrid"]
+
+
+@numba.njit(cache=True)
+def step_updategrid_single(
+    nlev: int,
+    depth0: float,
+    zeta: float,
+    grid_method: int,
+    ga: np.ndarray,
+    h: np.ndarray,
+    ho: np.ndarray,
+    z: np.ndarray,
+    zi: np.ndarray,
+) -> None:
+    """Recompute layer thicknesses and interface depths for a new sea-surface elevation.
+
+    Only handles the per-step update (after grid_ready=True). Grid initialisation
+    (building ga from ddu/ddl) must have already run in Python before this kernel
+    is called from the compiled time loop.
+    """
+    current_depth = depth0 + zeta
+    if grid_method == 1:
+        for i in range(1, nlev + 1):
+            ho[i] = h[i]
+            h[i] = ga[i] * current_depth
+    elif grid_method == 2:
+        for i in range(1, nlev + 1):
+            ho[i] = h[i]
+    else:  # methods 0 and 3 (equidistant/zoomed sigma)
+        for i in range(1, nlev + 1):
+            ho[i] = h[i]
+            h[i] = (ga[i] - ga[i - 1]) * current_depth
+    zi[0] = -depth0
+    for i in range(1, nlev + 1):
+        zi[i] = zi[i - 1] + h[i]
+        z[i] = zi[i - 1] + 0.5 * h[i]
 
 
 def updategrid(

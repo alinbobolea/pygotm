@@ -1,14 +1,82 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: The temperature equation \label{sec:temperature}
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
 """
+Temperature (potential) transport equation.
+
+Implements GOTM Section 3.2.10 — advances potential temperature :math:`\\Theta`
+by one timestep using a Crank–Nicolson advection–diffusion solver.
+
+Transport equation
+------------------
+
+The temperature satisfies (Eq. 27):
+
+.. math::
+
+   \\dot{\\Theta} = \\mathcal{D}_\\Theta
+     - \\frac{1}{\\tau_R^\\Theta}(\\Theta - \\Theta_{\\mathrm{obs}})
+     + \\frac{1}{C_p \\rho_0} \\frac{\\partial I}{\\partial z} \\comma
+
+where :math:`\\mathcal{D}_\\Theta` is the turbulent diffusion operator (Eq. 28):
+
+.. math::
+
+   \\mathcal{D}_\\Theta = \\frac{\\partial}{\\partial z}
+       \\left( (\\nu_t^\\Theta + \\nu^\\Theta)
+       \\frac{\\partial \\Theta}{\\partial z}
+       - \\tilde{\\Gamma}_\\Theta \\right) \\comma
+
+with turbulent scalar diffusivity :math:`\\nu_t^\\Theta`, molecular diffusivity
+:math:`\\nu^\\Theta = \\nu_{\\mathrm{mol}}^T` (``avmolT``), and counter-gradient
+flux :math:`\\tilde{\\Gamma}_\\Theta` (``gamh``).
+
+Short-wave radiation absorption
+---------------------------------
+
+The radiative heating term uses the Paulson and Simpson (1977) double-exponential
+profile (Eq. 29):
+
+.. math::
+
+   I(z) = I_0 \\left[ A\\,e^{-z/\\eta_1}
+        + (1 - A)\\,e^{-z/\\eta_2}\\,\\mathrm{bioshade} \\right] \\comma
+
+where :math:`I_0` is the surface short-wave irradiance [W m⁻²],
+:math:`A = 0.58` is the fraction in the red/near-infrared band,
+:math:`\\eta_1 = 0.35\\,\\mathrm{m}` and :math:`\\eta_2 = 23.0\\,\\mathrm{m}` are
+the extinction depths (defaults from Paulson & Simpson 1977), and
+``bioshade`` is an optional biological shading factor.
+
+The divergence :math:`\\partial I/\\partial z` contributes to ``q_sour`` at
+each layer.  The surface layer receives the residual flux absorbed in the
+topmost cell.
+
+Surface boundary condition
+--------------------------
+
+At the sea surface a Neumann (prescribed flux) condition is applied:
+
+.. math::
+
+   (\\nu_t^\\Theta + \\nu^\\Theta)
+   \\frac{\\partial \\Theta}{\\partial z}\\Bigg|_{z=\\zeta}
+   = \\frac{Q_{\\mathrm{net}}}{C_p \\rho_0} \\comma
+
+where :math:`Q_{\\mathrm{net}}` is the net non-penetrative heat flux (positive into
+the ocean).  In the code, ``hflux`` carries the **opposite sign** — it follows the
+atmospheric convention (positive = heat loss from ocean, negative = heat gain) — so
+the Neumann value passed to the diffusion solver is
+``diff_t_up = -hflux / (rho0 * cp)``,
+which is positive (warming) when ``hflux < 0``.  This matches the calling convention
+in both :mod:`pygotm.gotm.gotm` and Fortran GOTM v7, where
+``shf = -heat_input%value`` before calling ``temperature()``.
+
+A sea-ice correction suppresses the warming flux when the sea-surface
+temperature is at or below the saline freezing point
+(:math:`T \\le -0.0575\\,S`).
+
+Author (original Fortran): Lars Umlauf.
+"""
+
 
 import math
 
@@ -24,6 +92,7 @@ from pygotm.util.util import oneSided as _ONE_SIDED
 __all__ = [
     "temperature",
     "step_temperature",
+    "step_temperature_single",
 ]
 
 _ADV_MODE: int = 0
@@ -77,7 +146,7 @@ def _step_temperature(
     qu: np.ndarray,
     adv_cu: np.ndarray,
 ) -> None:
-    # simple sea ice correction: suppress upward heat flux when SST <= freezing T
+    # sea ice correction: suppress warming flux (diff_t_up > 0) when SST <= freezing T
     if T[nlev] <= -_FREEZE_SLOPE * S[nlev]:
         if diff_t_up > 0.0:
             diff_t_up = 0.0
@@ -203,7 +272,44 @@ def temperature(
     w_adv_discr: int = 4,
     t_adv: bool = False,
 ) -> None:
-    """Advance the temperature equation for one column."""
+    """Advance the temperature equation for one column.
+
+    Parameters
+    ----------
+    state:
+        MeanflowState with T, S, h, w, u, v, bioshade, rad, Tobs, avh, avmolT.
+    nlev:
+        Number of model layers.
+    dt:
+        Time step [s].
+    cnpar:
+        Crank–Nicolson implicitness (1 = fully implicit).
+    I_0:
+        Surface short-wave irradiance [W m⁻²].
+    wflux:
+        Freshwater flux [m s⁻¹] (reserved; not currently used in heat equation).
+    hflux:
+        Net non-penetrative surface heat flux [W m⁻²], **atmospheric convention
+        (positive = heat loss from ocean; negative = heat gain into ocean)**.
+        Identical convention to Fortran GOTM v7 ``shf = -heat_input%value``.
+        Converted to Neumann BC as ``diff_t_up = -hflux / (rho0 * cp)``; negative
+        ``hflux`` produces a positive (warming) Neumann value.
+    nuh:
+        Turbulent heat diffusivity profile [m² s⁻¹], shape (nlev+1,).
+    gamh:
+        Counter-gradient heat flux :math:`\\tilde{\\Gamma}_\\Theta`, shape (nlev+1,).
+    rho0:
+        Reference density [kg m⁻³].
+    cp:
+        Specific heat capacity [J kg⁻¹ K⁻¹].
+    A:
+        Fraction of short-wave in the red/near-IR band (Paulson & Simpson 1977).
+        Default 0.58.
+    g1:
+        Extinction depth for band 1 [m]. Default 0.35 m.
+    g2:
+        Extinction depth for band 2 [m]. Default 23.0 m.
+    """
     assert state.T is not None
     assert state.S is not None
     assert state.h is not None
@@ -243,3 +349,6 @@ def temperature(
         _dtdx, _dtdy,
         state.avh, q_sour, l_sour, au, bu, cu, du, ru, qu, adv_cu,
     )
+
+
+step_temperature_single = _step_temperature

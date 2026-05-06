@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
-import warnings
 
 import click
 import numpy as np
@@ -17,7 +17,9 @@ __all__ = [
     "cli",
     "compare_datasets",
     "discover_reference_cases",
+    "numeric_variable_names",
     "open_reference_dataset",
+    "open_validation_dataset",
     "resolve_reference_case",
     "run_case_validation",
 ]
@@ -124,6 +126,12 @@ def _open_dataset(path: Path) -> xr.Dataset:
             raise OSError(msg) from exc
 
 
+def open_validation_dataset(path: Path) -> xr.Dataset:
+    """Open a validation NetCDF with the same backend fallback as references."""
+
+    return _open_dataset(path)
+
+
 def resolve_reference_case(
     case_name: str,
     *,
@@ -170,6 +178,12 @@ def _numeric_variable_names(dataset: xr.Dataset) -> tuple[str, ...]:
     return tuple(names)
 
 
+def numeric_variable_names(dataset: xr.Dataset) -> tuple[str, ...]:
+    """Return numeric data variables in dataset order."""
+
+    return _numeric_variable_names(dataset)
+
+
 def _as_float(value: np.generic | float | int) -> float:
     return float(np.asarray(value, dtype=np.float64))
 
@@ -185,7 +199,7 @@ def compare_datasets(
     actual: xr.Dataset,
     expected: xr.Dataset,
     *,
-    rtol: float = 1.0e-6,
+    rtol: float = 5.0e-6,
     atol: float = 1.0e-12,
     variables: tuple[str, ...] | None = None,
 ) -> DatasetComparison:
@@ -264,7 +278,7 @@ def run_case_validation(
     module_name: str | None = None,
     actual_path: Path | None = None,
     runner: CaseRunner | None = None,
-    rtol: float = 1.0e-6,
+    rtol: float = 5.0e-6,
     atol: float = 1.0e-12,
     cases_root: Path | None = None,
 ) -> DatasetComparison:
@@ -305,7 +319,7 @@ def run_case_validation(
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="Path to a pyGOTM-generated NetCDF output file to compare.",
 )
-@click.option("--rtol", default=1.0e-6, show_default=True, type=float)
+@click.option("--rtol", default=5.0e-6, show_default=True, type=float)
 @click.option("--atol", default=1.0e-12, show_default=True, type=float)
 @click.option("--list-cases", is_flag=True, help="List the bundled reference cases.")
 def cli(

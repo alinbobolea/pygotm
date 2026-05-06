@@ -1,97 +1,14 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: observations --- the 'real' world \label{sec:observations}
-!
-! !INTERFACE:
-!   module observations
-!
-! !DESCRIPTION:
-!  This module provides the necessary subroutines for communicating
-!  `observations' to GOTM.
-!  The module operates according to the general philosophy used in GOTM,
-!  i.e.\ it provides {\tt init\_observ\-ations()} to be called in the overall
-!  initialisation routine and {\tt get\_all\_obs()} to be called in the time
-!  loop to actually obtain the `observations'.
-!  In addition to these subroutines the module also provides two routines
-!  for reading scalar-type observations and profile-type observations.
-!  Each observation has a date stamp with the format {\tt yyyy-mm-dd hh:dd:mm}.
-!  The module uses the {\tt time} module (see \sect{sec:time})
-!  to convert the time string to the
-!  internal time representation of GOTM.
-!  Profiles are interpolated to the actual GOTM model grid.
-!  Free format is used for reading-in the actual data.
-!
-! !USES:
-!   use input
-!   use settings
-!   IMPLICIT NONE
-!  default: all is private.
-!   private
-!
-! !PUBLIC MEMBER FUNCTIONS:
-!   public init_observations, post_init_observations, get_all_obs, clean_observations
-!
-! !PUBLIC DATA MEMBERS:
-!
-!  'observed' salinity profile
-!   integer, public :: initial_salinity_type
-!   type (type_profile_input), public, target :: sprof_input
-!
-!  'observed' temperature profile
-!   integer, public :: initial_temperature_type
-!   type (type_profile_input), public, target :: tprof_input
-!
-!  'observed' oxygen profile
-!   type (type_profile_input), public, target :: o2_prof_input
-!
-!  'observed' horizontal salinity gradients
-!   type (type_profile_input), public, target :: dsdx_input,dsdy_input
-!
-!  'observed' horizontal temperature gradients
-!   type (type_profile_input), public, target :: dtdx_input,dtdy_input
-!
-!  internal horizontal pressure gradients
-!   REALTYPE, public, dimension(:), allocatable :: idpdx,idpdy
-!
-!  horizontal velocity profiles
-!   type (type_profile_input), public, target :: uprof_input,vprof_input
-!
-!  observed profile of turbulent dissipation rates
-!   type (type_profile_input), public, target :: epsprof_input
-!
-!  relaxation times for salinity and temperature
-!   REALTYPE, public, dimension(:), allocatable, target :: SRelaxTau
-!   REALTYPE, public, dimension(:), allocatable         :: TRelaxTau
-!
-!  sea surface elevation, sea surface gradients and height of velocity obs.
-!   type (type_scalar_input), public, target :: zeta_input,dpdx_input,dpdy_input,h_press_input
-!
-!  vertical advection velocity
-!   type (type_scalar_input), public, target :: w_adv_input,w_height_input
-!
-!  Parameters for water classification - default Jerlov type I
-!   type (type_scalar_input), public, target :: A_input, g1_input, g2_input
-!
-! !DEFINED PARAMETERS:
-!
-!  pre-defined parameters
-!   integer, parameter        :: NOTHING=0
-!   integer, parameter        :: ANALYTICAL=1
-!   integer, parameter        :: CONSTANT=1
-!   integer, parameter        :: FROMFILE=2
-!   integer, parameter        :: CONST_PROF=1
-!   integer, parameter        :: TWO_LAYERS=2
-!   integer, parameter        :: CONST_NN=3
-!   integer, parameter        :: ANALYTICAL_OFFSET=10
-!
-! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding & Hans Burchard
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Observational data access for GOTM.
+
+Provides routines for reading and interpolating observational profiles of
+temperature, salinity, velocity, and related quantities onto the model grid.
+Used to initialise the model state and to apply nudging/relaxation towards
+observed values.
+
+Key routines: init_observations, post_init_observations,
+get_all_obs, clean_observations.
 """
 
 from __future__ import annotations

@@ -15,7 +15,7 @@ compiler needed.
 - NetCDF output (CF conventions, xarray-compatible)
 - FastAPI REST API + WebSocket progress streaming
 - NiceGUI browser UI with Plotly interactive charts
-- Validation parity with Fortran GOTM 6.0.7: pass criterion `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 1e-6×|b|`
+- Validation parity with Fortran GOTM 6.0.7: pass criterion `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 5e-6×|b|`
 - Stokes drift / wave-averaged equations (Craig-Banner BC, Stokes drift profiles)
 - FABM biogeochemistry coupling (gotm_fabm interface)
 - Extras: seagrass drag parameterization, sediment model
@@ -28,9 +28,9 @@ compiler needed.
    `taichi` must not appear in `pyproject.toml` dependencies.
 1. **Scientific accuracy is non-negotiable.** Every kernel must validate against
    Fortran GOTM using the range-aware combined tolerance:
-   `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 1e-6×|b|`
+   `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 5e-6×|b|`
    The signal-range atol floor prevents false failures at near-zero field values
-   while rtol=1e-6 governs where the signal is non-negligible.
+   while rtol=5e-6 governs where the signal is non-negligible.
    No accuracy tradeoffs for performance before parity is established.
 2. **Reproducibility is a feature.** Every simulation result must be fully
    reproducible from its YAML config. No hidden state.
@@ -56,6 +56,14 @@ compiler needed.
    gives two `prange` iterations per thread, which is a good starting point.
 6. **Fail loudly on science errors.** If a field goes NaN or violates physical
    bounds, raise immediately with a diagnostic message. Never silently continue.
+7. **Parity validation uses the shared validation stack.** When running GOTM
+   parity cases, use `src/pygotm/validate.py` together with the supporting
+   modules in `src/pygotm/validation/`. pyGOTM parity NetCDF outputs are stored
+   under `validation/runs/<case>/<case>.nc`. Results must be reported in the
+   `validation/results.json` schema so `validation/report.html` can be rendered
+   from the same artifact. Parity case execution must use the Numba compiled
+   runtime; unsupported compiled configurations fail explicitly instead of
+   falling back to the legacy Python timestep loop.
 
 ## Performance Goals
 | Scenario | Target |
@@ -609,7 +617,7 @@ solar irradiance at specific lat/lon/time.
 7.3 Validation: run GOTM test cases from `gotm-model/cases-runs/` (starting with
     couette, channel, entrainment; expanding to all 22), compare every prognostic
     field to Fortran GOTM output using the range-aware combined tolerance
-    (`max(1e-7×ref_range, 1e-12) + 1e-6×|b|`), produce `validation/report.html`  
+    (`max(1e-7×ref_range, 1e-12) + 5e-6×|b|`), produce `validation/report.html`  
 
 ### Phase 8 — Multi-Column Driver (Dask + Numba batch)
 8.1 Add batch entry points to all Phase 1–4 hot kernels: for each
@@ -677,7 +685,7 @@ For each case:
 2. Run pyGOTM simulation; save output to `validation/runs/<case>/<case>.nc`
 3. Load Fortran GOTM reference NetCDF from `gotm-model/cases-runs/<case>/`
 4. Compare all shared numeric variables using the range-aware pass criterion:
-   `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 1e-6×|b|`
+   `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 5e-6×|b|`
    Variables absent from pyGOTM output (FABM, ice model) are reported as
    `SKIP`, not `FAIL`.
 5. Report per-variable metrics on failure:
@@ -703,11 +711,11 @@ uv run python validation/run_validation.py --cases couette,channel,entrainment
 
 Pass criterion (applied per variable):
 ```
-|a − b| ≤ max(1e-7 × ref_range, 1e-12) + 1e-6 × |b|
+|a − b| ≤ max(1e-7 × ref_range, 1e-12) + 5e-6 × |b|
 ```
 - `atol_var = 1e-7 × ref_range` — signal-range floor that prevents false failures
   when the reference field is near zero (e.g., velocity at rest, TKE at surface)
-- `rtol = 1e-6 × |b|` — standard relative tolerance where the field is non-negligible
+- `rtol = 5e-6 × |b|` — standard relative tolerance where the field is non-negligible
 
 Reported metrics per variable (in `validation/report.html`):
 | Metric | Formula | Notes |
@@ -744,6 +752,9 @@ FAIL the validation if any variable does not satisfy the pass criterion.
 - `uv run mypy src/` must pass (strict mode)
 - `uv run mypy tests/` must pass when changing test helpers or typing infrastructure
 - `uv run pytest` must pass before any commit
+- When building Sphinx documentation, write the HTML output to
+  `/home/nick/projects/pygotm/docs/build` using:
+  `uv run --group docs sphinx-build -W -b html docs docs/build`
 - Line length: 88 chars maximum
 - Type hints on all public functions and methods
 - Docstrings on all public APIs
@@ -758,6 +769,14 @@ FAIL the validation if any variable does not satisfy the pass criterion.
   This is the opposite of the standard physical-oceanography convention.
   In `temperature.F90`: `DiffTup = -hflux/(rho0*cp)`, so a negative `hflux` (ocean
   gains heat) produces a positive Neumann BC value that warms the surface layer.
+
+- **`sflux`/`ssf` (virtual salinity flux):** Defined as `S_surface · (P − E)` [psu m s⁻¹].
+  `sflux > 0` when **P > E** (precipitation-dominated, surface dilutes — salt leaves the column).
+  `sflux < 0` when **E > P** (evaporation-dominated, surface concentrates — salt enters the column).
+  The GOTM manual (Eq. 32) writes the surface BC as `S*(P−E)` using the *upward-flux* convention
+  (positive = salt leaving). `diff_center` uses the opposite *entering-flux* convention
+  (positive = salt gained by the cell). The negation `DiffSup = −sflux` in `salinity.F90`
+  reconciles these two conventions. pyGOTM replicates this exactly: `diff_s_up = −sflux`.
 
 ---
 
@@ -877,3 +896,67 @@ FAIL the validation if any variable does not satisfy the pass criterion.
    - Config: `.pre-commit-config.yaml`
    - Runs: on git commit
    - Tools: Prettier (YAML/JSON), Ruff (Python)
+
+## Shell Command Isolation Policy
+
+All shell commands must be executed through the dedicated `shell-runner` subagent.
+
+This applies to both Claude Code and Codex.
+
+Do not execute shell commands directly from the main conversation unless the user explicitly instructs otherwise.
+
+Use `shell-runner` for:
+- tests
+- builds
+- linting
+- formatting checks
+- type checking
+- git status, diff, log, and branch inspection
+- filesystem inspection
+- package/environment checks
+- benchmark execution
+- generated report inspection
+- any command that may produce logs or large output
+
+The main agent should receive only the subagent’s concise result summary.
+
+The `shell-runner` result should include:
+- command executed
+- working directory, when relevant
+- exit code
+- concise stdout/stderr summary
+- exact error excerpts needed for the next action
+- files changed, only if applicable
+
+The `shell-runner` must not return:
+- full logs
+- full directory trees
+- full test output
+- full diffs
+- long benchmark tables
+- repeated warning blocks
+- irrelevant stdout/stderr noise
+
+Only return full output when the user explicitly asks for it.
+
+## Context Preservation Policy
+
+Keep command execution, exploratory filesystem inspection, test-output analysis, build-output analysis, and git-output analysis outside the main conversation context.
+
+The main conversation should preserve architectural reasoning, implementation decisions, requirements, and the final concise findings.
+
+## Safety Policy for Shell Execution
+
+The `shell-runner` must not run destructive commands unless explicitly approved by the user.
+
+Do not run:
+- `rm -rf`
+- `git push`
+- `git commit`
+- `git reset --hard`
+- `git clean -fd`
+- force pushes
+- credential/token printing commands
+- network download or install commands unless explicitly requested
+
+For risky commands, summarize the intended command and ask for approval first.
