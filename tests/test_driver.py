@@ -100,7 +100,8 @@ def test_driver_run_returns_dataset_with_expected_axes_and_metadata(
     assert dataset.sizes["time"] == 2
     assert dataset.sizes["z"] == 8
     assert dataset.sizes["zi"] == 9
-    assert dataset["u"].shape == (2, 8)
+    assert dataset["u"].dims == ("time", "z", "lat", "lon")
+    assert dataset["u"].shape == (2, 8, 1, 1)
     assert dataset.attrs["runtime"] == "compiled"
     assert np.issubdtype(dataset["time"].dtype, np.datetime64)
     assert Path(str(dataset.attrs["source_yaml"])) == config_path.resolve()

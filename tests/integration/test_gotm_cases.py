@@ -90,15 +90,9 @@ def test_compare_datasets_squeezes_singleton_lat_lon_dimensions() -> None:
 
 
 def test_compare_datasets_uses_range_aware_tolerance() -> None:
-    expected = xr.Dataset(
-        {"signal": ("z", np.array([0.0, 100.0], dtype=np.float64))}
-    )
-    within = xr.Dataset(
-        {"signal": ("z", np.array([9.0e-6, 100.0], dtype=np.float64))}
-    )
-    outside = xr.Dataset(
-        {"signal": ("z", np.array([1.1e-5, 100.0], dtype=np.float64))}
-    )
+    expected = xr.Dataset({"signal": ("z", np.array([0.0, 100.0], dtype=np.float64))})
+    within = xr.Dataset({"signal": ("z", np.array([9.0e-6, 100.0], dtype=np.float64))})
+    outside = xr.Dataset({"signal": ("z", np.array([1.1e-5, 100.0], dtype=np.float64))})
 
     assert compare_datasets(within, expected, variables=("signal",)).ok
 
@@ -142,6 +136,11 @@ def test_couette_driver_advances_velocity_and_turbulence() -> None:
     dataset = GotmDriver(case.yaml_path).run(max_steps=360)
     try:
         assert dataset.sizes["time"] == 2
+        assert dataset["u"].dims == ("time", "z", "lat", "lon")
+        assert dataset["tke"].dims == ("time", "zi", "lat", "lon")
+        assert dataset.coords["z"].dims == ("time", "z", "lat", "lon")
+        assert dataset.coords["lat"].shape == (1,)
+        assert dataset.coords["lon"].shape == (1,)
         velocity_change = np.max(
             np.abs(dataset["u"].values[1] - dataset["u"].values[0])
         )

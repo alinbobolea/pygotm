@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 import gsw
@@ -771,6 +772,154 @@ def build_runtime_from_run(
     return bundle
 
 
+_ICE_REFERENCE_SCALARS = (
+    "Hfrazil",
+    "Hice",
+    "Tf",
+    "Tice_surface",
+    "bottom_ice_energy",
+    "ocean_ice_flux",
+    "ocean_ice_heat_flux",
+    "ocean_ice_salt_flux",
+    "surface_ice_energy",
+)
+_FABM_REFERENCE_SCALARS = (
+    "surface_albedo",
+    "surface_drag_coefficient_in_air",
+)
+_JRC_MED_ERGOM_REFERENCE_SCALARS = (
+    "jrc_med_ergom_DNB",
+    "jrc_med_ergom_OFL",
+    "jrc_med_ergom_PBR",
+    "jrc_med_ergom_SBR",
+    "jrc_med_ergom_fl",
+    "jrc_med_ergom_pb",
+)
+_BSEM_REFERENCE_PROFILES = (
+    "bsem_PAR",
+    "bsem_PPR",
+    "bsem_am",
+    "bsem_dn",
+    "bsem_hs",
+    "bsem_ni",
+    "bsem_o2",
+    "bsem_pl",
+    "bsem_ps",
+    "bsem_zg",
+    "bsem_zl",
+    "bsem_zn",
+    "bsem_zs",
+)
+_JRC_MED_ERGOM_REFERENCE_PROFILES = (
+    "jrc_med_ergom_Amm",
+    "jrc_med_ergom_DNP",
+    "jrc_med_ergom_DO_mg",
+    "jrc_med_ergom_GPP",
+    "jrc_med_ergom_NCP",
+    "jrc_med_ergom_NFX",
+    "jrc_med_ergom_NPR",
+    "jrc_med_ergom_Nit",
+    "jrc_med_ergom_PAR",
+    "jrc_med_ergom_PPR",
+    "jrc_med_ergom_Pho",
+    "jrc_med_ergom_TN",
+    "jrc_med_ergom_TP",
+    "jrc_med_ergom_aa",
+    "jrc_med_ergom_bb",
+    "jrc_med_ergom_bb_chla",
+    "jrc_med_ergom_dd",
+    "jrc_med_ergom_ff",
+    "jrc_med_ergom_ff_chla",
+    "jrc_med_ergom_nn",
+    "jrc_med_ergom_o2",
+    "jrc_med_ergom_po",
+    "jrc_med_ergom_pp",
+    "jrc_med_ergom_pp_chla",
+    "jrc_med_ergom_pw",
+    "jrc_med_ergom_tot_chla",
+    "jrc_med_ergom_zz",
+)
+_NPZD_REFERENCE_PROFILES = (
+    "npzd_NPR",
+    "npzd_PAR",
+    "npzd_PPR",
+    "npzd_det",
+    "npzd_nut",
+    "npzd_phy",
+    "npzd_zoo",
+)
+
+
+def _document_mapping(value: object) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _document_token(value: object, default: str) -> str:
+    if value is None:
+        return default
+    return str(value).strip().lower().replace("-", "_")
+
+
+def _fabm_yaml_text(run: Any) -> str:
+    fabm_path = Path(run.yaml_path).with_name("fabm.yaml")
+    if not fabm_path.exists():
+        return ""
+    return fabm_path.read_text(encoding="utf-8").lower()
+
+
+def _reference_scalar_output_names(run: Any, output: RuntimeOutput) -> tuple[str, ...]:
+    names: list[str] = []
+    document = _document_mapping(run.document)
+    surface = _document_mapping(document.get("surface"))
+    ice = _document_mapping(surface.get("ice"))
+    if _document_token(ice.get("model"), "simple") == "simple":
+        names.extend(_ICE_REFERENCE_SCALARS)
+
+    fabm = _document_mapping(document.get("fabm"))
+    if bool(fabm.get("use", False)):
+        names.extend(_FABM_REFERENCE_SCALARS)
+        fabm_text = _fabm_yaml_text(run)
+        if "jrc_med_ergom" in fabm_text:
+            names.extend(_JRC_MED_ERGOM_REFERENCE_SCALARS)
+
+    available = output.reference_scalars
+    return tuple(name for name in names if name in available)
+
+
+def _reference_z_profile_output_names(
+    run: Any,
+    output: RuntimeOutput,
+) -> tuple[str, ...]:
+    names: list[str] = []
+    eps_input = getattr(run.observations, "epsprof_input", None)
+    if (
+        getattr(eps_input, "method", 0) != 0
+        and getattr(eps_input, "data", None) is not None
+    ):
+        names.append("eps_obs")
+
+    document = _document_mapping(run.document)
+    fabm = _document_mapping(document.get("fabm"))
+    if bool(fabm.get("use", False)):
+        names.append("attenuation_coefficient_of_photosynthetic_radiative_flux")
+        fabm_text = _fabm_yaml_text(run)
+        if "bsem" in fabm_text:
+            names.extend(_BSEM_REFERENCE_PROFILES)
+            names.append("total_nitrogen")
+        if "jrc_med_ergom" in fabm_text:
+            names.extend(_JRC_MED_ERGOM_REFERENCE_PROFILES)
+        if "npzd" in fabm_text:
+            names.extend(_NPZD_REFERENCE_PROFILES)
+            names.append("total_nitrogen")
+        if "bb/passive" in fabm_text:
+            names.append("sed_c")
+
+    available = output.reference_z_profiles
+    return tuple(name for name in names if name in available)
+
+
 def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
     """Convert dense compiled output buffers to an xarray dataset after a run."""
 
@@ -788,52 +937,149 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
 
     z_profiles = output.z[:, 1:]
     zi_profiles = output.zi
+
+    def z_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
+        return (
+            ("time", "z", "lat", "lon"),
+            np.asarray(values[:, 1:], dtype=np.float64)[:, :, None, None],
+        )
+
+    def zi_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
+        return (
+            ("time", "zi", "lat", "lon"),
+            np.asarray(values, dtype=np.float64)[:, :, None, None],
+        )
+
+    def scalar(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
+        return (
+            ("time", "lat", "lon"),
+            np.asarray(values, dtype=np.float64)[:, None, None],
+        )
+
     coords: dict[str, Any] = {
         "time": time,
-        "z": z_profiles[0]
-        if _all_rows_equal(z_profiles)
-        else (("time", "z"), z_profiles),
-        "zi": (
-            zi_profiles[0]
-            if _all_rows_equal(zi_profiles)
-            else (("time", "zi"), zi_profiles)
-        ),
-        "lat": float(run.latitude),
-        "lon": float(run.longitude),
+        "z": (("time", "z", "lat", "lon"), z_profiles[:, :, None, None]),
+        "zi": (("time", "zi", "lat", "lon"), zi_profiles[:, :, None, None]),
+        "lat": ("lat", np.asarray([float(run.latitude)], dtype=np.float64)),
+        "lon": ("lon", np.asarray([float(run.longitude)], dtype=np.float64)),
     }
 
     data_vars: dict[str, Any] = {
-        "u": (("time", "z"), output.u[:, 1:]),
-        "v": (("time", "z"), output.v[:, 1:]),
-        "temp": (("time", "z"), output.T[:, 1:]),
-        "salt": (("time", "z"), output.S[:, 1:]),
-        "tke": (("time", "zi"), output.tke),
-        "eps": (("time", "zi"), output.eps),
-        "num": (("time", "zi"), output.num),
-        "nuh": (("time", "zi"), output.nuh),
-        "h": (("time", "z"), output.h[:, 1:]),
-        "xP": (("time", "z"), output.xP[:, 1:]),
-        "fric": (("time", "z"), output.fric[:, 1:]),
-        "drag": (("time", "z"), output.drag[:, 1:]),
-        "avh": (("time", "z"), output.avh[:, 1:]),
-        "bioshade": (("time", "z"), output.bioshade[:, 1:]),
-        "ga": (("time", "z"), output.ga[:, 1:]),
-        "SS": (("time", "zi"), output.SS),
-        "P": (("time", "zi"), output.P),
-        "G": (("time", "zi"), output.B),
-        "Pb": (("time", "zi"), output.Pb),
-        "kb": (("time", "zi"), output.kb),
-        "epsb": (("time", "zi"), output.epsb),
-        "L": (("time", "zi"), output.L),
-        "PSTK": (("time", "zi"), output.PSTK),
-        "cmue1": (("time", "zi"), output.cmue1),
-        "cmue2": (("time", "zi"), output.cmue2),
-        "as": (("time", "zi"), output.as_),
-        "an": (("time", "zi"), output.an),
-        "at": (("time", "zi"), output.at),
-        "nus": (("time", "zi"), output.nus),
-        "nucl": (("time", "zi"), output.nucl),
+        "rho_p": z_profile(output.rho_p),
+        "zeta": scalar(output.zeta),
+        "u_taus": scalar(output.u_taus),
+        "u10": scalar(output.u10),
+        "v10": scalar(output.v10),
+        "airt": scalar(output.airt),
+        "airp": scalar(output.airp),
+        "hum": scalar(output.hum),
+        "es": scalar(output.es),
+        "ea": scalar(output.ea),
+        "qs": scalar(output.qs),
+        "qa": scalar(output.qa),
+        "rhoa": scalar(output.rhoa),
+        "cloud": scalar(output.cloud),
+        "albedo": scalar(output.albedo),
+        "precip": scalar(output.precip),
+        "evap": scalar(output.evap),
+        "int_precip": scalar(output.int_precip),
+        "int_evap": scalar(output.int_evap),
+        "int_swr": scalar(output.int_swr),
+        "int_heat": scalar(output.int_heat),
+        "int_total": scalar(output.int_total),
+        "I_0": scalar(output.I_0),
+        "qh": scalar(output.qh),
+        "qe": scalar(output.qe),
+        "ql": scalar(output.ql),
+        "heat": scalar(output.heat),
+        "tx": scalar(output.tx),
+        "ty": scalar(output.ty),
+        "sst": scalar(output.sst),
+        "sst_obs": scalar(output.sst_obs),
+        "sss": scalar(output.sss),
+        "mld_surf": scalar(output.mld_surf),
+        "u": z_profile(output.u),
+        "v": z_profile(output.v),
+        "temp": z_profile(output.T),
+        "salt": z_profile(output.S),
+        "temp_obs": z_profile(output.Tobs),
+        "salt_obs": z_profile(output.Sobs),
+        "u_obs": z_profile(output.u_obs),
+        "v_obs": z_profile(output.v_obs),
+        "idpdx": z_profile(output.idpdx),
+        "idpdy": z_profile(output.idpdy),
+        "tke": zi_profile(output.tke),
+        "eps": zi_profile(output.eps),
+        "num": zi_profile(output.num),
+        "nuh": zi_profile(output.nuh),
+        "h": z_profile(output.h),
+        "xP": z_profile(output.xP),
+        "fric": z_profile(output.fric),
+        "drag": z_profile(output.drag),
+        "avh": z_profile(output.avh),
+        "bioshade": z_profile(output.bioshade),
+        "ga": z_profile(output.ga),
+        "uu": zi_profile(output.uu),
+        "vv": zi_profile(output.vv),
+        "ww": zi_profile(output.ww),
+        "NN": zi_profile(output.NN),
+        "NNT": zi_profile(output.NNT),
+        "NNS": zi_profile(output.NNS),
+        "buoy": z_profile(output.buoy),
+        "SS": zi_profile(output.SS),
+        "P": zi_profile(output.P),
+        "G": zi_profile(output.B),
+        "Pb": zi_profile(output.Pb),
+        "kb": zi_profile(output.kb),
+        "epsb": zi_profile(output.epsb),
+        "L": zi_profile(output.L),
+        "PSTK": zi_profile(output.PSTK),
+        "cmue1": zi_profile(output.cmue1),
+        "cmue2": zi_profile(output.cmue2),
+        "gamu": zi_profile(output.gamu),
+        "gamv": zi_profile(output.gamv),
+        "gamh": zi_profile(output.gamh),
+        "gams": zi_profile(output.gams),
+        "Rig": zi_profile(output.Rig),
+        "gamb": zi_profile(output.gamb),
+        "gam": zi_profile(output.gam),
+        "as": zi_profile(output.as_),
+        "an": zi_profile(output.an),
+        "at": zi_profile(output.at),
+        "r": zi_profile(output.r),
+        "taux": zi_profile(output.taux),
+        "tauy": zi_profile(output.tauy),
+        "u_taub": scalar(output.u_taub),
+        "taub": scalar(output.taub),
+        "mld_bott": scalar(output.mld_bott),
+        "rad": zi_profile(output.rad),
+        "us": z_profile(output.us),
+        "vs": z_profile(output.vs),
+        "dusdz": zi_profile(output.dusdz),
+        "dvsdz": zi_profile(output.dvsdz),
+        "us0": scalar(output.us0),
+        "vs0": scalar(output.vs0),
+        "ds": scalar(output.ds),
+        "Ekin": scalar(output.Ekin),
+        "Epot": scalar(output.Epot),
+        "Eturb": scalar(output.Eturb),
+        "nus": zi_profile(output.nus),
+        "nucl": zi_profile(output.nucl),
     }
+    for name in _reference_scalar_output_names(run, output):
+        data_vars[name] = scalar(output.reference_scalars[name])
+    for name in _reference_z_profile_output_names(run, output):
+        data_vars[name] = z_profile(output.reference_z_profiles[name])
+
+    if int(bundle.params.density_method) == 1:
+        data_vars.update(
+            {
+                "rho": z_profile(output.rho),
+                "temp_p": z_profile(output.Tp),
+                "temp_i": z_profile(output.Ti),
+                "salt_p": z_profile(output.Sp),
+            }
+        )
 
     return xr.Dataset(
         data_vars=data_vars,
@@ -846,9 +1092,3 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
             "runtime": "compiled",
         },
     )
-
-
-def _all_rows_equal(values: np.ndarray) -> bool:
-    if values.shape[0] <= 1:
-        return True
-    return bool(np.allclose(values, values[0], equal_nan=True))

@@ -28,10 +28,12 @@ from pygotm.turbulence.dissipationeq import step_dissipationeq_single
 from pygotm.turbulence.epsbalgebraic import step_epsbalgebraic_single
 from pygotm.turbulence.internal_wave import step_internal_wave_single
 from pygotm.turbulence.kbalgebraic import step_kbalgebraic_single
-from pygotm.turbulence.lengthscaleeq import _step_lengthscaleeq as _step_lengthscaleeq_single
+from pygotm.turbulence.lengthscaleeq import (
+    _step_lengthscaleeq as _step_lengthscaleeq_single,
+)
 from pygotm.turbulence.omegaeq import step_omegaeq_single
-from pygotm.turbulence.q2over2eq import _step_q2over2eq as _step_q2over2eq_single
 from pygotm.turbulence.production import step_production_single
+from pygotm.turbulence.q2over2eq import _step_q2over2eq as _step_q2over2eq_single
 from pygotm.turbulence.tkeeq import step_tkeeq_single
 from pygotm.turbulence.variances import step_variances_single
 from pygotm.util.gsw import gsw_alpha, gsw_beta, gsw_sigma0
@@ -53,16 +55,16 @@ _BOLZ = 5.670374419e-8
 _LONG = 1.0e15
 
 # Fairall bulk-flux constants (Fairall et al. 1996)
-_FAIRALL_G = 9.81        # gravitational acceleration [m s⁻²]
-_FAIRALL_KAPPA = 0.41    # von Karman constant
-_FAIRALL_FDG = 1.0       # Fairall LKB roughness Reynolds to von Karman
-_FAIRALL_BETA = 1.2      # gustiness parameter
-_FAIRALL_ZABL = 600.0    # atmospheric boundary layer height [m]
+_FAIRALL_G = 9.81  # gravitational acceleration [m s⁻²]
+_FAIRALL_KAPPA = 0.41  # von Karman constant
+_FAIRALL_FDG = 1.0  # Fairall LKB roughness Reynolds to von Karman
+_FAIRALL_BETA = 1.2  # gustiness parameter
+_FAIRALL_ZABL = 600.0  # atmospheric boundary layer height [m]
 _FAIRALL_R3 = 1.0 / 3.0
-_FAIRALL_ZT = 2.0        # temperature measurement height [m]
-_FAIRALL_ZQ = 2.0        # humidity measurement height [m]
-_FAIRALL_ZW = 10.0       # wind measurement height [m]
-_FAIRALL_WGUST = 0.0     # gustiness wind speed [m s⁻¹]
+_FAIRALL_ZT = 2.0  # temperature measurement height [m]
+_FAIRALL_ZQ = 2.0  # humidity measurement height [m]
+_FAIRALL_ZW = 10.0  # wind measurement height [m]
+_FAIRALL_WGUST = 0.0  # gustiness wind speed [m s⁻¹]
 _FAIRALL_ITERMAX = 20
 # Liu et al. (1979) look-up table: rt = A[:,0]*Rr**B[:,0], rq = A[:,1]*Rr**B[:,1]
 _FAIRALL_LIU_A0 = np.array(
@@ -71,12 +73,8 @@ _FAIRALL_LIU_A0 = np.array(
 _FAIRALL_LIU_A1 = np.array(
     [0.292, 1.808, 1.393, 1.956, 4.994, 30.709, 1448.680, 298000.0]
 )
-_FAIRALL_LIU_B0 = np.array(
-    [0.0, 0.929, -0.599, -1.018, -1.475, -2.067, -2.907, -3.935]
-)
-_FAIRALL_LIU_B1 = np.array(
-    [0.0, 0.826, -0.528, -0.870, -1.297, -1.845, -2.682, -3.616]
-)
+_FAIRALL_LIU_B0 = np.array([0.0, 0.929, -0.599, -1.018, -1.475, -2.067, -2.907, -3.935])
+_FAIRALL_LIU_B1 = np.array([0.0, 0.826, -0.528, -0.870, -1.297, -1.845, -2.682, -3.616])
 _FAIRALL_LIU_RR = np.array([0.0, 0.11, 0.825, 3.0, 10.0, 30.0, 100.0, 300.0, 1000.0])
 
 _CLOUD_CORRECTION_FACTOR = (
@@ -244,10 +242,59 @@ def _write_output_slot(
     step: int,
     time_value: float,
     nlev: int,
+    rho0_value: float,
+    zeta_value: float,
+    u10_value: float,
+    v10_value: float,
+    airt_value: float,
+    airp_value: float,
+    hum_value: float,
+    es_value: float,
+    ea_value: float,
+    qs_value: float,
+    qa_value: float,
+    rhoa_value: float,
+    cloud_value: float,
+    albedo_value: float,
+    precip_value: float,
+    evap_value: float,
+    int_precip_value: float,
+    int_evap_value: float,
+    int_swr_value: float,
+    int_heat_value: float,
+    int_total_value: float,
+    i0_value: float,
+    qh_value: float,
+    qe_value: float,
+    ql_value: float,
+    heat_value: float,
+    tx_surface_value: float,
+    ty_surface_value: float,
+    sst_value: float,
+    sst_obs_value: float,
+    sss_value: float,
+    mld_surf_value: float,
+    mld_bott_value: float,
+    ekin_value: float,
+    epot_value: float,
+    eturb_value: float,
+    u_taus: np.ndarray,
+    u_taub: np.ndarray,
+    taub: np.ndarray,
+    rho_p: np.ndarray,
     u: np.ndarray,
     v: np.ndarray,
     T: np.ndarray,
     S: np.ndarray,
+    Tp: np.ndarray,
+    Ti: np.ndarray,
+    Sp: np.ndarray,
+    Tobs: np.ndarray,
+    Sobs: np.ndarray,
+    u_obs: np.ndarray,
+    v_obs: np.ndarray,
+    idpdx: np.ndarray,
+    idpdy: np.ndarray,
     tke: np.ndarray,
     eps: np.ndarray,
     num: np.ndarray,
@@ -259,6 +306,13 @@ def _write_output_slot(
     avh: np.ndarray,
     bioshade: np.ndarray,
     ga: np.ndarray,
+    uu: np.ndarray,
+    vv: np.ndarray,
+    ww: np.ndarray,
+    NN: np.ndarray,
+    NNT: np.ndarray,
+    NNS: np.ndarray,
+    buoy: np.ndarray,
     SS: np.ndarray,
     P: np.ndarray,
     B: np.ndarray,
@@ -272,16 +326,73 @@ def _write_output_slot(
     as_: np.ndarray,
     an: np.ndarray,
     at: np.ndarray,
+    gamh: np.ndarray,
+    gams: np.ndarray,
+    rad: np.ndarray,
+    dusdz: np.ndarray,
+    dvsdz: np.ndarray,
     nus: np.ndarray,
     nucl: np.ndarray,
     z: np.ndarray,
     zi: np.ndarray,
     output_step: np.ndarray,
     output_time: np.ndarray,
+    output_zeta: np.ndarray,
+    output_u_taus: np.ndarray,
+    output_u10: np.ndarray,
+    output_v10: np.ndarray,
+    output_airt: np.ndarray,
+    output_airp: np.ndarray,
+    output_hum: np.ndarray,
+    output_es: np.ndarray,
+    output_ea: np.ndarray,
+    output_qs: np.ndarray,
+    output_qa: np.ndarray,
+    output_rhoa: np.ndarray,
+    output_cloud: np.ndarray,
+    output_albedo: np.ndarray,
+    output_precip: np.ndarray,
+    output_evap: np.ndarray,
+    output_int_precip: np.ndarray,
+    output_int_evap: np.ndarray,
+    output_int_swr: np.ndarray,
+    output_int_heat: np.ndarray,
+    output_int_total: np.ndarray,
+    output_I_0: np.ndarray,
+    output_qh: np.ndarray,
+    output_qe: np.ndarray,
+    output_ql: np.ndarray,
+    output_heat: np.ndarray,
+    output_tx: np.ndarray,
+    output_ty: np.ndarray,
+    output_sst: np.ndarray,
+    output_sst_obs: np.ndarray,
+    output_sss: np.ndarray,
+    output_mld_surf: np.ndarray,
+    output_u_taub: np.ndarray,
+    output_taub: np.ndarray,
+    output_mld_bott: np.ndarray,
+    output_us0: np.ndarray,
+    output_vs0: np.ndarray,
+    output_ds: np.ndarray,
+    output_Ekin: np.ndarray,
+    output_Epot: np.ndarray,
+    output_Eturb: np.ndarray,
+    output_rho_p: np.ndarray,
+    output_rho: np.ndarray,
     output_u: np.ndarray,
     output_v: np.ndarray,
     output_T: np.ndarray,
     output_S: np.ndarray,
+    output_Tp: np.ndarray,
+    output_Ti: np.ndarray,
+    output_Sp: np.ndarray,
+    output_Tobs: np.ndarray,
+    output_Sobs: np.ndarray,
+    output_u_obs: np.ndarray,
+    output_v_obs: np.ndarray,
+    output_idpdx: np.ndarray,
+    output_idpdy: np.ndarray,
     output_tke: np.ndarray,
     output_eps: np.ndarray,
     output_num: np.ndarray,
@@ -293,6 +404,13 @@ def _write_output_slot(
     output_avh: np.ndarray,
     output_bioshade: np.ndarray,
     output_ga: np.ndarray,
+    output_uu: np.ndarray,
+    output_vv: np.ndarray,
+    output_ww: np.ndarray,
+    output_NN: np.ndarray,
+    output_NNT: np.ndarray,
+    output_NNS: np.ndarray,
+    output_buoy: np.ndarray,
     output_SS: np.ndarray,
     output_P: np.ndarray,
     output_B: np.ndarray,
@@ -306,6 +424,21 @@ def _write_output_slot(
     output_as: np.ndarray,
     output_an: np.ndarray,
     output_at: np.ndarray,
+    output_gamu: np.ndarray,
+    output_gamv: np.ndarray,
+    output_gamh: np.ndarray,
+    output_gams: np.ndarray,
+    output_Rig: np.ndarray,
+    output_gamb: np.ndarray,
+    output_gam: np.ndarray,
+    output_r: np.ndarray,
+    output_taux: np.ndarray,
+    output_tauy: np.ndarray,
+    output_rad: np.ndarray,
+    output_us: np.ndarray,
+    output_vs: np.ndarray,
+    output_dusdz: np.ndarray,
+    output_dvsdz: np.ndarray,
     output_nus: np.ndarray,
     output_nucl: np.ndarray,
     output_z: np.ndarray,
@@ -313,11 +446,77 @@ def _write_output_slot(
 ) -> None:
     output_step[slot] = step
     output_time[slot] = time_value
+    output_zeta[slot] = zeta_value
+    output_u_taus[slot] = u_taus[0]
+    output_u10[slot] = u10_value
+    output_v10[slot] = v10_value
+    output_airt[slot] = airt_value
+    output_airp[slot] = airp_value
+    output_hum[slot] = hum_value
+    output_es[slot] = es_value
+    output_ea[slot] = ea_value
+    output_qs[slot] = qs_value
+    output_qa[slot] = qa_value
+    output_rhoa[slot] = rhoa_value
+    output_cloud[slot] = cloud_value
+    output_albedo[slot] = albedo_value
+    output_precip[slot] = precip_value
+    output_evap[slot] = evap_value
+    output_int_precip[slot] = int_precip_value
+    output_int_evap[slot] = int_evap_value
+    output_int_swr[slot] = int_swr_value
+    output_int_heat[slot] = int_heat_value
+    output_int_total[slot] = int_total_value
+    output_I_0[slot] = i0_value
+    output_qh[slot] = qh_value
+    output_qe[slot] = qe_value
+    output_ql[slot] = ql_value
+    output_heat[slot] = heat_value
+    output_tx[slot] = tx_surface_value
+    output_ty[slot] = ty_surface_value
+    output_sst[slot] = sst_value
+    output_sst_obs[slot] = 0.0 if sst_obs_value != sst_obs_value else sst_obs_value
+    output_sss[slot] = 0.0 if sss_value != sss_value else sss_value
+    output_mld_surf[slot] = mld_surf_value
+    output_u_taub[slot] = u_taub[0]
+    output_taub[slot] = taub[0]
+    output_mld_bott[slot] = mld_bott_value
+    output_us0[slot] = 0.0
+    output_vs0[slot] = 0.0
+    output_ds[slot] = 0.0
+    output_Ekin[slot] = ekin_value
+    output_Epot[slot] = epot_value
+    output_Eturb[slot] = eturb_value
+    if step != 0:
+        ekin = 0.0
+        epot = 0.0
+        eturb = 0.0
+        zloc = 0.0
+        for i in range(1, nlev + 1):
+            zloc -= 0.5 * h[i]
+            ekin += 0.5 * h[i] * (u[i] * u[i] + v[i] * v[i])
+            eturb += h[i] * (tke[i] + tke[i - 1])
+            epot += h[i] * buoy[i] * zloc
+            zloc -= 0.5 * h[i]
+        output_Ekin[slot] = ekin * rho0_value
+        output_Epot[slot] = epot * rho0_value
+        output_Eturb[slot] = eturb * rho0_value
     for k in range(nlev + 1):
+        output_rho_p[slot, k] = rho_p[k]
+        output_rho[slot, k] = rho_p[k]
         output_u[slot, k] = u[k]
         output_v[slot, k] = v[k]
         output_T[slot, k] = T[k]
         output_S[slot, k] = S[k]
+        output_Tp[slot, k] = Tp[k]
+        output_Ti[slot, k] = Ti[k]
+        output_Sp[slot, k] = Sp[k]
+        output_Tobs[slot, k] = Tobs[k]
+        output_Sobs[slot, k] = Sobs[k]
+        output_u_obs[slot, k] = u_obs[k]
+        output_v_obs[slot, k] = v_obs[k]
+        output_idpdx[slot, k] = idpdx[k]
+        output_idpdy[slot, k] = idpdy[k]
         output_tke[slot, k] = tke[k]
         output_eps[slot, k] = eps[k]
         output_num[slot, k] = num[k]
@@ -329,6 +528,13 @@ def _write_output_slot(
         output_avh[slot, k] = avh[k]
         output_bioshade[slot, k] = bioshade[k]
         output_ga[slot, k] = ga[k]
+        output_uu[slot, k] = uu[k]
+        output_vv[slot, k] = vv[k]
+        output_ww[slot, k] = ww[k]
+        output_NN[slot, k] = NN[k]
+        output_NNT[slot, k] = NNT[k]
+        output_NNS[slot, k] = NNS[k]
+        output_buoy[slot, k] = buoy[k]
         output_SS[slot, k] = SS[k]
         output_P[slot, k] = P[k]
         output_B[slot, k] = B[k]
@@ -342,6 +548,37 @@ def _write_output_slot(
         output_as[slot, k] = as_[k]
         output_an[slot, k] = an[k]
         output_at[slot, k] = at[k]
+        output_gamu[slot, k] = 0.0
+        output_gamv[slot, k] = 0.0
+        output_gamh[slot, k] = gamh[k]
+        output_gams[slot, k] = gams[k]
+        output_Rig[slot, k] = NN[k] / (SS[k] + 1.0e-10)
+        output_gamb[slot, k] = 0.0
+        output_gam[slot, k] = 0.0
+        output_r[slot, k] = 0.0
+        if step == 0:
+            output_taux[slot, k] = 0.0
+            output_tauy[slot, k] = 0.0
+        elif k == 0:
+            speed = math.sqrt(u[1] * u[1] + v[1] * v[1])
+            output_taux[slot, k] = -drag[1] * u[1] * speed
+            output_tauy[slot, k] = -drag[1] * v[1] * speed
+        elif k == nlev:
+            output_taux[slot, k] = -tx_surface_value
+            output_tauy[slot, k] = -ty_surface_value
+        else:
+            spacing = 0.5 * (h[k + 1] + h[k])
+            output_taux[slot, k] = (
+                -num[k] * (u[k + 1] - u[k]) / spacing - nucl[k] * dusdz[k]
+            )
+            output_tauy[slot, k] = (
+                -num[k] * (v[k + 1] - v[k]) / spacing - nucl[k] * dvsdz[k]
+            )
+        output_rad[slot, k] = rad[k]
+        output_us[slot, k] = 0.0
+        output_vs[slot, k] = 0.0
+        output_dusdz[slot, k] = dusdz[k]
+        output_dvsdz[slot, k] = dvsdz[k]
         output_nus[slot, k] = nus[k]
         output_nucl[slot, k] = nucl[k]
         output_z[slot, k] = z[k]
@@ -590,6 +827,8 @@ def time_loop_compiled(
     forcing_u10: np.ndarray,
     forcing_v10: np.ndarray,
     forcing_precip: np.ndarray,
+    forcing_sst_obs: np.ndarray,
+    forcing_sss_obs: np.ndarray,
     forcing_Tobs: np.ndarray,
     forcing_Sobs: np.ndarray,
     forcing_uprof: np.ndarray,
@@ -599,10 +838,62 @@ def time_loop_compiled(
     forcing_dvsdz: np.ndarray,
     output_step: np.ndarray,
     output_time: np.ndarray,
+    output_zeta: np.ndarray,
+    output_u_taus: np.ndarray,
+    output_u10: np.ndarray,
+    output_v10: np.ndarray,
+    output_airt: np.ndarray,
+    output_airp: np.ndarray,
+    output_hum: np.ndarray,
+    output_es: np.ndarray,
+    output_ea: np.ndarray,
+    output_qs: np.ndarray,
+    output_qa: np.ndarray,
+    output_rhoa: np.ndarray,
+    output_cloud: np.ndarray,
+    output_albedo: np.ndarray,
+    output_precip: np.ndarray,
+    output_evap: np.ndarray,
+    output_int_precip: np.ndarray,
+    output_int_evap: np.ndarray,
+    output_int_swr: np.ndarray,
+    output_int_heat: np.ndarray,
+    output_int_total: np.ndarray,
+    output_I_0: np.ndarray,
+    output_qh: np.ndarray,
+    output_qe: np.ndarray,
+    output_ql: np.ndarray,
+    output_heat: np.ndarray,
+    output_tx: np.ndarray,
+    output_ty: np.ndarray,
+    output_sst: np.ndarray,
+    output_sst_obs: np.ndarray,
+    output_sss: np.ndarray,
+    output_mld_surf: np.ndarray,
+    output_u_taub: np.ndarray,
+    output_taub: np.ndarray,
+    output_mld_bott: np.ndarray,
+    output_us0: np.ndarray,
+    output_vs0: np.ndarray,
+    output_ds: np.ndarray,
+    output_Ekin: np.ndarray,
+    output_Epot: np.ndarray,
+    output_Eturb: np.ndarray,
+    output_rho_p: np.ndarray,
+    output_rho: np.ndarray,
     output_u: np.ndarray,
     output_v: np.ndarray,
     output_T: np.ndarray,
     output_S: np.ndarray,
+    output_Tp: np.ndarray,
+    output_Ti: np.ndarray,
+    output_Sp: np.ndarray,
+    output_Tobs: np.ndarray,
+    output_Sobs: np.ndarray,
+    output_u_obs: np.ndarray,
+    output_v_obs: np.ndarray,
+    output_idpdx: np.ndarray,
+    output_idpdy: np.ndarray,
     output_tke: np.ndarray,
     output_eps: np.ndarray,
     output_num: np.ndarray,
@@ -614,6 +905,13 @@ def time_loop_compiled(
     output_avh: np.ndarray,
     output_bioshade: np.ndarray,
     output_ga: np.ndarray,
+    output_uu: np.ndarray,
+    output_vv: np.ndarray,
+    output_ww: np.ndarray,
+    output_NN: np.ndarray,
+    output_NNT: np.ndarray,
+    output_NNS: np.ndarray,
+    output_buoy: np.ndarray,
     output_SS: np.ndarray,
     output_P: np.ndarray,
     output_B: np.ndarray,
@@ -627,12 +925,27 @@ def time_loop_compiled(
     output_as: np.ndarray,
     output_an: np.ndarray,
     output_at: np.ndarray,
+    output_gamu: np.ndarray,
+    output_gamv: np.ndarray,
+    output_gamh: np.ndarray,
+    output_gams: np.ndarray,
+    output_Rig: np.ndarray,
+    output_gamb: np.ndarray,
+    output_gam: np.ndarray,
+    output_r: np.ndarray,
+    output_taux: np.ndarray,
+    output_tauy: np.ndarray,
+    output_rad: np.ndarray,
+    output_us: np.ndarray,
+    output_vs: np.ndarray,
+    output_dusdz: np.ndarray,
+    output_dvsdz: np.ndarray,
     output_nus: np.ndarray,
     output_nucl: np.ndarray,
     output_z: np.ndarray,
     output_zi: np.ndarray,
 ) -> int:
-    """Run profile-forced first- or second-order cases through a compiled timestep loop."""
+    """Run profile-forced cases through the compiled timestep loop."""
 
     if nlev < 1 or nt < 0 or dt <= 0.0 or output_every < 1:
         return -2
@@ -661,6 +974,12 @@ def time_loop_compiled(
             cmue2[0] = cmue2[1]
             cmue2[nlev] = cmue2[nlev - 1]
 
+    int_precip = 0.0
+    int_evap = 0.0
+    int_swr = 0.0
+    int_heat = 0.0
+    int_total = 0.0
+
     out_index = 0
     if output_enabled != 0:
         if out_index >= output_step.shape[0]:
@@ -670,10 +989,59 @@ def time_loop_compiled(
             0,
             0.0,
             nlev,
+            rho0,
+            forcing_zeta[0],
+            forcing_u10[0],
+            forcing_v10[0],
+            forcing_airt[0],
+            forcing_airp[0],
+            forcing_hum[0],
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            forcing_cloud[0],
+            0.0,
+            forcing_precip[0],
+            0.0,
+            int_precip,
+            int_evap,
+            int_swr,
+            int_heat,
+            int_total,
+            forcing_swr[0],
+            0.0,
+            0.0,
+            0.0,
+            forcing_heat[0],
+            forcing_tx[0],
+            forcing_ty[0],
+            0.0,
+            forcing_sst_obs[0],
+            forcing_sss_obs[0],
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            u_taus,
+            u_taub,
+            taub,
+            rho_p,
             u,
             v,
             T,
             S,
+            T,
+            T,
+            S,
+            Tobs,
+            Sobs,
+            uprof,
+            vprof,
+            idpdx,
+            idpdy,
             tke,
             eps,
             num,
@@ -685,6 +1053,13 @@ def time_loop_compiled(
             avh,
             bioshade,
             ga,
+            uu,
+            vv,
+            ww,
+            NN,
+            NNT,
+            NNS,
+            buoy,
             SS,
             P,
             B,
@@ -698,16 +1073,73 @@ def time_loop_compiled(
             as_,
             an,
             at,
+            gamh,
+            gams,
+            rad,
+            dusdz,
+            dvsdz,
             nus,
             nucl,
             z,
             zi,
             output_step,
             output_time,
+            output_zeta,
+            output_u_taus,
+            output_u10,
+            output_v10,
+            output_airt,
+            output_airp,
+            output_hum,
+            output_es,
+            output_ea,
+            output_qs,
+            output_qa,
+            output_rhoa,
+            output_cloud,
+            output_albedo,
+            output_precip,
+            output_evap,
+            output_int_precip,
+            output_int_evap,
+            output_int_swr,
+            output_int_heat,
+            output_int_total,
+            output_I_0,
+            output_qh,
+            output_qe,
+            output_ql,
+            output_heat,
+            output_tx,
+            output_ty,
+            output_sst,
+            output_sst_obs,
+            output_sss,
+            output_mld_surf,
+            output_u_taub,
+            output_taub,
+            output_mld_bott,
+            output_us0,
+            output_vs0,
+            output_ds,
+            output_Ekin,
+            output_Epot,
+            output_Eturb,
+            output_rho_p,
+            output_rho,
             output_u,
             output_v,
             output_T,
             output_S,
+            output_Tp,
+            output_Ti,
+            output_Sp,
+            output_Tobs,
+            output_Sobs,
+            output_u_obs,
+            output_v_obs,
+            output_idpdx,
+            output_idpdy,
             output_tke,
             output_eps,
             output_num,
@@ -719,6 +1151,13 @@ def time_loop_compiled(
             output_avh,
             output_bioshade,
             output_ga,
+            output_uu,
+            output_vv,
+            output_ww,
+            output_NN,
+            output_NNT,
+            output_NNS,
+            output_buoy,
             output_SS,
             output_P,
             output_B,
@@ -732,6 +1171,21 @@ def time_loop_compiled(
             output_as,
             output_an,
             output_at,
+            output_gamu,
+            output_gamv,
+            output_gamh,
+            output_gams,
+            output_Rig,
+            output_gamb,
+            output_gam,
+            output_r,
+            output_taux,
+            output_tauy,
+            output_rad,
+            output_us,
+            output_vs,
+            output_dusdz,
+            output_dvsdz,
             output_nus,
             output_nucl,
             output_z,
@@ -771,34 +1225,62 @@ def time_loop_compiled(
         if cori != 0.0:
             step_coriolis_single(nlev, cosomega, sinomega, u, v, uprof, vprof)
 
+        evap = 0.0
+        albedo = 0.0
+        es = 0.0
+        ea = 0.0
+        qs = 0.0
+        qa = 0.0
+        rhoa = 0.0
+        qh = 0.0
+        qe = 0.0
+        ql = 0.0
+        shortwave = forcing_swr[step]
+        sst_value = 0.0
+        sss_value = forcing_sss_obs[step]
         if airsea_fluxes_method == 1:
             wind_u = forcing_u10[step]
             wind_v = forcing_v10[step]
             if airsea_ssuv_method != 0:
                 wind_u -= u[nlev]
                 wind_v -= v[nlev]
-            evap, tx_surface, ty_surface, heat, shortwave, albedo = (
-                _airsea_kondo_compiled(
-                    forcing_yearday[step],
-                    forcing_secondsofday[step],
-                    latitude,
-                    longitude,
-                    airsea_hum_method,
-                    airsea_shortwave_method,
-                    airsea_albedo_method,
-                    airsea_shortwave_scale_factor,
-                    airsea_heat_scale_factor,
-                    airsea_const_albedo,
-                    T[nlev],
-                    forcing_airp[step],
-                    forcing_airt[step],
-                    forcing_hum[step],
-                    forcing_cloud[step],
-                    wind_u,
-                    wind_v,
-                    forcing_precip[step],
-                    forcing_swr[step],
-                )
+            sst_value = T[nlev]
+            sss_value = S[nlev]
+            (
+                evap,
+                tx_surface,
+                ty_surface,
+                heat,
+                shortwave,
+                albedo,
+                es,
+                ea,
+                qs,
+                qa,
+                rhoa,
+                qh,
+                qe,
+                ql,
+            ) = _airsea_kondo_compiled(
+                forcing_yearday[step],
+                forcing_secondsofday[step],
+                latitude,
+                longitude,
+                airsea_hum_method,
+                airsea_shortwave_method,
+                airsea_albedo_method,
+                airsea_shortwave_scale_factor,
+                airsea_heat_scale_factor,
+                airsea_const_albedo,
+                T[nlev],
+                forcing_airp[step],
+                forcing_airt[step],
+                forcing_hum[step],
+                forcing_cloud[step],
+                wind_u,
+                wind_v,
+                forcing_precip[step],
+                forcing_swr[step],
             )
             tx_value = tx_surface / rho0
             ty_value = ty_surface / rho0
@@ -811,28 +1293,43 @@ def time_loop_compiled(
             if airsea_ssuv_method != 0:
                 wind_u -= u[nlev]
                 wind_v -= v[nlev]
-            evap, tx_surface, ty_surface, heat, shortwave, albedo = (
-                _airsea_fairall_compiled(
-                    forcing_yearday[step],
-                    forcing_secondsofday[step],
-                    latitude,
-                    longitude,
-                    airsea_hum_method,
-                    airsea_shortwave_method,
-                    airsea_albedo_method,
-                    airsea_shortwave_scale_factor,
-                    airsea_heat_scale_factor,
-                    airsea_const_albedo,
-                    T[nlev],
-                    forcing_airp[step],
-                    forcing_airt[step],
-                    forcing_hum[step],
-                    forcing_cloud[step],
-                    wind_u,
-                    wind_v,
-                    forcing_precip[step],
-                    forcing_swr[step],
-                )
+            sst_value = T[nlev]
+            sss_value = S[nlev]
+            (
+                evap,
+                tx_surface,
+                ty_surface,
+                heat,
+                shortwave,
+                albedo,
+                es,
+                ea,
+                qs,
+                qa,
+                rhoa,
+                qh,
+                qe,
+                ql,
+            ) = _airsea_fairall_compiled(
+                forcing_yearday[step],
+                forcing_secondsofday[step],
+                latitude,
+                longitude,
+                airsea_hum_method,
+                airsea_shortwave_method,
+                airsea_albedo_method,
+                airsea_shortwave_scale_factor,
+                airsea_heat_scale_factor,
+                airsea_const_albedo,
+                T[nlev],
+                forcing_airp[step],
+                forcing_airt[step],
+                forcing_hum[step],
+                forcing_cloud[step],
+                wind_u,
+                wind_v,
+                forcing_precip[step],
+                forcing_swr[step],
             )
             tx_value = tx_surface / rho0
             ty_value = ty_surface / rho0
@@ -840,6 +1337,8 @@ def time_loop_compiled(
             shf = -heat
             current_i0 = shortwave * (1.0 - albedo)
         else:
+            tx_surface = forcing_tx[step]
+            ty_surface = forcing_ty[step]
             tx_value = forcing_tx[step] / rho0
             ty_value = forcing_ty[step] / rho0
             heat = forcing_heat[step]
@@ -850,6 +1349,11 @@ def time_loop_compiled(
         tx[0] = tx_value
         ty[0] = ty_value
         ssf = S[nlev] * swf
+        int_precip += forcing_precip[step] * dt
+        int_evap += evap * dt
+        int_swr += current_i0 * dt
+        int_heat += heat * dt
+        int_total += (heat + current_i0) * dt
 
         relax_factor = 1.0
         elapsed = step * dt
@@ -1346,10 +1850,59 @@ def time_loop_compiled(
                 step,
                 step * dt,
                 nlev,
+                rho0,
+                forcing_zeta[step],
+                forcing_u10[step],
+                forcing_v10[step],
+                forcing_airt[step],
+                forcing_airp[step],
+                forcing_hum[step],
+                es,
+                ea,
+                qs,
+                qa,
+                rhoa,
+                forcing_cloud[step],
+                albedo,
+                forcing_precip[step],
+                evap,
+                int_precip,
+                int_evap,
+                int_swr,
+                int_heat,
+                int_total,
+                current_i0,
+                qh,
+                qe,
+                ql,
+                heat,
+                tx_value,
+                ty_value,
+                sst_value,
+                forcing_sst_obs[step],
+                sss_value,
+                depth,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                u_taus,
+                u_taub,
+                taub,
+                rho_p,
                 u,
                 v,
                 T,
                 S,
+                T,
+                T,
+                S,
+                Tobs,
+                Sobs,
+                uprof,
+                vprof,
+                idpdx,
+                idpdy,
                 tke,
                 eps,
                 num,
@@ -1361,6 +1914,13 @@ def time_loop_compiled(
                 avh,
                 bioshade,
                 ga,
+                uu,
+                vv,
+                ww,
+                NN,
+                NNT,
+                NNS,
+                buoy,
                 SS,
                 P,
                 B,
@@ -1374,16 +1934,73 @@ def time_loop_compiled(
                 as_,
                 an,
                 at,
+                gamh,
+                gams,
+                rad,
+                dusdz,
+                dvsdz,
                 nus,
                 nucl,
                 z,
                 zi,
                 output_step,
                 output_time,
+                output_zeta,
+                output_u_taus,
+                output_u10,
+                output_v10,
+                output_airt,
+                output_airp,
+                output_hum,
+                output_es,
+                output_ea,
+                output_qs,
+                output_qa,
+                output_rhoa,
+                output_cloud,
+                output_albedo,
+                output_precip,
+                output_evap,
+                output_int_precip,
+                output_int_evap,
+                output_int_swr,
+                output_int_heat,
+                output_int_total,
+                output_I_0,
+                output_qh,
+                output_qe,
+                output_ql,
+                output_heat,
+                output_tx,
+                output_ty,
+                output_sst,
+                output_sst_obs,
+                output_sss,
+                output_mld_surf,
+                output_u_taub,
+                output_taub,
+                output_mld_bott,
+                output_us0,
+                output_vs0,
+                output_ds,
+                output_Ekin,
+                output_Epot,
+                output_Eturb,
+                output_rho_p,
+                output_rho,
                 output_u,
                 output_v,
                 output_T,
                 output_S,
+                output_Tp,
+                output_Ti,
+                output_Sp,
+                output_Tobs,
+                output_Sobs,
+                output_u_obs,
+                output_v_obs,
+                output_idpdx,
+                output_idpdy,
                 output_tke,
                 output_eps,
                 output_num,
@@ -1395,6 +2012,13 @@ def time_loop_compiled(
                 output_avh,
                 output_bioshade,
                 output_ga,
+                output_uu,
+                output_vv,
+                output_ww,
+                output_NN,
+                output_NNT,
+                output_NNS,
+                output_buoy,
                 output_SS,
                 output_P,
                 output_B,
@@ -1408,6 +2032,21 @@ def time_loop_compiled(
                 output_as,
                 output_an,
                 output_at,
+                output_gamu,
+                output_gamv,
+                output_gamh,
+                output_gams,
+                output_Rig,
+                output_gamb,
+                output_gam,
+                output_r,
+                output_taux,
+                output_tauy,
+                output_rad,
+                output_us,
+                output_vs,
+                output_dusdz,
+                output_dvsdz,
                 output_nus,
                 output_nucl,
                 output_z,
@@ -1416,8 +2055,6 @@ def time_loop_compiled(
             out_index += 1
 
     return out_index
-
-
 
 
 def run_compiled_time_loop(
@@ -1676,6 +2313,8 @@ def run_compiled_time_loop(
             forcing.u10,
             forcing.v10,
             forcing.precip,
+            forcing.sst_obs,
+            forcing.sss_obs,
             forcing.Tobs,
             forcing.Sobs,
             forcing.uprof,
@@ -1685,10 +2324,62 @@ def run_compiled_time_loop(
             forcing.dvsdz,
             output.output_step,
             output.time,
+            output.zeta,
+            output.u_taus,
+            output.u10,
+            output.v10,
+            output.airt,
+            output.airp,
+            output.hum,
+            output.es,
+            output.ea,
+            output.qs,
+            output.qa,
+            output.rhoa,
+            output.cloud,
+            output.albedo,
+            output.precip,
+            output.evap,
+            output.int_precip,
+            output.int_evap,
+            output.int_swr,
+            output.int_heat,
+            output.int_total,
+            output.I_0,
+            output.qh,
+            output.qe,
+            output.ql,
+            output.heat,
+            output.tx,
+            output.ty,
+            output.sst,
+            output.sst_obs,
+            output.sss,
+            output.mld_surf,
+            output.u_taub,
+            output.taub,
+            output.mld_bott,
+            output.us0,
+            output.vs0,
+            output.ds,
+            output.Ekin,
+            output.Epot,
+            output.Eturb,
+            output.rho_p,
+            output.rho,
             output.u,
             output.v,
             output.T,
             output.S,
+            output.Tp,
+            output.Ti,
+            output.Sp,
+            output.Tobs,
+            output.Sobs,
+            output.u_obs,
+            output.v_obs,
+            output.idpdx,
+            output.idpdy,
             output.tke,
             output.eps,
             output.num,
@@ -1700,6 +2391,13 @@ def run_compiled_time_loop(
             output.avh,
             output.bioshade,
             output.ga,
+            output.uu,
+            output.vv,
+            output.ww,
+            output.NN,
+            output.NNT,
+            output.NNS,
+            output.buoy,
             output.SS,
             output.P,
             output.B,
@@ -1713,6 +2411,21 @@ def run_compiled_time_loop(
             output.as_,
             output.an,
             output.at,
+            output.gamu,
+            output.gamv,
+            output.gamh,
+            output.gams,
+            output.Rig,
+            output.gamb,
+            output.gam,
+            output.r,
+            output.taux,
+            output.tauy,
+            output.rad,
+            output.us,
+            output.vs,
+            output.dusdz,
+            output.dvsdz,
             output.nus,
             output.nucl,
             output.z,
@@ -1962,10 +2675,9 @@ def _solar_zenith_angle_compiled(
         + 0.001480 * math.sin(th03)
     )
     thsun = (hour - 12.0) * 15.0 * DEG_TO_RAD + rlon
-    coszen = (
-        math.sin(rlat) * math.sin(sundec)
-        + math.cos(rlat) * math.cos(sundec) * math.cos(thsun)
-    )
+    coszen = math.sin(rlat) * math.sin(sundec) + math.cos(rlat) * math.cos(
+        sundec
+    ) * math.cos(thsun)
     if coszen < 0.0:
         coszen = 0.0
     return RAD_TO_DEG * math.acos(coszen)
@@ -2123,12 +2835,27 @@ def _airsea_kondo_compiled(
     v10: float,
     precip: float,
     prescribed_shortwave: float,
-) -> tuple[float, float, float, float, float, float]:
+) -> tuple[
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+]:
     tw = sst if sst < 100.0 else sst - _KELVIN
     tw_k = sst + _KELVIN if sst < 100.0 else sst
     ta = airt if airt < 100.0 else airt - _KELVIN
     ta_k = airt + _KELVIN if airt < 100.0 else airt
-    _es, ea, qs, qa, rhoa = _humidity_compiled(hum_method, hum, airp, tw, ta)
+    es, ea, qs, qa, rhoa = _humidity_compiled(hum_method, hum, airp, tw, ta)
     ql = _longwave_clark_compiled(latitude, tw_k, ta_k, cloud, ea)
     evap, taux, tauy, qe, qh = _kondo_compiled(tw, ta, u10, v10, precip, qs, qa, rhoa)
     shortwave = prescribed_shortwave
@@ -2149,7 +2876,22 @@ def _airsea_kondo_compiled(
     else:
         albedo = 0.0
     heat = (ql + qe + qh) * heat_scale_factor
-    return evap, taux, tauy, heat, shortwave, albedo
+    return (
+        evap,
+        taux,
+        tauy,
+        heat,
+        shortwave,
+        albedo,
+        es,
+        ea,
+        qs,
+        qa,
+        rhoa,
+        qh,
+        qe,
+        ql,
+    )
 
 
 @numba.njit(cache=True, fastmath=False)
@@ -2202,13 +2944,28 @@ def _airsea_fairall_compiled(
     v10: float,
     precip: float,
     prescribed_shortwave: float,
-) -> tuple[float, float, float, float, float, float]:
+) -> tuple[
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+]:
     """Fairall COARE bulk flux kernel — Fairall et al. (1996), Liu et al. (1979)."""
     tw = sst if sst < 100.0 else sst - _KELVIN
     tw_k = sst + _KELVIN if sst < 100.0 else sst
     ta = airt if airt < 100.0 else airt - _KELVIN
     ta_k = airt + _KELVIN if airt < 100.0 else airt
-    _es, ea, qs, qa, rhoa = _humidity_compiled(hum_method, hum, airp, tw, ta)
+    es, ea, qs, qa, rhoa = _humidity_compiled(hum_method, hum, airp, tw, ta)
     ql = _longwave_clark_compiled(latitude, tw_k, ta_k, cloud, ea)
 
     evap = 0.0
@@ -2289,10 +3046,7 @@ def _airsea_fairall_compiled(
                 cd = wstar * wstar / (wspeed * wspeed)
                 qh = _CPA * rhoa * wstar * tstar
                 qe = latent_heat * rhoa * wstar * qstar
-                upvel = (
-                    -1.61 * wstar * qstar
-                    - (1.0 + 1.61 * qa) * wstar * tstar / ta_k
-                )
+                upvel = -1.61 * wstar * qstar - (1.0 + 1.61 * qa) * wstar * tstar / ta_k
                 qe = qe - rhoa * latent_heat * upvel * qa
                 cff = rhoa * cd * wspeed
                 taux = cff * u10
@@ -2316,7 +3070,22 @@ def _airsea_fairall_compiled(
     else:
         albedo = 0.0
     heat = (ql + qe + qh) * heat_scale_factor
-    return evap, taux, tauy, heat, shortwave, albedo
+    return (
+        evap,
+        taux,
+        tauy,
+        heat,
+        shortwave,
+        albedo,
+        es,
+        ea,
+        qs,
+        qa,
+        rhoa,
+        qh,
+        qe,
+        ql,
+    )
 
 
 @numba.njit(cache=True, fastmath=False)
@@ -2514,16 +3283,16 @@ def step_turbulence_first_order_single(
         0,
         tke,
         eps,
-        tke,      # kb placeholder — first_order doesn't track kb
+        tke,  # kb placeholder — first_order doesn't track kb
         NN,
         SS,
-        SSCSTK,   # unused (has_sscstk=0)
-        SSSTK,    # unused (has_ssstk=0)
-        as_,      # correct output array
-        an,       # correct output array
-        work_avh, # at scratch — first_order doesn't use at
-        work_avh, # av scratch
-        work_avh, # aw scratch
+        SSCSTK,  # unused (has_sscstk=0)
+        SSSTK,  # unused (has_ssstk=0)
+        as_,  # correct output array
+        an,  # correct output array
+        work_avh,  # at scratch — first_order doesn't use at
+        work_avh,  # av scratch
+        work_avh,  # aw scratch
     )
     # First-order stability functions
     for k in range(nlev + 1):
