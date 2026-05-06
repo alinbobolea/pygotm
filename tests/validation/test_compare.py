@@ -63,14 +63,37 @@ def test_shape_mismatch_fails(tmp_path: Path) -> None:
     assert math.isinf(results[0].max_abs_err)
 
 
-def test_missing_variable_is_skipped(tmp_path: Path) -> None:
+def test_missing_reference_variable_fails(tmp_path: Path) -> None:
     _write_nc(tmp_path / "py.nc", {"u": np.ones(10)})
     _write_nc(tmp_path / "ref.nc", {"u": np.ones(10), "v": np.ones(10)})
     results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc")
     by_name = {r.name: r for r in results}
     assert by_name["u"].status == "PASS"
-    assert by_name["v"].status == "SKIP"
-    assert math.isnan(by_name["v"].max_abs_err)
+    assert by_name["v"].status == "FAIL"
+    assert math.isinf(by_name["v"].max_abs_err)
+
+
+def test_extra_pygotm_variable_fails_structure_parity(tmp_path: Path) -> None:
+    _write_nc(tmp_path / "py.nc", {"u": np.ones(10), "extra": np.ones(10)})
+    _write_nc(tmp_path / "ref.nc", {"u": np.ones(10)})
+    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc")
+    by_name = {r.name: r for r in results}
+    assert by_name["u"].status == "PASS"
+    assert by_name["extra"].status == "FAIL"
+
+
+def test_dimension_name_mismatch_fails_structure_parity(tmp_path: Path) -> None:
+    xr.Dataset({"u": (["time"], np.ones(10))}).to_netcdf(
+        tmp_path / "py.nc",
+        engine="scipy",
+    )
+    xr.Dataset({"u": (["t"], np.ones(10))}).to_netcdf(
+        tmp_path / "ref.nc",
+        engine="scipy",
+    )
+    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc")
+    assert results[0].status == "FAIL"
+    assert math.isinf(results[0].max_abs_err)
 
 
 def test_rmse_computed_correctly(tmp_path: Path) -> None:

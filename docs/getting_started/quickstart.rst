@@ -28,7 +28,7 @@ Run from the Command Line
    # Run the built-in validation suite for a specific case
    pygotm validate --case couette
 
-   # Benchmark the compiled runtime (records timing to JSON)
+   # Benchmark the compiled runtime (prints timing to the terminal)
    pygotm benchmark --cases couette,channel
 
 Suppress Output (no-output integration)

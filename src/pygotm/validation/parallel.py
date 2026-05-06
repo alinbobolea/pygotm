@@ -9,6 +9,7 @@ from pathlib import Path
 
 from dask.distributed import Client, LocalCluster, as_completed
 
+from pygotm.validate import resolve_reference_case
 from pygotm.validation.report import CaseResult
 from pygotm.validation.runner import validate_case
 
@@ -47,7 +48,8 @@ def _run_case_worker(
     """
     _ = arch_name
 
-    progress_path = runs_dir / case_name / ".progress"
+    case = resolve_reference_case(case_name)
+    progress_path = runs_dir / case.run_name / ".progress"
     on_step = _make_step_writer(progress_path) if not skip_run else None
     try:
         return validate_case(case_name, runs_dir, skip_run=skip_run, on_step=on_step)
@@ -71,6 +73,7 @@ def run_cases_parallel(
     Calls *on_result* as each case completes (arrival order).
     """
     n_workers = max(1, min(n_workers, len(case_names)))
+    cases = [resolve_reference_case(name) for name in case_names]
 
     logging.getLogger("distributed").setLevel(logging.CRITICAL)
 
@@ -87,21 +90,21 @@ def run_cases_parallel(
         futures = {
             client.submit(
                 _run_case_worker,
-                name,
+                case_names[index],
                 runs_dir,
                 arch_name,
                 skip_run,
-                key=f"validate-{name}",
-            ): name
-            for name in case_names
+                key=case.task_name,
+            ): index
+            for index, case in enumerate(cases)
         }
 
-        result_map: dict[str, CaseResult] = {}
+        result_map: dict[int, CaseResult] = {}
         for future in as_completed(futures):  # type: ignore[no-untyped-call]
-            case_name = futures[future]
+            index = futures[future]
             result = future.result()
-            result_map[case_name] = result
+            result_map[index] = result
             if on_result is not None:
                 on_result(result)
 
-    return [result_map[name] for name in case_names]
+    return [result_map[index] for index in range(len(case_names))]

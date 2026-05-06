@@ -45,15 +45,16 @@ Output files:
 Benchmark Mode
 --------------
 
-To measure wall-clock performance without validation comparison:
+To measure wall-clock performance without writing validation artifacts:
 
 .. code-block:: bash
 
-   pygotm benchmark --cases couette,channel --warmup 1 --repeat 5
+   pygotm benchmark --cases couette,channel --no-validate
 
 The first run pays Numba JIT compilation cost.  Subsequent runs use the
-cached compiled code.  Benchmark results are written to
-``validation/benchmarks/``.
+cached compiled code.  Benchmark results are printed to the terminal by default.
+Use ``--output-dir`` only when an explicit aggregate JSON timing artifact is
+needed.
 
 Validation API
 --------------

@@ -9,23 +9,30 @@ from unittest.mock import patch
 import numpy as np
 import xarray as xr
 
+from pygotm.validate import ValidationCase
 from pygotm.validation.runner import validate_case
 
 
+def _fake_case(
+    tmp_path: Path,
+    *,
+    name: str = "couette",
+    ref_path: Path | None = None,
+    yaml_path: Path | None = None,
+) -> ValidationCase:
+    return ValidationCase(
+        name=name,
+        directory=tmp_path / name,
+        yaml_path=yaml_path or tmp_path / "gotm.yaml",
+        reference_path=ref_path or tmp_path / "ref.nc",
+    )
+
+
 def test_validate_case_skip_run_missing_nc_returns_error(tmp_path: Path) -> None:
-    with ExitStack() as stack:
-        stack.enter_context(
-            patch(
-                "pygotm.validation.runner._ref_path",
-                return_value=tmp_path / "ref.nc",
-            )
-        )
-        stack.enter_context(
-            patch(
-                "pygotm.validation.runner._yaml_path",
-                return_value=tmp_path / "gotm.yaml",
-            )
-        )
+    with patch(
+        "pygotm.validate.resolve_reference_case",
+        return_value=_fake_case(tmp_path),
+    ):
         result = validate_case("couette", tmp_path / "runs", skip_run=True)
     assert result.status == "ERROR"
     assert "not found" in (result.error or "").lower()
@@ -44,16 +51,10 @@ def test_validate_case_skip_run_existing_nc(tmp_path: Path) -> None:
     ref_nc = tmp_path / "ref.nc"
     ds.to_netcdf(ref_nc, engine="scipy")
 
-    with ExitStack() as stack:
-        stack.enter_context(
-            patch("pygotm.validation.runner._ref_path", return_value=ref_nc)
-        )
-        stack.enter_context(
-            patch(
-                "pygotm.validation.runner._yaml_path",
-                return_value=tmp_path / "gotm.yaml",
-            )
-        )
+    with patch(
+        "pygotm.validate.resolve_reference_case",
+        return_value=_fake_case(tmp_path, ref_path=ref_nc),
+    ):
         result = validate_case("couette", runs_dir, skip_run=True)
 
     assert result.status == "PASS"
@@ -70,7 +71,7 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
     arr = np.linspace(0.0, 1.0, 10)
     # u: present in both, identical → PASS
     # v: present in both, large error → FAIL
-    # w: only in ref → SKIP
+    # w: only in ref → FAIL; pyGOTM must emit every Fortran reference variable.
     py_ds  = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr + 1000.0)})
     ref_ds = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr), "w": (["t"], arr)})
 
@@ -78,21 +79,15 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
     ref_nc = tmp_path / "ref.nc"
     ref_ds.to_netcdf(ref_nc, engine="scipy")
 
-    with ExitStack() as stack:
-        stack.enter_context(
-            patch("pygotm.validation.runner._ref_path", return_value=ref_nc)
-        )
-        stack.enter_context(
-            patch(
-                "pygotm.validation.runner._yaml_path",
-                return_value=tmp_path / "gotm.yaml",
-            )
-        )
+    with patch(
+        "pygotm.validate.resolve_reference_case",
+        return_value=_fake_case(tmp_path, ref_path=ref_nc),
+    ):
         result = validate_case("couette", runs_dir, skip_run=True)
 
     assert result.n_pass == 1
-    assert result.n_fail == 1
-    assert result.n_skip == 1
+    assert result.n_fail == 2
+    assert result.n_skip == 0
     assert result.status == "FAIL"
 
 
@@ -123,7 +118,10 @@ def test_validate_case_threads_on_step_to_run_case(tmp_path: Path) -> None:
             patch("pygotm.validation.runner.run_case", side_effect=fake_run_case)
         )
         stack.enter_context(
-            patch("pygotm.validation.runner._ref_path", return_value=ref_nc)
+            patch(
+                "pygotm.validate.resolve_reference_case",
+                return_value=_fake_case(tmp_path, ref_path=ref_nc),
+            )
         )
         validate_case("couette", tmp_path, skip_run=False, on_step=capture)
 
@@ -143,7 +141,10 @@ def test_validate_case_run_exception_returns_error(tmp_path: Path) -> None:
             )
         )
         stack.enter_context(
-            patch("pygotm.validation.runner._ref_path", return_value=ref_nc)
+            patch(
+                "pygotm.validate.resolve_reference_case",
+                return_value=_fake_case(tmp_path, ref_path=ref_nc),
+            )
         )
         result = validate_case("couette", tmp_path, skip_run=False)
 

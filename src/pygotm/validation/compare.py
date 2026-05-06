@@ -19,13 +19,26 @@ ATOL: float = 1.0e-12
 @dataclass
 class VarResult:
     name: str
-    status: Literal["PASS", "FAIL", "SKIP"]
+    status: Literal["PASS", "FAIL"]
     ref_at_worst: float
     calc_at_worst: float
     max_abs_err: float
     max_rel_err: float
     rmse: float
     nrmse: float
+
+
+def _failed_structure_result(name: str) -> VarResult:
+    return VarResult(
+        name=name,
+        status="FAIL",
+        ref_at_worst=float("nan"),
+        calc_at_worst=float("nan"),
+        max_abs_err=float("inf"),
+        max_rel_err=float("inf"),
+        rmse=float("inf"),
+        nrmse=float("inf"),
+    )
 
 
 def compare_nc(
@@ -40,9 +53,6 @@ def compare_nc(
     try:
         ref_ds = open_validation_dataset(ref_path)
         try:
-            py_ds = py_ds.squeeze(drop=True)
-            ref_ds = ref_ds.squeeze(drop=True)
-
             ref_vars = numeric_variable_names(ref_ds)
             py_vars = {
                 str(name)
@@ -53,25 +63,18 @@ def compare_nc(
             results: list[VarResult] = []
             for name in ref_vars:
                 if name not in py_vars:
-                    results.append(VarResult(
-                        name=name, status="SKIP",
-                        ref_at_worst=float("nan"), calc_at_worst=float("nan"),
-                        max_abs_err=float("nan"), max_rel_err=float("nan"),
-                        rmse=float("nan"), nrmse=float("nan"),
-                    ))
+                    results.append(_failed_structure_result(name))
+                    continue
+
+                if (
+                    py_ds[name].dims != ref_ds[name].dims
+                    or py_ds[name].shape != ref_ds[name].shape
+                ):
+                    results.append(_failed_structure_result(name))
                     continue
 
                 ref_arr = np.asarray(ref_ds[name].values, dtype=np.float64).ravel()
-                py_arr  = np.asarray(py_ds[name].values,  dtype=np.float64).ravel()
-
-                if ref_arr.shape != py_arr.shape:
-                    results.append(VarResult(
-                        name=name, status="FAIL",
-                        ref_at_worst=float("nan"), calc_at_worst=float("nan"),
-                        max_abs_err=float("inf"), max_rel_err=float("inf"),
-                        rmse=float("inf"), nrmse=float("inf"),
-                    ))
-                    continue
+                py_arr = np.asarray(py_ds[name].values, dtype=np.float64).ravel()
 
                 abs_err = np.abs(py_arr - ref_arr)
                 worst_i = int(np.argmax(abs_err))
@@ -97,6 +100,9 @@ def compare_nc(
                     max_abs_err=max_abs, max_rel_err=max_rel,
                     rmse=rmse, nrmse=nrmse,
                 ))
+
+            for name in sorted(py_vars.difference(ref_vars)):
+                results.append(_failed_structure_result(name))
         finally:
             ref_ds.close()
     finally:

@@ -108,6 +108,16 @@ def test_driver_run_returns_dataset_with_expected_axes_and_metadata(
     assert np.isfinite(dataset["tke"].values).all()
 
 
+def test_driver_accepts_custom_yaml_filename(tmp_path: Path) -> None:
+    config_path = tmp_path / "custom_input.yaml"
+    _write_short_couette_config(config_path)
+
+    dataset = GotmDriver(config_path).run(max_steps=1)
+
+    assert Path(str(dataset.attrs["source_yaml"])) == config_path.resolve()
+    assert dataset.attrs["runtime"] == "compiled"
+
+
 def test_driver_run_writes_netcdf_output(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
     output_path = tmp_path / "output" / "result.nc"

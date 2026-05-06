@@ -156,9 +156,9 @@ def test_couette_driver_advances_velocity_and_turbulence() -> None:
 def test_full_case_matches_reference(case_name: str) -> None:
     """Release gate: full simulation must pass rtol=5e-6 against Fortran GOTM.
 
-    Compares all variables that pyGOTM outputs against the Fortran reference.
-    Variables present only in the reference (unimplemented features such as
-    FABM biogeochemistry or ice model) are skipped and reported separately.
+    Compares every numeric variable in the Fortran reference. Missing pyGOTM
+    outputs are validation failures because release parity requires matching
+    NetCDF structure and content.
 
     Run with:  uv run pytest -m slow tests/integration/
     """
@@ -169,42 +169,10 @@ def test_full_case_matches_reference(case_name: str) -> None:
     expected = open_reference_dataset(case)
 
     try:
-        # Compare only the intersection: variables that pyGOTM actually outputs.
-        # Variables absent from pyGOTM (FABM, ice model) are unimplemented features,
-        # not wrong answers — do not count them as failures.
-        actual_var_names = {
-            str(n)
-            for n, da in actual.data_vars.items()
-            if np.issubdtype(da.dtype, np.number)
-        }
-        expected_var_names = tuple(
-            str(n)
-            for n, da in expected.data_vars.items()
-            if np.issubdtype(da.dtype, np.number)
-        )
-        shared_vars = tuple(v for v in expected_var_names if v in actual_var_names)
-        unimplemented = [v for v in expected_var_names if v not in actual_var_names]
-
-        comparison = compare_datasets(
-            actual, expected, rtol=5e-6, atol=1e-12, variables=shared_vars
-        )
+        comparison = compare_datasets(actual, expected, rtol=5e-6, atol=1e-12)
     finally:
         actual.close()
         expected.close()
-
-    if unimplemented:
-        # Not a failure — just informational
-        suffix = (
-            f" ... ({len(unimplemented) - 5} more)"
-            if len(unimplemented) > 5
-            else ""
-        )
-        print(
-            f"\n[INFO] {case_name}: "
-            f"{len(unimplemented)} reference variable(s) not compared "
-            f"(unimplemented): {', '.join(unimplemented[:5])}"
-            + suffix
-        )
 
     if comparison.failures:
         details = "; ".join(

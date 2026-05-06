@@ -57,6 +57,26 @@ class ValidationCase:
     yaml_path: Path
     reference_path: Path
 
+    @property
+    def yaml_base(self) -> str:
+        """Base name of the selected GOTM YAML input file."""
+
+        return self.yaml_path.stem
+
+    @property
+    def task_name(self) -> str:
+        """Dask task name for this case/input pair."""
+
+        return f"{self.name}-{self.yaml_base}"
+
+    @property
+    def run_name(self) -> str:
+        """Validation output name, preserving legacy paths for gotm.yaml cases."""
+
+        if self.yaml_base == "gotm":
+            return self.name
+        return self.task_name
+
 
 @dataclass(frozen=True)
 class ValidationFailure:
@@ -100,6 +120,83 @@ def _select_reference_output(case_dir: Path) -> Path:
     return max(candidates, key=lambda path: (path.stat().st_size, path.name))
 
 
+def _split_case_spec(
+    case_name: str,
+    yaml_file: str | Path | None,
+) -> tuple[str, str | Path | None]:
+    if yaml_file is not None:
+        return case_name, yaml_file
+
+    for separator in ("/", ":"):
+        if separator in case_name:
+            case_part, yaml_part = case_name.split(separator, 1)
+            if case_part and yaml_part:
+                return case_part, yaml_part
+
+    return case_name, None
+
+
+def _yaml_file_candidates(case_dir: Path, yaml_file: str | Path) -> tuple[Path, ...]:
+    requested = Path(yaml_file)
+    path = requested if requested.is_absolute() else case_dir / requested
+    if path.suffix:
+        return (path,)
+    return (
+        path.with_suffix(".yaml"),
+        path.with_suffix(".yml"),
+        path,
+    )
+
+
+def _select_case_yaml(
+    case_dir: Path,
+    case_name: str,
+    yaml_file: str | Path | None,
+) -> Path:
+    if yaml_file is not None:
+        for candidate in _yaml_file_candidates(case_dir, yaml_file):
+            if candidate.is_file():
+                return candidate.resolve()
+        tried = ", ".join(
+            str(path) for path in _yaml_file_candidates(case_dir, yaml_file)
+        )
+        msg = (
+            f"missing YAML input file {str(yaml_file)!r} for case "
+            f"{case_name!r}; tried {tried}"
+        )
+        raise FileNotFoundError(msg)
+
+    preferred = case_dir / "gotm.yaml"
+    if preferred.is_file():
+        return preferred.resolve()
+
+    preferred_yml = case_dir / "gotm.yml"
+    if preferred_yml.is_file():
+        return preferred_yml.resolve()
+
+    all_yaml = sorted(
+        path
+        for suffix in ("*.yaml", "*.yml")
+        for path in case_dir.glob(suffix)
+        if path.name not in {"fabm.yaml", "fabm.yml", "output.yaml", "output.yml"}
+    )
+    gotm_yaml = [path for path in all_yaml if path.stem.startswith("gotm")]
+    if len(gotm_yaml) == 1:
+        return gotm_yaml[0].resolve()
+    if len(all_yaml) == 1:
+        return all_yaml[0].resolve()
+
+    if not all_yaml:
+        msg = f"missing GOTM YAML input file for case {case_name!r} under {case_dir}"
+    else:
+        names = ", ".join(path.name for path in all_yaml)
+        msg = (
+            f"multiple GOTM YAML input files found for case {case_name!r} "
+            f"under {case_dir}: {names}; specify one explicitly"
+        )
+    raise FileNotFoundError(msg)
+
+
 def _open_dataset(path: Path) -> xr.Dataset:
     scipy_error: Exception | None = None
     try:
@@ -135,18 +232,17 @@ def open_validation_dataset(path: Path) -> xr.Dataset:
 def resolve_reference_case(
     case_name: str,
     *,
+    yaml_file: str | Path | None = None,
     cases_root: Path | None = None,
 ) -> ValidationCase:
+    case_name, yaml_file = _split_case_spec(case_name, yaml_file)
     root = _cases_root(cases_root)
     case_dir = root / case_name
     if not case_dir.is_dir():
         msg = f"unknown GOTM reference case {case_name!r} under {root}"
         raise FileNotFoundError(msg)
 
-    yaml_path = case_dir / "gotm.yaml"
-    if not yaml_path.is_file():
-        msg = f"missing gotm.yaml for case {case_name!r} at {yaml_path}"
-        raise FileNotFoundError(msg)
+    yaml_path = _select_case_yaml(case_dir, case_name, yaml_file)
 
     return ValidationCase(
         name=case_name,
@@ -210,18 +306,33 @@ def compare_datasets(
 
     for name in variable_names:
         if name not in actual.data_vars:
-            msg = f"actual dataset is missing required variable {name!r}"
-            raise KeyError(msg)
+            failures.append(
+                ValidationFailure(
+                    variable=name,
+                    index=(),
+                    max_abs_error=float("inf"),
+                    max_rel_error=float("inf"),
+                    actual_value=float("nan"),
+                    expected_value=float("nan"),
+                )
+            )
+            continue
 
         expected_values = _normalized_numeric_values(expected, name)
         actual_values = _normalized_numeric_values(actual, name)
 
         if actual_values.shape != expected_values.shape:
-            msg = (
-                f"shape mismatch for {name!r}: "
-                f"{actual_values.shape} != {expected_values.shape}"
+            failures.append(
+                ValidationFailure(
+                    variable=name,
+                    index=(),
+                    max_abs_error=float("inf"),
+                    max_rel_error=float("inf"),
+                    actual_value=float("nan"),
+                    expected_value=float("nan"),
+                )
             )
-            raise ValueError(msg)
+            continue
 
         abs_error = np.abs(actual_values - expected_values)
         finite_expected = expected_values[np.isfinite(expected_values)]

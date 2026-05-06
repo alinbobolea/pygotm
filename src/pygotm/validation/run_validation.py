@@ -180,7 +180,10 @@ def _make_on_result(
 @click.command()
 @click.option(
     "--cases", default=None, show_default=False,
-    help="Comma-separated cases. Defaults to couette,channel,entrainment.",
+    help=(
+        "Comma-separated cases or case/input-yaml-base specs. "
+        "Defaults to couette,channel,entrainment."
+    ),
 )
 @click.option(
     "--all", "run_all", is_flag=True,

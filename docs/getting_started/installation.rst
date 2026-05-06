@@ -41,7 +41,7 @@ benchmarking:
 
 .. code-block:: bash
 
-   pygotm benchmark --case couette --warmup 1 --repeat 1
+   pygotm benchmark --cases couette
 
 The first run pays the compilation cost; subsequent runs are fast.
 

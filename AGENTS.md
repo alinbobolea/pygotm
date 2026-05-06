@@ -64,6 +64,10 @@ compiler needed.
    from the same artifact. Parity case execution must use the Numba compiled
    runtime; unsupported compiled configurations fail explicitly instead of
    falling back to the legacy Python timestep loop.
+   Parity means exact NetCDF structure and content: every numeric variable in
+   the Fortran case output must be produced by pyGOTM with matching dimensions,
+   shape, and values. Missing, extra, or structurally different variables are
+   `FAIL` results; validation reports must not use parameter-level `SKIP`.
 
 ## Performance Goals
 | Scenario | Target |
@@ -684,10 +688,12 @@ For each case:
 1. Load YAML config from `gotm-model/cases-runs/<case>/gotm.yaml`
 2. Run pyGOTM simulation; save output to `validation/runs/<case>/<case>.nc`
 3. Load Fortran GOTM reference NetCDF from `gotm-model/cases-runs/<case>/`
-4. Compare all shared numeric variables using the range-aware pass criterion:
+4. Compare every numeric variable in the Fortran NetCDF using the range-aware
+   pass criterion:
    `|a−b| ≤ max(1e-7×ref_range, 1e-12) + 5e-6×|b|`
-   Variables absent from pyGOTM output (FABM, ice model) are reported as
-   `SKIP`, not `FAIL`.
+   The pyGOTM NetCDF must match the Fortran file's variable set, dimensions,
+   shapes, and values. Missing or extra variables are `FAIL`; no parameter
+   should be reported as `SKIP`.
 5. Report per-variable metrics on failure:
    `max_abs_err`, `max_rel_err` ⚠, `max_range_err`, `mean_abs_err`,
    `mean_rel_err`, `RMSE`, `NRMSE`, `ref_range`

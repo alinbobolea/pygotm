@@ -15,11 +15,13 @@ __all__ = ["run_case", "validate_case"]
 
 def _ref_path(case_name: str) -> Path:
     from pygotm.validate import resolve_reference_case
+
     return resolve_reference_case(case_name).reference_path
 
 
 def _yaml_path(case_name: str) -> Path:
     from pygotm.validate import resolve_reference_case
+
     return resolve_reference_case(case_name).yaml_path
 
 
@@ -30,19 +32,22 @@ def run_case(
 ) -> tuple[Path, float]:
     """Run a compiled parity case, write NetCDF, return (path, elapsed_s)."""
     from pygotm.driver import GotmDriver
+    from pygotm.validate import resolve_reference_case
 
-    case_dir = runs_dir / case_name
+    case = resolve_reference_case(case_name)
+    case_dir = runs_dir / case.run_name
     case_dir.mkdir(parents=True, exist_ok=True)
-    nc_path = case_dir / f"{case_name}.nc"
+    nc_path = case_dir / f"{case.run_name}.nc"
 
     t0 = time.monotonic()
     if on_step is not None:
         on_step(0, 1)
-    dataset = GotmDriver(_yaml_path(case_name)).run(output_path=nc_path)
+    dataset = GotmDriver(case.yaml_path).run(output_path=nc_path)
     try:
         if dataset.attrs.get("runtime") != "compiled":
             msg = (
-                f"parity case {case_name!r} did not use the Numba compiled runtime"
+                f"parity case {case.run_name!r} did not use the Numba "
+                "compiled runtime"
             )
             raise RuntimeError(msg)
     finally:
@@ -61,14 +66,17 @@ def validate_case(
     on_step: Callable[[int, int], None] | None = None,
 ) -> CaseResult:
     """Run (optionally) and validate a single GOTM case."""
-    ref_path = _ref_path(case_name)
+    from pygotm.validate import resolve_reference_case
+
+    case = resolve_reference_case(case_name)
+    ref_path = case.reference_path
 
     if skip_run:
-        py_path = runs_dir / case_name / f"{case_name}.nc"
+        py_path = runs_dir / case.run_name / f"{case.run_name}.nc"
         elapsed = 0.0
         if not py_path.is_file():
             return CaseResult(
-                case_name=case_name, status="ERROR",
+                case_name=case.run_name, status="ERROR",
                 error=f"NetCDF not found: {py_path}",
                 py_nc_path=str(py_path), ref_nc_path=str(ref_path),
                 wall_time_s=0.0,
@@ -78,7 +86,7 @@ def validate_case(
             py_path, elapsed = run_case(case_name, runs_dir, on_step=on_step)
         except Exception as exc:
             return CaseResult(
-                case_name=case_name, status="ERROR",
+                case_name=case.run_name, status="ERROR",
                 error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
                 py_nc_path="", ref_nc_path=str(ref_path),
                 wall_time_s=0.0,
@@ -87,10 +95,9 @@ def validate_case(
     var_results = compare_nc(py_path, ref_path)
     n_pass = sum(1 for v in var_results if v.status == "PASS")
     n_fail = sum(1 for v in var_results if v.status == "FAIL")
-    n_skip = sum(1 for v in var_results if v.status == "SKIP")
 
     return CaseResult(
-        case_name=case_name,
+        case_name=case.run_name,
         status="PASS" if n_fail == 0 else "FAIL",
         error=None,
         py_nc_path=str(py_path),
@@ -99,5 +106,5 @@ def validate_case(
         variables=var_results,
         n_pass=n_pass,
         n_fail=n_fail,
-        n_skip=n_skip,
+        n_skip=0,
     )

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import TracebackType
+from types import SimpleNamespace, TracebackType
 from typing import Literal
 from unittest.mock import MagicMock, patch
 
@@ -19,11 +19,28 @@ def _fake_result(name: str) -> CaseResult:
     )
 
 
+def _fake_case(case_spec: str) -> SimpleNamespace:
+    case_name, yaml_base = (
+        case_spec.split("/", 1) if "/" in case_spec else (case_spec, "gotm")
+    )
+    yaml_base = Path(yaml_base).stem
+    run_name = case_name if yaml_base == "gotm" else f"{case_name}-{yaml_base}"
+    return SimpleNamespace(
+        name=case_name,
+        run_name=run_name,
+        task_name=f"{case_name}-{yaml_base}",
+        yaml_path=Path(f"{yaml_base}.yaml"),
+    )
+
+
 def test_run_case_worker_validates_case_without_runtime_init(tmp_path: Path) -> None:
     with patch(
         "pygotm.validation.parallel.validate_case",
         return_value=_fake_result("couette"),
-    ) as mock_validate:
+    ) as mock_validate, patch(
+        "pygotm.validation.parallel.resolve_reference_case",
+        side_effect=_fake_case,
+    ):
         _run_case_worker("couette", tmp_path, "cpu", skip_run=False)
 
     mock_validate.assert_called_once()
@@ -42,24 +59,28 @@ def test_run_cases_parallel_calls_on_result_for_each_case(tmp_path: Path) -> Non
     mock_client.__enter__ = MagicMock(return_value=mock_client)
     mock_client.__exit__ = MagicMock(return_value=False)
 
-    submitted: list[tuple[MagicMock, str]] = []
+    submitted: list[tuple[MagicMock, str, str]] = []
 
     def tracking_submit(fn: object, name: str, *args: object,
                         key: str = "", **kw: object) -> MagicMock:
         f = MagicMock()
         f.result.return_value = _fake_result(name)
-        submitted.append((f, name))
+        submitted.append((f, name, key))
         return f
 
     mock_client.submit.side_effect = tracking_submit
 
     def as_completed_mock(fmap: dict[MagicMock, str]) -> object:
-        for f, _name in submitted:
+        for f, _name, _key in submitted:
             yield f
 
     with (
         patch("pygotm.validation.parallel.LocalCluster", return_value=mock_cluster),
         patch("pygotm.validation.parallel.Client", return_value=mock_client),
+        patch(
+            "pygotm.validation.parallel.resolve_reference_case",
+            side_effect=_fake_case,
+        ),
         patch(
             "pygotm.validation.parallel.as_completed",
             side_effect=as_completed_mock,
@@ -75,6 +96,7 @@ def test_run_cases_parallel_calls_on_result_for_each_case(tmp_path: Path) -> Non
         )
 
     assert set(received) == {"couette", "channel"}
+    assert [key for _f, _name, key in submitted] == ["couette-gotm", "channel-gotm"]
 
 
 def test_run_cases_parallel_clamps_workers_to_case_count(tmp_path: Path) -> None:
@@ -119,6 +141,10 @@ def test_run_cases_parallel_clamps_workers_to_case_count(tmp_path: Path) -> None
     with (
         patch("pygotm.validation.parallel.LocalCluster", TrackingCluster),
         patch("pygotm.validation.parallel.Client", return_value=mock_client),
+        patch(
+            "pygotm.validation.parallel.resolve_reference_case",
+            side_effect=_fake_case,
+        ),
         patch(
             "pygotm.validation.parallel.as_completed",
             side_effect=as_completed_mock,

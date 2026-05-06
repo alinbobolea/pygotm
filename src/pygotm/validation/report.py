@@ -1,5 +1,7 @@
 """Validation report data classes, JSON serialization, and HTML rendering."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import html as _html
@@ -118,7 +120,7 @@ def _fmt_time(s: float) -> str:
 def _status_cell(status: str) -> str:
     colours = {
         "PASS": "#2e7d32", "FAIL": "#c62828",
-        "SKIP": "#6d4c41", "ERROR": "#c62828",
+        "ERROR": "#c62828",
     }
     colour = colours.get(status, "#333")
     return f'<td style="color:{colour};font-weight:bold">{status}</td>'
@@ -197,20 +199,19 @@ def render_html(report: Report) -> str:
             f"<td>{c.case_name}</td>"
             + _status_cell(c.status) +
             f"<td>{c.n_pass}/{total_checked}</td>"
-            f"<td>{c.n_skip}</td>"
+            f"<td>{c.n_fail}</td>"
             f"<td style='font-variant-numeric:tabular-nums'>{time_str}</td>"
             f"</tr>\n"
         )
 
     total_pass = sum(c.n_pass for c in report.cases)
     total_fail = sum(c.n_fail for c in report.cases)
-    total_skip = sum(c.n_skip for c in report.cases)
     rows_summary += (
         f"<tr style='font-weight:bold;border-top:2px solid #ccc'>"
         f"<td>TOTAL ({total_cases} cases)</td>"
         f"<td>—</td>"
         f"<td>{total_pass}/{total_pass + total_fail}</td>"
-        f"<td>{total_skip}</td>"
+        f"<td>{total_fail}</td>"
         f"<td style='font-variant-numeric:tabular-nums'>{_fmt_time(total_wall)}</td>"
         f"</tr>\n"
     )
@@ -238,7 +239,7 @@ def render_html(report: Report) -> str:
             # ref_at_worst and calc_at_worst: full precision via repr()
             # error metrics: 3-digit scientific notation for readability
             rows += (
-                f"<tr>"
+                "<tr>"
                 + _status_cell(v.status) +
                 f"<td>{_html.escape(v.name)}</td>"
                 f"<td><code>{_fmt_full(v.ref_at_worst)}</code></td>"
@@ -258,7 +259,7 @@ def render_html(report: Report) -> str:
     <span class="case-badge {badge_cls}">{c.status}</span>
     <span class="case-meta">
       {c.n_pass}/{c.n_pass+c.n_fail} vars pass &nbsp;·&nbsp;
-      {c.n_skip} skipped &nbsp;·&nbsp;
+      {c.n_fail} failed &nbsp;·&nbsp;
       wall time: {time_str}
     </span>
   </summary>
@@ -398,7 +399,7 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
 
 <h2>Summary</h2>
 <table>
-  <thead><tr><th>Case</th><th>Status</th><th>Vars passed</th><th>Skipped</th><th>Wall time</th></tr></thead>
+  <thead><tr><th>Case</th><th>Status</th><th>Vars passed</th><th>Vars failed</th><th>Wall time</th></tr></thead>
   <tbody>{rows_summary}</tbody>
 </table>
 

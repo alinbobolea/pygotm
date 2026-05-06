@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 import click
-import numpy as np
 import xarray as xr
 
 from pygotm.gotm.gotm import finalize_gotm, initialize_gotm
@@ -42,36 +41,6 @@ __all__ = [
 
 BenchmarkStatus = Literal["PASS", "FAIL", "ERROR", "UNSUPPORTED"]
 ValidationStatus = Literal["PASS", "FAIL", "SKIP", "ERROR"]
-
-_EMITTED_VALIDATION_VARIABLES = (
-    "u",
-    "v",
-    "temp",
-    "salt",
-    "tke",
-    "eps",
-    "num",
-    "nuh",
-    "h",
-    "xP",
-    "fric",
-    "drag",
-    "bioshade",
-    "ga",
-    "SS",
-    "P",
-    "G",
-    "Pb",
-    "kb",
-    "epsb",
-    "L",
-    "PSTK",
-    "cmue2",
-    "an",
-    "nus",
-    "nucl",
-)
-
 
 @dataclass(slots=True, frozen=True)
 class BenchmarkTimings:
@@ -119,27 +88,6 @@ def _compiled_function_for_bundle(bundle: RuntimeBundle) -> Any:
     return time_loop_compiled
 
 
-def _numeric_emitted_variables(
-    actual: xr.Dataset,
-    reference: xr.Dataset,
-) -> tuple[str, ...]:
-    actual_numeric = {
-        str(name)
-        for name, data_array in actual.data_vars.items()
-        if np.issubdtype(data_array.dtype, np.number)
-    }
-    reference_numeric = {
-        str(name)
-        for name, data_array in reference.data_vars.items()
-        if np.issubdtype(data_array.dtype, np.number)
-    }
-    return tuple(
-        name
-        for name in _EMITTED_VALIDATION_VARIABLES
-        if name in actual_numeric and name in reference_numeric
-    )
-
-
 def _validation_status(
     comparison: DatasetComparison | None,
 ) -> tuple[ValidationStatus, tuple[str, ...], tuple[str, ...]]:
@@ -177,12 +125,14 @@ def benchmark_compiled_case(
     actual: xr.Dataset | None = None
     reference: xr.Dataset | None = None
     run: Any | None = None
+    result_case_name = case_name
 
     try:
         if warmup:
             warmup_s = trigger_numba_jit()
 
         case = resolve_reference_case(case_name)
+        result_case_name = case.run_name
 
         t0 = time.perf_counter()
         run = initialize_gotm(case.yaml_path)
@@ -223,16 +173,7 @@ def benchmark_compiled_case(
                         reference_for_compare = reference.isel(
                             time=slice(0, actual.sizes["time"])
                         ).squeeze(drop=True)
-                    variables = _numeric_emitted_variables(
-                        actual,
-                        reference_for_compare,
-                    )
-                    if variables:
-                        comparison = compare_datasets(
-                            actual,
-                            reference_for_compare,
-                            variables=variables,
-                        )
+                    comparison = compare_datasets(actual, reference_for_compare)
                     validation_s = time.perf_counter() - t0
 
             validation_status, checked, failed = _validation_status(comparison)
@@ -246,7 +187,7 @@ def benchmark_compiled_case(
                 total_s=time.perf_counter() - total_t0,
             )
             return BenchmarkResult(
-                case_name=case_name,
+                case_name=result_case_name,
                 status=_benchmark_status(validation_status),
                 validation_status=validation_status,
                 error=None,
@@ -275,7 +216,7 @@ def benchmark_compiled_case(
             total_s=time.perf_counter() - total_t0,
         )
         return BenchmarkResult(
-            case_name=case_name,
+            case_name=result_case_name,
             status="UNSUPPORTED",
             validation_status="SKIP",
             error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
@@ -298,7 +239,7 @@ def benchmark_compiled_case(
             total_s=time.perf_counter() - total_t0,
         )
         return BenchmarkResult(
-            case_name=case_name,
+            case_name=result_case_name,
             status="ERROR",
             validation_status="ERROR",
             error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
@@ -339,7 +280,7 @@ def benchmark_cases(
 
 
 def save_benchmark_results(results: Sequence[BenchmarkResult], path: Path) -> None:
-    """Write benchmark results to a JSON artifact under validation output."""
+    """Write benchmark results to one aggregate JSON artifact."""
 
     generated_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     data = {
@@ -349,15 +290,6 @@ def save_benchmark_results(results: Sequence[BenchmarkResult], path: Path) -> No
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
-
-    for result in results:
-        case_data = {
-            "generated_at": generated_at,
-            "case": asdict(result),
-        }
-        case_path = path.parent / f"{result.case_name}_benchmark.json"
-        with open(case_path, "w") as f:
-            json.dump(case_data, f, indent=2)
 
 
 def _format_result(result: BenchmarkResult) -> str:
@@ -383,10 +315,9 @@ def _format_result(result: BenchmarkResult) -> str:
 @click.option("--max-steps", default=None, type=int, help="Limit integration steps.")
 @click.option(
     "--output-dir",
-    default="validation/benchmarks",
-    show_default=True,
+    default=None,
     type=click.Path(file_okay=False, path_type=Path),
-    help="Directory for benchmark JSON output.",
+    help="Optional directory for one aggregate benchmark JSON output.",
 )
 @click.option("--no-output", "output", is_flag=True, flag_value=False, default=True)
 @click.option("--no-warmup", "warmup", is_flag=True, flag_value=False, default=True)
@@ -394,7 +325,7 @@ def _format_result(result: BenchmarkResult) -> str:
 def cli(
     cases: str,
     max_steps: int | None,
-    output_dir: Path,
+    output_dir: Path | None,
     output: bool,
     warmup: bool,
     validate: bool,
@@ -409,11 +340,13 @@ def cli(
         warmup=warmup,
         validate=validate,
     )
-    json_path = output_dir / "results.json"
-    save_benchmark_results(results, json_path)
 
     for result in results:
         click.echo(_format_result(result))
         if result.error:
             click.echo((result.error.splitlines() or ["unknown error"])[0])
-    click.echo(f"Wrote {json_path}")
+
+    if output_dir is not None:
+        json_path = output_dir / "results.json"
+        save_benchmark_results(results, json_path)
+        click.echo(f"Wrote {json_path}")
