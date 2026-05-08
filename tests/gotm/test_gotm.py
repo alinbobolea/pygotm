@@ -8,10 +8,19 @@ import numpy as np
 import pytest
 import yaml  # type: ignore[import-untyped,unused-ignore]
 
-from pygotm.gotm.gotm import finalize_gotm, initialize_gotm, integrate_gotm
+from pygotm.airsea.airsea import AirSeaDriverState
+from pygotm.gotm.gotm import (
+    _configure_airsea_from_document,
+    _configure_output_schedule,
+    finalize_gotm,
+    initialize_gotm,
+    integrate_gotm,
+)
 from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
 
 _COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
+_NNS_SEASONAL_CONFIG = Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml")
+_REYNOLDS_CONFIG = Path("gotm-model/cases-runs/reynolds/gotm.yaml")
 
 
 def _write_config(path: Path) -> None:
@@ -100,6 +109,41 @@ def test_integrate_gotm_rejects_on_step_callback(tmp_path: Path) -> None:
         finalize_gotm(run)
 
 
+def test_integrate_gotm_rejects_fabm_active_case_before_zero_output(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_short_couette_config(config_path)
+    text = config_path.read_text(encoding="utf-8")
+    text = text.replace(
+        "use: false                           # enable FABM",
+        "use: true                            # enable FABM",
+    )
+    config_path.write_text(text, encoding="utf-8")
+    (tmp_path / "fabm.yaml").write_text("instances: {}\n", encoding="utf-8")
+
+    run = initialize_gotm(config_path)
+    try:
+        with pytest.raises(RuntimeError, match="FABM|pyfabm"):
+            integrate_gotm(run, max_steps=1, output=True)
+    finally:
+        finalize_gotm(run)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("config_path", [_NNS_SEASONAL_CONFIG, _REYNOLDS_CONFIG])
+def test_integrate_gotm_accepts_active_vertical_advection(config_path: Path) -> None:
+    run = initialize_gotm(config_path)
+    try:
+        integrate_gotm(run, max_steps=1, output=False)
+
+        assert run.observations.w_adv_input.method != 0
+        assert run.meanflow.w is not None
+        assert np.any(run.meanflow.w[1 : run.nlev] != 0.0)
+    finally:
+        finalize_gotm(run)
+
+
 @pytest.mark.parametrize(
     "eqstate_method",
     ["full_teos-10", "full_teos_10", "linear_teos-10", "linear_teos_10"],
@@ -125,6 +169,45 @@ def test_initialize_gotm_accepts_teos10_equation_of_state_variants(
     config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
     run = initialize_gotm(config_path)
     finalize_gotm(run)
+
+
+@pytest.mark.parametrize("ice_model", ["basal_melt", "winton"])
+def test_airsea_configuration_accepts_validation_ice_models(ice_model: str) -> None:
+    state = AirSeaDriverState()
+
+    _inputs, configured_model = _configure_airsea_from_document(
+        state,
+        {"surface": {"ice": {"model": ice_model}}},
+    )
+
+    assert configured_model == ice_model
+
+
+def test_output_schedule_tracks_active_vertical_slice() -> None:
+    schedule = _configure_output_schedule(
+        {
+            "output": {
+                "plume": {
+                    "time_unit": "dt",
+                    "time_step": 400,
+                    "k_start": 300,
+                    "k1_start": 300,
+                },
+                "ice": {
+                    "is_active": False,
+                    "time_unit": "hour",
+                    "time_step": 1,
+                    "k_start": 1,
+                    "k1_start": 1,
+                },
+            }
+        },
+        dt=8.64,
+    )
+
+    assert schedule.interval_steps == 400
+    assert schedule.k_start == 300
+    assert schedule.k1_start == 300
 
 
 def test_initialize_gotm_can_write_default_yaml_and_schema_without_input_file(

@@ -98,10 +98,8 @@ def _unsupported_feature_names(params: RuntimeParams) -> tuple[str, ...]:
     unsupported: list[str] = []
     if params.calc_bottom_stress != 1:
         unsupported.append("calc_bottom_stress")
-    if params.plume_active != 0:
-        unsupported.append("plume_active")
-    if params.w_adv_active != 0:
-        unsupported.append("w_adv_active")
+    if params.int_press_type not in (0, 1, 2):
+        unsupported.append("int_press_type")
     if params.airsea_fluxes_method not in (0, 1, 2):
         unsupported.append("airsea.fluxes_method")
     if params.turb_method not in (first_order, second_order):
@@ -150,8 +148,7 @@ def select_time_loop(params: RuntimeParams) -> TimeLoopRunner:
 def _matches_supported_path(params: RuntimeParams) -> bool:
     if not (
         params.calc_bottom_stress == 1
-        and params.plume_active == 0
-        and params.w_adv_active == 0
+        and params.int_press_type in (0, 1, 2)
         and params.airsea_fluxes_method in (0, 1, 2)
         and params.turb_method in (first_order, second_order)
         and params.tke_method in (tke_keps, tke_MY)
@@ -269,6 +266,23 @@ def _input_method(input_: Any | None) -> int:
     return int(getattr(input_, "method", 0))
 
 
+def _stokes_runtime_active(stokes: Any) -> bool:
+    return any(
+        getattr(stokes, name) != 0
+        for name in (
+            "us0_method",
+            "vs0_method",
+            "ds_method",
+            "uwnd_method",
+            "vwnd_method",
+            "usprof_method",
+            "vsprof_method",
+            "dusdz_method",
+            "dvsdz_method",
+        )
+    )
+
+
 def _validate_run_supported_by_compiled_runtime(run: Any, *, output: bool) -> None:
     unsupported: list[str] = []
 
@@ -290,6 +304,7 @@ def _make_runtime_params_from_run(run: Any, nt: int) -> RuntimeParams:
     observations = run.observations
     seagrass = run.seagrass
     stokes = run.stokes_drift
+    diagnostics = run.diagnostics
 
     rho0 = float(density.rho0)
     tx = _surface_input_value(run.surface_inputs.tx, float(run.airsea.tx)) / rho0
@@ -316,25 +331,24 @@ def _make_runtime_params_from_run(run: Any, nt: int) -> RuntimeParams:
         charnock=1 if meanflow.charnock else 0,
         charnock_val=float(meanflow.charnock_val),
         max_it_z0b=int(meanflow.MaxItz0b),
-        plume_active=1 if observations.plume_type == 1 else 0,
+        plume_active=(
+            1
+            if observations.int_press_type == 2 and observations.plume_type == 1
+            else 0
+        ),
+        int_press_type=int(observations.int_press_type),
+        plume_type=int(observations.plume_type),
+        plume_slope_x=float(observations.plume_slope_x),
+        plume_slope_y=float(observations.plume_slope_y),
         seagrass_active=1 if seagrass.seagrass_calc else 0,
         seagrass_alpha=float(seagrass.alpha),
         seagrass_grassind=int(seagrass.grassind),
         seagrass_grassn=int(seagrass.grassn),
-        stokes_active=(
-            1
-            if any(
-                getattr(stokes, name) != 0
-                for name in (
-                    "usprof_method",
-                    "vsprof_method",
-                    "dusdz_method",
-                    "dvsdz_method",
-                )
-            )
-            else 0
-        ),
-        w_adv_active=1 if observations.w_adv_input.method != 0 else 0,
+        stokes_active=1 if _stokes_runtime_active(stokes) else 0,
+        w_adv_active=int(observations.w_adv_input.method),
+        w_adv_discr=int(observations.w_adv_discr),
+        s_adv=1 if observations.s_adv else 0,
+        t_adv=1 if observations.t_adv else 0,
         sprof_input_active=1 if observations.sprof_input.method != 0 else 0,
         tprof_input_active=1 if observations.tprof_input.method != 0 else 0,
         uprof_input_active=1 if observations.uprof_input.method != 0 else 0,
@@ -344,9 +358,12 @@ def _make_runtime_params_from_run(run: Any, nt: int) -> RuntimeParams:
         airsea_fluxes_method=int(run.airsea.fluxes_method),
         airsea_hum_method=int(run.airsea.hum_method),
         airsea_shortwave_method=int(run.airsea.shortwave_method),
+        airsea_shortwave_type=int(run.airsea.shortwave_type),
         airsea_longwave_method=int(run.airsea.longwave_method),
+        airsea_longwave_type=int(run.airsea.longwave_type),
         airsea_albedo_method=int(run.airsea.albedo_method),
         airsea_ssuv_method=int(run.airsea.ssuv_method),
+        airsea_sst_obs_method=_input_method(run.surface_inputs.sst_obs),
         airsea_shortwave_scale_factor=float(run.airsea.shortwave_scale_factor),
         airsea_heat_scale_factor=float(run.airsea.heat_scale_factor),
         airsea_const_albedo=float(run.airsea.const_albedo),
@@ -368,6 +385,9 @@ def _make_runtime_params_from_run(run: Any, nt: int) -> RuntimeParams:
         epsb_method=int(turbulence.epsb_method),
         iw_model=int(turbulence.iw_model),
         prandtl0_fix=float(turbulence.Prandtl0_fix),
+        mld_method=int(diagnostics.mld_method),
+        mld_diff_k=float(diagnostics.diff_k),
+        mld_ri_crit=float(diagnostics.Ri_crit),
         kappa=float(turbulence.kappa),
         cm0=float(turbulence.cm0),
         cmsf=float(turbulence.cmsf),
@@ -521,12 +541,25 @@ def _record_forcing_step(run: Any, forcing: RuntimeForcing, step: int) -> None:
     forcing.longwave[step] = _surface_input_value(surface_inputs.longwave)
     forcing.sst_obs[step] = _surface_input_optional_value(surface_inputs.sst_obs)
     forcing.sss_obs[step] = _surface_input_optional_value(surface_inputs.sss_obs)
+    forcing.w_adv[step] = _surface_input_value(observations.w_adv_input)
+    forcing.w_height[step] = _surface_input_value(observations.w_height_input)
 
     np.copyto(forcing.Tobs[step], run.meanflow.Tobs)
     np.copyto(forcing.Sobs[step], run.meanflow.Sobs)
     _copy_profile_data(observations.uprof_input, forcing.uprof[step])
     _copy_profile_data(observations.vprof_input, forcing.vprof[step])
+    _copy_profile_data(observations.dtdx_input, forcing.dtdx[step])
+    _copy_profile_data(observations.dtdy_input, forcing.dtdy[step])
+    _copy_profile_data(observations.dsdx_input, forcing.dsdx[step])
+    _copy_profile_data(observations.dsdy_input, forcing.dsdy[step])
     stokes = run.stokes_drift
+    forcing.us0[step] = float(stokes.us0)
+    forcing.vs0[step] = float(stokes.vs0)
+    forcing.ds[step] = float(stokes.ds)
+    if stokes.usprof is not None:
+        np.copyto(forcing.us[step], stokes.usprof)
+    if stokes.vsprof is not None:
+        np.copyto(forcing.vs[step], stokes.vsprof)
     if stokes.dusdz is not None:
         np.copyto(forcing.dusdz[step], stokes.dusdz)
     if stokes.dvsdz is not None:
@@ -538,10 +571,7 @@ def _populate_runtime_forcing_from_run(
     forcing: RuntimeForcing,
 ) -> None:
     stokes = run.stokes_drift
-    stokes_active = any(
-        getattr(stokes, name) != 0
-        for name in ("usprof_method", "vsprof_method", "dusdz_method", "dvsdz_method")
-    )
+    stokes_active = _stokes_runtime_active(stokes)
 
     if forcing.nt == 0:
         _record_forcing_step(run, forcing, 0)
@@ -729,6 +759,8 @@ def build_runtime_from_run(
         np.copyto(state.beta, run.density.beta)
     if run.density.rho_p is not None:
         np.copyto(state.rho_p, run.density.rho_p)
+    if run.density.rho is not None:
+        np.copyto(state.rho, run.density.rho)
 
     state.z0b[0] = float(run.meanflow.z0b)
     state.z0s[0] = float(run.meanflow.z0s)
@@ -783,6 +815,7 @@ _ICE_REFERENCE_SCALARS = (
     "ocean_ice_salt_flux",
     "surface_ice_energy",
 )
+_WINTON_REFERENCE_SCALARS = ("T1", "T2")
 _FABM_REFERENCE_SCALARS = (
     "surface_albedo",
     "surface_drag_coefficient_in_air",
@@ -874,8 +907,11 @@ def _reference_scalar_output_names(run: Any, output: RuntimeOutput) -> tuple[str
     document = _document_mapping(run.document)
     surface = _document_mapping(document.get("surface"))
     ice = _document_mapping(surface.get("ice"))
-    if _document_token(ice.get("model"), "simple") == "simple":
+    ice_model = _document_token(ice.get("model"), "simple")
+    if ice_model in {"simple", "basal_melt", "winton"}:
         names.extend(_ICE_REFERENCE_SCALARS)
+        if ice_model == "winton":
+            names.extend(_WINTON_REFERENCE_SCALARS)
 
     fabm = _document_mapping(document.get("fabm"))
     if bool(fabm.get("use", False)):
@@ -935,19 +971,22 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
     offsets = output.time.astype("timedelta64[s]")
     time = start + offsets
 
-    z_profiles = output.z[:, 1:]
-    zi_profiles = output.zi
+    z_start = min(max(int(getattr(run.output_schedule, "k_start", 1)), 1), nlev)
+    zi_start = min(max(int(getattr(run.output_schedule, "k1_start", 1)) - 1, 0), nlev)
+
+    z_profiles = output.z[:, z_start:]
+    zi_profiles = output.zi[:, zi_start:]
 
     def z_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
         return (
             ("time", "z", "lat", "lon"),
-            np.asarray(values[:, 1:], dtype=np.float64)[:, :, None, None],
+            np.asarray(values[:, z_start:], dtype=np.float64)[:, :, None, None],
         )
 
     def zi_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
         return (
             ("time", "zi", "lat", "lon"),
-            np.asarray(values, dtype=np.float64)[:, :, None, None],
+            np.asarray(values[:, zi_start:], dtype=np.float64)[:, :, None, None],
         )
 
     def scalar(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:

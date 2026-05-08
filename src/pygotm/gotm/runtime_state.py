@@ -44,6 +44,7 @@ _PROFILE_FIELDS = (
     "alpha",
     "beta",
     "rho_p",
+    "rho",
     "rad",
     "xP",
     "avh",
@@ -150,6 +151,7 @@ class RuntimeState:
     alpha: FloatArray
     beta: FloatArray
     rho_p: FloatArray
+    rho: FloatArray
     rad: FloatArray
     xP: FloatArray
     avh: FloatArray
@@ -283,6 +285,7 @@ def allocate_runtime_state(nlev: int) -> RuntimeState:
         alpha=_new_profile(nlev),
         beta=_new_profile(nlev),
         rho_p=_new_profile(nlev),
+        rho=_new_profile(nlev),
         rad=_new_profile(nlev),
         xP=_new_profile(nlev),
         avh=_new_profile(nlev),

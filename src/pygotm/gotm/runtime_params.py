@@ -48,12 +48,19 @@ class RuntimeParams:
     charnock_val: float
     max_it_z0b: int
     plume_active: int
+    int_press_type: int
+    plume_type: int
+    plume_slope_x: float
+    plume_slope_y: float
     seagrass_active: int
     seagrass_alpha: float
     seagrass_grassind: int
     seagrass_grassn: int
     stokes_active: int
     w_adv_active: int
+    w_adv_discr: int
+    s_adv: int
+    t_adv: int
     sprof_input_active: int
     tprof_input_active: int
     uprof_input_active: int
@@ -63,9 +70,12 @@ class RuntimeParams:
     airsea_fluxes_method: int
     airsea_hum_method: int
     airsea_shortwave_method: int
+    airsea_shortwave_type: int
     airsea_longwave_method: int
+    airsea_longwave_type: int
     airsea_albedo_method: int
     airsea_ssuv_method: int
+    airsea_sst_obs_method: int
     airsea_shortwave_scale_factor: float
     airsea_heat_scale_factor: float
     airsea_const_albedo: float
@@ -88,6 +98,9 @@ class RuntimeParams:
     epsb_method: int
     iw_model: int
     prandtl0_fix: float
+    mld_method: int
+    mld_diff_k: float
+    mld_ri_crit: float
 
     kappa: float
     cm0: float
@@ -174,6 +187,8 @@ class RuntimeParams:
         _require_positive("gravity", self.gravity)
         _require_positive("rho0", self.rho0)
         _require_positive("kappa", self.kappa)
+        _require_positive("mld_diff_k", self.mld_diff_k)
+        _require_positive("mld_ri_crit", self.mld_ri_crit)
         _require_nonnegative_int("max_it_z0b", self.max_it_z0b)
         _require_nonnegative_int("airsea_fluxes_method", self.airsea_fluxes_method)
 
@@ -201,12 +216,19 @@ def make_runtime_params(
     charnock_val: float = 1400.0,
     max_it_z0b: int = 10,
     plume_active: int = 0,
+    int_press_type: int = 0,
+    plume_type: int = 2,
+    plume_slope_x: float = 0.0,
+    plume_slope_y: float = 0.0,
     seagrass_active: int = 0,
     seagrass_alpha: float = 0.0,
     seagrass_grassind: int = 0,
     seagrass_grassn: int = 0,
     stokes_active: int = 0,
     w_adv_active: int = 0,
+    w_adv_discr: int = 4,
+    s_adv: int = 0,
+    t_adv: int = 0,
     sprof_input_active: int = 0,
     tprof_input_active: int = 0,
     uprof_input_active: int = 0,
@@ -216,9 +238,12 @@ def make_runtime_params(
     airsea_fluxes_method: int = 0,
     airsea_hum_method: int = 1,
     airsea_shortwave_method: int = 1,
+    airsea_shortwave_type: int = 1,
     airsea_longwave_method: int = 3,
+    airsea_longwave_type: int = 1,
     airsea_albedo_method: int = 0,
     airsea_ssuv_method: int = 1,
+    airsea_sst_obs_method: int = 0,
     airsea_shortwave_scale_factor: float = 1.0,
     airsea_heat_scale_factor: float = 1.0,
     airsea_const_albedo: float = 0.0,
@@ -240,6 +265,9 @@ def make_runtime_params(
     epsb_method: int = 0,
     iw_model: int = 0,
     prandtl0_fix: float = 0.74,
+    mld_method: int = 2,
+    mld_diff_k: float = 1.0e-5,
+    mld_ri_crit: float = 0.5,
     kappa: float = 0.4,
     cm0: float = 0.5477,
     cmsf: float = 1.0,
@@ -333,12 +361,19 @@ def make_runtime_params(
         charnock_val=charnock_val,
         max_it_z0b=max_it_z0b,
         plume_active=plume_active,
+        int_press_type=int_press_type,
+        plume_type=plume_type,
+        plume_slope_x=plume_slope_x,
+        plume_slope_y=plume_slope_y,
         seagrass_active=seagrass_active,
         seagrass_alpha=seagrass_alpha,
         seagrass_grassind=seagrass_grassind,
         seagrass_grassn=seagrass_grassn,
         stokes_active=stokes_active,
         w_adv_active=w_adv_active,
+        w_adv_discr=w_adv_discr,
+        s_adv=s_adv,
+        t_adv=t_adv,
         sprof_input_active=sprof_input_active,
         tprof_input_active=tprof_input_active,
         uprof_input_active=uprof_input_active,
@@ -348,9 +383,12 @@ def make_runtime_params(
         airsea_fluxes_method=airsea_fluxes_method,
         airsea_hum_method=airsea_hum_method,
         airsea_shortwave_method=airsea_shortwave_method,
+        airsea_shortwave_type=airsea_shortwave_type,
         airsea_longwave_method=airsea_longwave_method,
+        airsea_longwave_type=airsea_longwave_type,
         airsea_albedo_method=airsea_albedo_method,
         airsea_ssuv_method=airsea_ssuv_method,
+        airsea_sst_obs_method=airsea_sst_obs_method,
         airsea_shortwave_scale_factor=airsea_shortwave_scale_factor,
         airsea_heat_scale_factor=airsea_heat_scale_factor,
         airsea_const_albedo=airsea_const_albedo,
@@ -372,6 +410,9 @@ def make_runtime_params(
         epsb_method=epsb_method,
         iw_model=iw_model,
         prandtl0_fix=prandtl0_fix,
+        mld_method=mld_method,
+        mld_diff_k=mld_diff_k,
+        mld_ri_crit=mld_ri_crit,
         kappa=kappa,
         cm0=cm0,
         cmsf=cmsf,

@@ -13,8 +13,11 @@ from pygotm.validation.report import CaseResult
 
 def _fake_result(name: str) -> CaseResult:
     return CaseResult(
-        case_name=name, status="PASS", error=None,
-        py_nc_path=f"/runs/{name}.nc", ref_nc_path=f"/ref/{name}.nc",
+        case_name=name,
+        status="PASS",
+        error=None,
+        py_nc_path=f"/runs/{name}.nc",
+        ref_nc_path=f"/ref/{name}.nc",
         wall_time_s=0.1,
     )
 
@@ -34,12 +37,15 @@ def _fake_case(case_spec: str) -> SimpleNamespace:
 
 
 def test_run_case_worker_validates_case_without_runtime_init(tmp_path: Path) -> None:
-    with patch(
-        "pygotm.validation.parallel.validate_case",
-        return_value=_fake_result("couette"),
-    ) as mock_validate, patch(
-        "pygotm.validation.parallel.resolve_reference_case",
-        side_effect=_fake_case,
+    with (
+        patch(
+            "pygotm.validation.parallel.validate_case",
+            return_value=_fake_result("couette"),
+        ) as mock_validate,
+        patch(
+            "pygotm.validation.parallel.resolve_reference_case",
+            side_effect=_fake_case,
+        ),
     ):
         _run_case_worker("couette", tmp_path, "cpu", skip_run=False)
 
@@ -61,8 +67,9 @@ def test_run_cases_parallel_calls_on_result_for_each_case(tmp_path: Path) -> Non
 
     submitted: list[tuple[MagicMock, str, str]] = []
 
-    def tracking_submit(fn: object, name: str, *args: object,
-                        key: str = "", **kw: object) -> MagicMock:
+    def tracking_submit(
+        fn: object, name: str, *args: object, key: str = "", **kw: object
+    ) -> MagicMock:
         f = MagicMock()
         f.result.return_value = _fake_result(name)
         submitted.append((f, name, key))
@@ -125,8 +132,9 @@ def test_run_cases_parallel_clamps_workers_to_case_count(tmp_path: Path) -> None
 
     submitted_futures: list[tuple[MagicMock, str]] = []
 
-    def tracking_submit(fn: object, name: str, *a: object,
-                        key: str = "", **kw: object) -> MagicMock:
+    def tracking_submit(
+        fn: object, name: str, *a: object, key: str = "", **kw: object
+    ) -> MagicMock:
         f = MagicMock()
         f.result.return_value = _fake_result(name)
         submitted_futures.append((f, name))

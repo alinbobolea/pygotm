@@ -23,6 +23,8 @@ __all__ = [
 REFERENCE_SCALAR_OUTPUT_NAMES = (
     "Hfrazil",
     "Hice",
+    "T1",
+    "T2",
     "Tf",
     "Tice_surface",
     "bottom_ice_energy",

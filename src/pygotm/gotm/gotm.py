@@ -59,6 +59,8 @@ from pygotm.extras.seagrass.seagrass import (
     init_seagrass,
     post_init_seagrass,
 )
+from pygotm.fabm.config import FABMConfig, load_fabm_config
+from pygotm.fabm.engine import FABMEngine
 from pygotm.gotm.diagnostics import (
     DiagnosticsState,
     clean_diagnostics,
@@ -294,6 +296,8 @@ class OutputSchedule:
     interval_steps: int = 1
     capture_initial: bool = True
     time_method: str = "point"
+    k_start: int = 1
+    k1_start: int = 1
 
 
 @dataclass
@@ -312,6 +316,8 @@ class GotmRun:
     seagrass: SeagrassState
     turbulence: TurbulenceState
     diagnostics: DiagnosticsState
+    fabm_config: FABMConfig | None
+    fabm_engine: FABMEngine | None
     surface_inputs: SurfaceInputs
     registry: FieldRegistry
     nlev: int
@@ -580,7 +586,7 @@ def _configure_airsea_from_document(
     if ssuv_method not in {"absolute", "relative"}:
         msg = f"unsupported surface.ssuv_method {ssuv_method!r}"
         raise NotImplementedError(msg)
-    if ice_model not in {"no_ice", "simple"}:
+    if ice_model not in {"no_ice", "simple", "basal_melt", "winton"}:
         msg = f"unsupported surface.ice.model {ice_model!r}"
         raise NotImplementedError(msg)
 
@@ -787,7 +793,12 @@ def _configure_output_schedule(document: dict[str, Any], dt: float) -> OutputSch
 
     interval_steps = 1
     current_time_method = "point"
+    k_start = 1
+    k1_start = 1
     for spec in specs:
+        if not bool(spec.get("is_active", True)):
+            continue
+
         time_method = _canonical_token(spec.get("time_method"), "point")
         if time_method not in {"point", "mean", "integrated"}:
             msg = f"unsupported output time_method {time_method!r}"
@@ -811,10 +822,14 @@ def _configure_output_schedule(document: dict[str, Any], dt: float) -> OutputSch
         interval_steps = (
             interval if interval_steps == 1 else min(interval_steps, interval)
         )
+        k_start = max(k_start, int(spec.get("k_start", k_start)))
+        k1_start = max(k1_start, int(spec.get("k1_start", k1_start)))
 
     return OutputSchedule(
         interval_steps=interval_steps,
         time_method=current_time_method,
+        k_start=k_start,
+        k1_start=k1_start,
     )
 
 
@@ -974,6 +989,27 @@ def _save_snapshot(run: GotmRun) -> None:
         run.accum_count = 0
 
 
+def _ensure_fabm_runtime_ready(run: GotmRun) -> None:
+    """Initialise pyfabm for FABM-active cases before compiled integration."""
+
+    if run.fabm_config is None or not run.fabm_config.use:
+        return
+    if run.fabm_config.config_path is None:
+        msg = "FABM is enabled, but no FABM model YAML path was resolved"
+        raise RuntimeError(msg)
+
+    if run.fabm_engine is None:
+        run.fabm_engine = FABMEngine(run.fabm_config.config_path)
+    run.fabm_engine.initialize()
+
+    msg = (
+        "FABM is enabled and pyfabm initialized, but the compiled GOTM runtime "
+        "does not yet interleave Python-level FABM source terms with pyGOTM "
+        "tracer transport. Refusing to emit zero-filled FABM parity output."
+    )
+    raise UnsupportedConfigurationError(msg)
+
+
 def initialize_gotm_from_settings(
     settings: GotmSettings,
     *,
@@ -1051,6 +1087,8 @@ def initialize_gotm_from_settings(
     assert meanflow.h is not None
     post_init_seagrass(seagrass, nlev, meanflow.h)
 
+    fabm_config = load_fabm_config(resolved_document, yaml_path)
+
     do_input(time_state.julianday, time_state.secondsofday, nlev, meanflow.z)
     get_all_obs(
         observations,
@@ -1081,6 +1119,8 @@ def initialize_gotm_from_settings(
             seagrass=seagrass,
             turbulence=turbulence,
             diagnostics=DiagnosticsState(),
+            fabm_config=fabm_config,
+            fabm_engine=None,
             surface_inputs=surface_inputs,
             registry=FieldRegistry(),
             nlev=nlev,
@@ -1110,6 +1150,8 @@ def initialize_gotm_from_settings(
         seagrass=seagrass,
         turbulence=turbulence,
         diagnostics=diagnostics,
+        fabm_config=fabm_config,
+        fabm_engine=None,
         surface_inputs=surface_inputs,
         registry=FieldRegistry(),
         nlev=nlev,
@@ -1594,6 +1636,7 @@ def integrate_gotm_compiled(
     if not run.initialized:
         raise RuntimeError("run has not been initialised")
 
+    _ensure_fabm_runtime_ready(run)
     bundle = build_runtime_from_run(run, max_steps=max_steps, output=output)
     written = bundle.run()
     if written < 0:
@@ -1618,6 +1661,8 @@ def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:
             target = getattr(run.meanflow, name)
         elif hasattr(run.turbulence, name):
             target = getattr(run.turbulence, name)
+        elif hasattr(run.density, name):
+            target = getattr(run.density, name)
         else:
             continue
         if isinstance(target, np.ndarray):

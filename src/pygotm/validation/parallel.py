@@ -40,6 +40,7 @@ def _run_case_worker(
     runs_dir: Path,
     arch_name: str,
     skip_run: bool,
+    debug_turbulence: bool = False,
 ) -> CaseResult:
     """Worker function executed in each Dask subprocess.
 
@@ -52,7 +53,13 @@ def _run_case_worker(
     progress_path = runs_dir / case.run_name / ".progress"
     on_step = _make_step_writer(progress_path) if not skip_run else None
     try:
-        return validate_case(case_name, runs_dir, skip_run=skip_run, on_step=on_step)
+        return validate_case(
+            case_name,
+            runs_dir,
+            skip_run=skip_run,
+            debug_turbulence=debug_turbulence,
+            on_step=on_step,
+        )
     finally:
         progress_path.unlink(missing_ok=True)
 
@@ -65,6 +72,7 @@ def run_cases_parallel(
     *,
     dashboard_port: int = 8787,
     skip_run: bool = False,
+    debug_turbulence: bool = False,
     on_result: Callable[[CaseResult], None] | None = None,
 ) -> list[CaseResult]:
     """Run *case_names* in parallel using a Dask LocalCluster.
@@ -77,14 +85,16 @@ def run_cases_parallel(
 
     logging.getLogger("distributed").setLevel(logging.CRITICAL)
 
-    with LocalCluster(  # type: ignore[no-untyped-call]
-        n_workers=n_workers,
-        threads_per_worker=1,
-        processes=True,
-        silence_logs=logging.CRITICAL,
-        dashboard_address=f":{dashboard_port}",
-    ) as cluster, Client(cluster, timeout=120) as client:  # type: ignore[no-untyped-call]
-
+    with (
+        LocalCluster(  # type: ignore[no-untyped-call]
+            n_workers=n_workers,
+            threads_per_worker=1,
+            processes=True,
+            silence_logs=logging.CRITICAL,
+            dashboard_address=f":{dashboard_port}",
+        ) as cluster,
+        Client(cluster, timeout=120) as client,  # type: ignore[no-untyped-call]
+    ):
         print(f"  Dask dashboard : {cluster.dashboard_link}")
 
         futures = {
@@ -94,6 +104,7 @@ def run_cases_parallel(
                 runs_dir,
                 arch_name,
                 skip_run,
+                debug_turbulence,
                 key=case.task_name,
             ): index
             for index, case in enumerate(cases)

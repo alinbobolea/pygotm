@@ -35,6 +35,11 @@ _SCALAR_SERIES = (
     "longwave",
     "sst_obs",
     "sss_obs",
+    "w_adv",
+    "w_height",
+    "us0",
+    "vs0",
+    "ds",
 )
 
 _PROFILE_SERIES = (
@@ -42,6 +47,12 @@ _PROFILE_SERIES = (
     "Sobs",
     "uprof",
     "vprof",
+    "dtdx",
+    "dtdy",
+    "dsdx",
+    "dsdy",
+    "us",
+    "vs",
     "dusdz",
     "dvsdz",
 )
@@ -83,11 +94,22 @@ class RuntimeForcing:
     longwave: FloatArray
     sst_obs: FloatArray
     sss_obs: FloatArray
+    w_adv: FloatArray
+    w_height: FloatArray
+    us0: FloatArray
+    vs0: FloatArray
+    ds: FloatArray
 
     Tobs: FloatArray
     Sobs: FloatArray
     uprof: FloatArray
     vprof: FloatArray
+    dtdx: FloatArray
+    dtdy: FloatArray
+    dsdx: FloatArray
+    dsdy: FloatArray
+    us: FloatArray
+    vs: FloatArray
     dusdz: FloatArray
     dvsdz: FloatArray
 
@@ -174,10 +196,21 @@ def allocate_runtime_forcing(nlev: int, nt: int) -> RuntimeForcing:
         longwave=_scalar_series(nt),
         sst_obs=np.full(nt + 1, np.nan, dtype=np.float64),
         sss_obs=np.full(nt + 1, np.nan, dtype=np.float64),
+        w_adv=_scalar_series(nt),
+        w_height=_scalar_series(nt),
+        us0=_scalar_series(nt),
+        vs0=_scalar_series(nt),
+        ds=_scalar_series(nt),
         Tobs=_profile_series(nt, nlev),
         Sobs=_profile_series(nt, nlev),
         uprof=_profile_series(nt, nlev),
         vprof=_profile_series(nt, nlev),
+        dtdx=_profile_series(nt, nlev),
+        dtdy=_profile_series(nt, nlev),
+        dsdx=_profile_series(nt, nlev),
+        dsdy=_profile_series(nt, nlev),
+        us=_profile_series(nt, nlev),
+        vs=_profile_series(nt, nlev),
         dusdz=_profile_series(nt, nlev),
         dvsdz=_profile_series(nt, nlev),
     )

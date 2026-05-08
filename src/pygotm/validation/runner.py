@@ -8,9 +8,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from pygotm.validation.compare import compare_nc
+from pygotm.validation.debug import write_turbulence_debug_dump
 from pygotm.validation.report import CaseResult
 
-__all__ = ["run_case", "validate_case"]
+__all__ = ["main", "run_case", "validate_case"]
 
 
 def _ref_path(case_name: str) -> Path:
@@ -46,8 +47,7 @@ def run_case(
     try:
         if dataset.attrs.get("runtime") != "compiled":
             msg = (
-                f"parity case {case.run_name!r} did not use the Numba "
-                "compiled runtime"
+                f"parity case {case.run_name!r} did not use the Numba compiled runtime"
             )
             raise RuntimeError(msg)
     finally:
@@ -63,6 +63,7 @@ def validate_case(
     runs_dir: Path,
     *,
     skip_run: bool = False,
+    debug_turbulence: bool = False,
     on_step: Callable[[int, int], None] | None = None,
 ) -> CaseResult:
     """Run (optionally) and validate a single GOTM case."""
@@ -76,9 +77,11 @@ def validate_case(
         elapsed = 0.0
         if not py_path.is_file():
             return CaseResult(
-                case_name=case.run_name, status="ERROR",
+                case_name=case.run_name,
+                status="ERROR",
                 error=f"NetCDF not found: {py_path}",
-                py_nc_path=str(py_path), ref_nc_path=str(ref_path),
+                py_nc_path=str(py_path),
+                ref_nc_path=str(ref_path),
                 wall_time_s=0.0,
             )
     else:
@@ -86,13 +89,21 @@ def validate_case(
             py_path, elapsed = run_case(case_name, runs_dir, on_step=on_step)
         except Exception as exc:
             return CaseResult(
-                case_name=case.run_name, status="ERROR",
+                case_name=case.run_name,
+                status="ERROR",
                 error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
-                py_nc_path="", ref_nc_path=str(ref_path),
+                py_nc_path="",
+                ref_nc_path=str(ref_path),
                 wall_time_s=0.0,
             )
 
     var_results = compare_nc(py_path, ref_path)
+    if debug_turbulence:
+        write_turbulence_debug_dump(
+            py_path,
+            ref_path,
+            runs_dir / case.run_name / "turbulence_debug.json",
+        )
     n_pass = sum(1 for v in var_results if v.status == "PASS")
     n_fail = sum(1 for v in var_results if v.status == "FAIL")
 
@@ -108,3 +119,15 @@ def validate_case(
         n_fail=n_fail,
         n_skip=0,
     )
+
+
+def main() -> None:
+    """CLI compatibility shim for ``python -m pygotm.validation.runner``."""
+
+    from pygotm.validation.run_validation import cli
+
+    cli()
+
+
+if __name__ == "__main__":
+    main()

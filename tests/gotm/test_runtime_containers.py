@@ -124,6 +124,13 @@ def test_runtime_forcing_allocates_scalar_and_profile_series() -> None:
     assert forcing.time.shape == (6,)
     assert forcing.airp.dtype == np.float64
     assert forcing.h_press.shape == (6,)
+    assert forcing.w_adv.shape == (6,)
+    assert forcing.w_height.shape == (6,)
+    assert forcing.us0.shape == (6,)
+    assert forcing.dtdx.shape == (6, 4)
+    assert forcing.dsdx.shape == (6, 4)
+    assert forcing.us.shape == (6, 4)
+    assert forcing.vs.shape == (6, 4)
     assert forcing.Tobs.shape == (6, 4)
     assert forcing.Sobs.flags.c_contiguous
     assert np.isnan(forcing.sst_obs).all()
@@ -142,6 +149,8 @@ def _supported_params(
     *,
     calc_bottom_stress: int = 1,
     stokes_active: int = 0,
+    w_adv_active: int = 0,
+    int_press_type: int = 0,
     ext_press_mode: int = 0,
 ) -> RuntimeParams:
     return make_runtime_params(
@@ -150,6 +159,8 @@ def _supported_params(
         dt=1.0,
         calc_bottom_stress=calc_bottom_stress,
         stokes_active=stokes_active,
+        w_adv_active=w_adv_active,
+        int_press_type=int_press_type,
         ext_press_mode=ext_press_mode,
         turb_method=first_order,
         tke_method=tke_keps,
@@ -159,7 +170,14 @@ def _supported_params(
 
 
 def test_runtime_builder_accepts_supported_stokes_and_external_pressure() -> None:
-    bundle = build_runtime(_supported_params(stokes_active=1, ext_press_mode=2))
+    bundle = build_runtime(
+        _supported_params(
+            stokes_active=1,
+            w_adv_active=2,
+            int_press_type=1,
+            ext_press_mode=2,
+        )
+    )
 
     assert getattr(bundle.runner, "__name__", "") == "run_compiled_time_loop"
 

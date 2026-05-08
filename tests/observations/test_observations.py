@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from pygotm.config.settings import GotmSettings
+from pygotm.config.settings import GotmSettings, load_settings
 from pygotm.input.input import close_input, init_input
 from pygotm.meanflow.meanflow import MeanflowState, init_meanflow, post_init_meanflow
 from pygotm.meanflow.updategrid import updategrid
@@ -15,6 +16,7 @@ from pygotm.observations.observations import (
     ANALYTICAL,
     ANALYTICAL_OFFSET,
     CONST_PROF,
+    FROMFILE,
     TWO_LAYERS,
     ObservationsState,
     clean_observations,
@@ -64,6 +66,77 @@ def test_init_observations_maps_settings_to_runtime_state() -> None:
     assert state.initial_temperature_type == 3
     assert state.initial_salinity_type == 2
     assert state.extinct_method == 5
+
+
+def test_init_observations_prefers_nested_mimic3d_vertical_velocity() -> None:
+    settings = GotmSettings.model_validate(
+        {
+            "w": {
+                "max": {"method": "file", "file": "top.dat"},
+                "height": {"method": "file", "file": "top_height.dat"},
+            },
+            "mimic_3d": {
+                "w": {
+                    "max": {"method": "file", "file": "nested.dat", "column": 2},
+                    "height": {
+                        "method": "file",
+                        "file": "nested_height.dat",
+                        "column": 3,
+                    },
+                    "adv_discr": "superbee",
+                }
+            },
+        }
+    )
+    state = ObservationsState()
+
+    init_observations(state, settings)
+
+    assert state.w_adv_input.method == FROMFILE
+    assert state.w_adv_input.path == "nested.dat"
+    assert state.w_adv_input.index == 2
+    assert state.w_height_input.path == "nested_height.dat"
+    assert state.w_height_input.index == 3
+
+
+def test_init_observations_keeps_top_level_vertical_velocity_compatibility() -> None:
+    settings = GotmSettings.model_validate(
+        {
+            "w": {
+                "max": {"method": "file", "file": "top.dat", "column": 4},
+                "height": {"method": "file", "file": "top_height.dat"},
+            }
+        }
+    )
+    state = ObservationsState()
+
+    init_observations(state, settings)
+
+    assert state.w_adv_input.method == FROMFILE
+    assert state.w_adv_input.path == "top.dat"
+    assert state.w_adv_input.index == 4
+
+
+def test_init_observations_uses_real_case_nested_zeta_period() -> None:
+    settings = load_settings(Path("gotm-model/cases-runs/seagrass/gotm.yaml"))
+    state = ObservationsState()
+
+    init_observations(state, settings)
+
+    assert state.period_1 == pytest.approx(15.0)
+
+
+def test_init_observations_uses_real_case_nested_vertical_advection() -> None:
+    for case_path in (
+        Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml"),
+        Path("gotm-model/cases-runs/reynolds/gotm.yaml"),
+    ):
+        settings = load_settings(case_path)
+        state = ObservationsState()
+
+        init_observations(state, settings)
+
+        assert state.w_adv_input.method == FROMFILE
 
 
 def test_post_init_observations_creates_two_layer_profile_and_relaxation() -> None:

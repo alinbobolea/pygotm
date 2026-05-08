@@ -66,6 +66,25 @@ def test_load_settings_parses_minimal_yaml(tmp_path: Path) -> None:
     assert settings.mimic_3d.zeta.period_1 == 100.0
 
 
+def test_load_settings_lifts_nested_tidal_periods_from_real_case() -> None:
+    settings = load_settings(Path("gotm-model/cases-runs/seagrass/gotm.yaml"))
+
+    assert settings.mimic_3d.zeta.method == "tidal"
+    assert settings.mimic_3d.zeta.period_1 == 15.0
+    assert settings.mimic_3d.zeta.period_2 == 43200.0
+
+
+def test_load_settings_parses_mimic3d_vertical_velocity_from_real_cases() -> None:
+    for case_path in (
+        Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml"),
+        Path("gotm-model/cases-runs/reynolds/gotm.yaml"),
+    ):
+        settings = load_settings(case_path)
+
+        assert settings.mimic_3d.w.max.method == "file"
+        assert settings.mimic_3d.w.height.method == "file"
+
+
 def test_save_settings_roundtrip(tmp_path: Path) -> None:
     settings = GotmSettings()
     out_path = tmp_path / "saved.yaml"

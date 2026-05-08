@@ -10,30 +10,59 @@ import math
 
 import numba
 
-from pygotm.util.gsw.modules.gsw_mod_teos10_constants import gsw_sfac, offset
 from pygotm.util.gsw.modules.gsw_mod_specvol_coefficients import (
-    a000, a001, a002, a003, a004,
-    a010, a011, a012, a013,
-    a020, a021, a022,
-    a030, a031, a032,
-    a040, a041,
+    a000,
+    a001,
+    a002,
+    a003,
+    a004,
+    a010,
+    a011,
+    a012,
+    a013,
+    a020,
+    a021,
+    a022,
+    a030,
+    a031,
+    a032,
+    a040,
+    a041,
     a050,
-    a100, a101, a102, a103,
-    a110, a111, a112,
-    a120, a121, a122,
-    a130, a131,
+    a100,
+    a101,
+    a102,
+    a103,
+    a110,
+    a111,
+    a112,
+    a120,
+    a121,
+    a122,
+    a130,
+    a131,
     a140,
-    a200, a201, a202,
-    a210, a211, a212,
-    a220, a221,
+    a200,
+    a201,
+    a202,
+    a210,
+    a211,
+    a212,
+    a220,
+    a221,
     a230,
-    a300, a301, a302,
-    a310, a311,
+    a300,
+    a301,
+    a302,
+    a310,
+    a311,
     a320,
-    a400, a401,
+    a400,
+    a401,
     a410,
     a500,
 )
+from pygotm.util.gsw.modules.gsw_mod_teos10_constants import gsw_sfac, offset
 from pygotm.util.gsw.toolbox.gsw_specvol import gsw_specvol
 
 __all__ = ["gsw_alpha"]
@@ -95,4 +124,4 @@ def gsw_alpha(sa: float, ct: float, p: float) -> float:
         )
     )
 
-    return 0.025 * v_ct_part / gsw_specvol(sa, ct, p)
+    return float(0.025 * v_ct_part / gsw_specvol(sa, ct, p))

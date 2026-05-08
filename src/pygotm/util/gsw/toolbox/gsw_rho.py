@@ -15,7 +15,7 @@ __all__ = ["gsw_rho"]
 
 @numba.njit(cache=True, fastmath=False)
 def gsw_rho(sa: float, ct: float, p: float) -> float:
-    """In-situ density [kg/m³] from Absolute Salinity, Conservative Temperature, pressure.
+    """In-situ density from Absolute Salinity, Conservative Temperature, pressure.
 
     Translated from gsw_rho.f90.
 
@@ -33,4 +33,4 @@ def gsw_rho(sa: float, ct: float, p: float) -> float:
     float
         In-situ density [kg/m³]
     """
-    return 1.0 / gsw_specvol(sa, ct, p)
+    return float(1.0 / gsw_specvol(sa, ct, p))

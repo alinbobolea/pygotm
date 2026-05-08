@@ -195,8 +195,10 @@ class SalinitySettings(InputSetting):
 
 
 class TidalConstituentSettings(_SettingsModel):
+    period_1: float = 44714.0
     amp_1: float = 0.0
     phase_1: float = 0.0
+    period_2: float = 43200.0
     amp_2: float = 0.0
     phase_2: float = 0.0
 
@@ -206,6 +208,24 @@ class ScalarTidalSettings(InputSetting):
     tidal: TidalConstituentSettings = Field(default_factory=TidalConstituentSettings)
     period_1: float = 44714.0
     period_2: float = 43200.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_nested_tidal_periods(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        normalized = _normalize_settings_document(value)
+        if not isinstance(normalized, dict):
+            return normalized
+
+        tidal = normalized.get("tidal")
+        if isinstance(tidal, dict):
+            if "period_1" in tidal and "period_1" not in normalized:
+                normalized["period_1"] = tidal["period_1"]
+            if "period_2" in tidal and "period_2" not in normalized:
+                normalized["period_2"] = tidal["period_2"]
+        return normalized
 
     @model_validator(mode="after")
     def _normalise_tidal(self) -> ScalarTidalSettings:
@@ -272,12 +292,6 @@ class ExtPressureSettings(_SettingsModel):
         return self
 
 
-class Mimic3DSettings(_SettingsModel):
-    ext_pressure: ExtPressureSettings = Field(default_factory=ExtPressureSettings)
-    int_pressure: IntPressureSettings = Field(default_factory=IntPressureSettings)
-    zeta: ScalarTidalSettings = Field(default_factory=ScalarTidalSettings)
-
-
 class VelocityRelaxationSettings(_SettingsModel):
     tau: float = 1.0e15
     ramp: float = 1.0e15
@@ -300,6 +314,13 @@ class VerticalVelocitySettings(_SettingsModel):
     def _normalise_adv_discr(self) -> VerticalVelocitySettings:
         self.adv_discr = _canonical_token(self.adv_discr, "p2_pdm")
         return self
+
+
+class Mimic3DSettings(_SettingsModel):
+    ext_pressure: ExtPressureSettings = Field(default_factory=ExtPressureSettings)
+    int_pressure: IntPressureSettings = Field(default_factory=IntPressureSettings)
+    zeta: ScalarTidalSettings = Field(default_factory=ScalarTidalSettings)
+    w: VerticalVelocitySettings = Field(default_factory=VerticalVelocitySettings)
 
 
 class WaveSettings(_SettingsModel):

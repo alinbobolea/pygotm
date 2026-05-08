@@ -12,6 +12,8 @@ Usage
     uv run python -m pygotm.validation.run_validation
     uv run python -m pygotm.validation.run_validation --cases couette,channel
     uv run python -m pygotm.validation.run_validation --all
+    uv run python -m pygotm.validation.run_validation --group non-stim
+    uv run python -m pygotm.validation.run_validation --exclude plume,resolute
     uv run python -m pygotm.validation.run_validation --no-run
     uv run python -m pygotm.validation.run_validation --workers 4
     uv run python -m pygotm.validation.run_validation --dashboard-port 8788
@@ -39,6 +41,14 @@ from pygotm.validation.warmup import trigger_numba_jit
 
 ALL_CASES: tuple[str, ...] = REFERENCE_CASE_NAMES
 DEFAULT_CASES: tuple[str, ...] = ("couette", "channel", "entrainment")
+NON_STIM_CASES: tuple[str, ...] = tuple(
+    case for case in ALL_CASES if case not in {"plume", "resolute"}
+)
+CASE_GROUPS: dict[str, tuple[str, ...]] = {
+    "default": DEFAULT_CASES,
+    "non-stim": NON_STIM_CASES,
+    "all": ALL_CASES,
+}
 
 
 def _fmt_time(s: float) -> str:
@@ -46,6 +56,34 @@ def _fmt_time(s: float) -> str:
         return f"{s:.1f}s"
     m, sec = divmod(s, 60)
     return f"{int(m)}m {sec:.0f}s"
+
+
+def _split_case_names(value: str | None) -> list[str]:
+    if value is None:
+        return []
+    return [case.strip() for case in value.split(",") if case.strip()]
+
+
+def _select_case_list(
+    *,
+    cases: str | None,
+    run_all: bool,
+    group: str | None,
+    exclude: str | None,
+) -> list[str]:
+    if group is not None:
+        case_list = list(CASE_GROUPS[group])
+    elif run_all:
+        case_list = list(ALL_CASES)
+    elif cases is not None:
+        case_list = _split_case_names(cases)
+    else:
+        case_list = list(DEFAULT_CASES)
+
+    excluded = set(_split_case_names(exclude))
+    if excluded:
+        case_list = [case for case in case_list if case not in excluded]
+    return case_list
 
 
 class _ProgressMonitor:
@@ -123,12 +161,14 @@ class _ProgressMonitor:
         for path in sorted(self._runs_dir.glob("*/.progress")):
             try:
                 parts = path.read_text().split()
-                result.append((
-                    path.parent.name,
-                    int(parts[0]),
-                    int(parts[1]),
-                    float(parts[2]),
-                ))
+                result.append(
+                    (
+                        path.parent.name,
+                        int(parts[0]),
+                        int(parts[1]),
+                        float(parts[2]),
+                    )
+                )
             except (OSError, ValueError, IndexError):
                 pass
         return result
@@ -160,9 +200,7 @@ def _make_on_result(
                 key=lambda v: v.nrmse if np.isfinite(v.nrmse) else -1,
                 default=None,
             )
-            worst_str = (
-                f"  worst={worst.name} nrmse={worst.nrmse:.2e}" if worst else ""
-            )
+            worst_str = f"  worst={worst.name} nrmse={worst.nrmse:.2e}" if worst else ""
             line = (
                 f"  {counter} FAIL   {name}  "
                 f"{result.n_fail}/{result.n_pass + result.n_fail} vars"
@@ -179,52 +217,90 @@ def _make_on_result(
 
 @click.command()
 @click.option(
-    "--cases", default=None, show_default=False,
+    "--cases",
+    default=None,
+    show_default=False,
     help=(
         "Comma-separated cases or case/input-yaml-base specs. "
         "Defaults to couette,channel,entrainment."
     ),
 )
 @click.option(
-    "--all", "run_all", is_flag=True,
+    "--all",
+    "run_all",
+    is_flag=True,
     help="Run all 22 GOTM reference cases.",
 )
 @click.option(
-    "--device", default=None, metavar="ARCH",
+    "--group",
+    type=click.Choice(sorted(CASE_GROUPS)),
+    default=None,
+    help="Named validation case group.",
+)
+@click.option(
+    "--exclude",
+    default=None,
+    show_default=False,
+    help="Comma-separated case names to omit from the selected set.",
+)
+@click.option(
+    "--device",
+    default=None,
+    metavar="ARCH",
     help="Execution backend label. Numba validation currently supports cpu.",
 )
 @click.option(
-    "--workers", default=None, type=int, metavar="N",
+    "--workers",
+    default=None,
+    type=int,
+    metavar="N",
     help="Dask worker count. Defaults to detected CPU count.",
 )
 @click.option(
-    "--dashboard-port", default=8787, show_default=True, type=int,
+    "--dashboard-port",
+    default=8787,
+    show_default=True,
+    type=int,
     help="Port for the Dask dashboard.",
 )
 @click.option(
-    "--output-dir", default="validation", show_default=True,
+    "--output-dir",
+    default="validation",
+    show_default=True,
     type=click.Path(file_okay=False, path_type=Path),
     help="Directory for run outputs and report.",
 )
 @click.option(
-    "--no-run", "skip_run", is_flag=True,
+    "--no-run",
+    "skip_run",
+    is_flag=True,
     help="Skip re-running pyGOTM; compare existing NetCDFs only.",
 )
 @click.option(
-    "--no-warmup", "skip_warmup", is_flag=True,
+    "--no-warmup",
+    "skip_warmup",
+    is_flag=True,
     help="Skip the Numba kernel warm-up step.",
+)
+@click.option(
+    "--debug-turbulence",
+    is_flag=True,
+    help="Write per-time turbulence comparison dumps under each run directory.",
 )
 @click.option("--rtol", default=RTOL, show_default=True, type=float)
 @click.option("--atol", default=ATOL, show_default=True, type=float)
 def cli(
     cases: str | None,
     run_all: bool,
+    group: str | None,
+    exclude: str | None,
     device: str | None,
     workers: int | None,
     dashboard_port: int,
     output_dir: Path,
     skip_run: bool,
     skip_warmup: bool,
+    debug_turbulence: bool,
     rtol: float,
     atol: float,
 ) -> None:
@@ -250,12 +326,12 @@ def cli(
     print(f"  Execution backend: {selected_arch}")
 
     # 3. Build case list
-    if run_all:
-        case_list = list(ALL_CASES)
-    elif cases is not None:
-        case_list = [c.strip() for c in cases.split(",") if c.strip()]
-    else:
-        case_list = list(DEFAULT_CASES)
+    case_list = _select_case_list(
+        cases=cases,
+        run_all=run_all,
+        group=group,
+        exclude=exclude,
+    )
 
     runs_dir = output_dir / "runs"
     print(f"  Cases ({len(case_list)}): {', '.join(case_list)}")
@@ -279,7 +355,12 @@ def cli(
     if skip_run:
         results: list[CaseResult] = []
         for name in case_list:
-            result = validate_case(name, runs_dir, skip_run=True)
+            result = validate_case(
+                name,
+                runs_dir,
+                skip_run=True,
+                debug_turbulence=debug_turbulence,
+            )
             on_result(result)
             results.append(result)
     else:
@@ -293,6 +374,7 @@ def cli(
                 n_workers=n_workers,
                 dashboard_port=dashboard_port,
                 skip_run=False,
+                debug_turbulence=debug_turbulence,
                 on_result=on_result,
             )
         finally:

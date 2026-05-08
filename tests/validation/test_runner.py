@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
@@ -72,7 +73,7 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
     # u: present in both, identical → PASS
     # v: present in both, large error → FAIL
     # w: only in ref → FAIL; pyGOTM must emit every Fortran reference variable.
-    py_ds  = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr + 1000.0)})
+    py_ds = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr + 1000.0)})
     ref_ds = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr), "w": (["t"], arr)})
 
     py_ds.to_netcdf(runs_dir / "couette" / "couette.nc", engine="scipy")
@@ -89,6 +90,46 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
     assert result.n_fail == 2
     assert result.n_skip == 0
     assert result.status == "FAIL"
+
+
+def test_validate_case_writes_turbulence_debug_dump(tmp_path: Path) -> None:
+    runs_dir = tmp_path / "runs"
+    case_dir = runs_dir / "couette"
+    case_dir.mkdir(parents=True)
+
+    ref_tke = np.asarray([[0.0, 1.0, 2.0], [0.0, 2.0, 4.0]])
+    py_tke = ref_tke.copy()
+    py_tke[1, 2] += 0.25
+
+    xr.Dataset(
+        {"tke": (["time", "zi"], py_tke)},
+    ).to_netcdf(case_dir / "couette.nc", engine="scipy")
+    ref_nc = tmp_path / "ref.nc"
+    xr.Dataset(
+        {"tke": (["time", "zi"], ref_tke)},
+    ).to_netcdf(ref_nc, engine="scipy")
+
+    with patch(
+        "pygotm.validate.resolve_reference_case",
+        return_value=_fake_case(tmp_path, ref_path=ref_nc),
+    ):
+        result = validate_case(
+            "couette",
+            runs_dir,
+            skip_run=True,
+            debug_turbulence=True,
+        )
+
+    debug_path = case_dir / "turbulence_debug.json"
+    payload = json.loads(debug_path.read_text(encoding="utf-8"))
+    worst_tke = next(
+        row
+        for row in payload["per_time"]
+        if row["variable"] == "tke" and row["time_index"] == 1
+    )
+    assert result.status == "FAIL"
+    assert worst_tke["max_abs_err"] == 0.25
+    assert worst_tke["spatial_index"] == {"zi": 2}
 
 
 def test_validate_case_threads_on_step_to_run_case(tmp_path: Path) -> None:

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from pygotm.config.settings import GotmSettings
+from pygotm.config.settings import GotmSettings, VerticalVelocitySettings
 from pygotm.input.input import (
     ProfileInput,
     ScalarInput,
@@ -78,6 +78,12 @@ _EXTINCTION_METHOD = {
     "jerlov_iii": 6,
     "custom": 7,
 }
+
+
+def _vertical_velocity_settings(parsed: GotmSettings) -> VerticalVelocitySettings:
+    if "w" in parsed.mimic_3d.model_fields_set:
+        return parsed.mimic_3d.w
+    return parsed.w
 
 
 def _profile_method(name: str, *, analytical_constant: bool) -> int:
@@ -352,7 +358,8 @@ def init_observations(
     state.plume_type = _PLUME_TYPE[parsed.mimic_3d.int_pressure.plume.type]
     state.plume_slope_x = parsed.mimic_3d.int_pressure.plume.x_slope
     state.plume_slope_y = parsed.mimic_3d.int_pressure.plume.y_slope
-    state.w_adv_discr = _W_ADV_DISCR[parsed.w.adv_discr]
+    vertical_velocity = _vertical_velocity_settings(parsed)
+    state.w_adv_discr = _W_ADV_DISCR[vertical_velocity.adv_discr]
 
     state.AmpMu = parsed.mimic_3d.ext_pressure.dpdx.tidal.amp_1
     state.PhaseMu = parsed.mimic_3d.ext_pressure.dpdx.tidal.phase_1
@@ -510,21 +517,21 @@ def init_observations(
     )
     state.w_adv_input = _scalar_input(
         name="w_adv",
-        method=_scalar_method(parsed.w.max.method),
-        path=parsed.w.max.path,
-        index=parsed.w.max.column,
-        constant_value=parsed.w.max.constant_value,
-        scale_factor=parsed.w.max.scale_factor,
-        add_offset=parsed.w.max.add_offset,
+        method=_scalar_method(vertical_velocity.max.method),
+        path=vertical_velocity.max.path,
+        index=vertical_velocity.max.column,
+        constant_value=vertical_velocity.max.constant_value,
+        scale_factor=vertical_velocity.max.scale_factor,
+        add_offset=vertical_velocity.max.add_offset,
     )
     state.w_height_input = _scalar_input(
         name="w_height",
-        method=_scalar_method(parsed.w.height.method),
-        path=parsed.w.height.path,
-        index=parsed.w.height.column,
-        constant_value=parsed.w.height.constant_value,
-        scale_factor=parsed.w.height.scale_factor,
-        add_offset=parsed.w.height.add_offset,
+        method=_scalar_method(vertical_velocity.height.method),
+        path=vertical_velocity.height.path,
+        index=vertical_velocity.height.column,
+        constant_value=vertical_velocity.height.constant_value,
+        scale_factor=vertical_velocity.height.scale_factor,
+        add_offset=vertical_velocity.height.add_offset,
     )
     state.A_input = _scalar_input(
         name="A",

@@ -36,7 +36,7 @@ from pygotm.turbulence.production import step_production_single
 from pygotm.turbulence.q2over2eq import _step_q2over2eq as _step_q2over2eq_single
 from pygotm.turbulence.tkeeq import step_tkeeq_single
 from pygotm.turbulence.variances import step_variances_single
-from pygotm.util.gsw import gsw_alpha, gsw_beta, gsw_sigma0
+from pygotm.util.gsw import gsw_alpha, gsw_beta, gsw_rho, gsw_sigma0
 
 __all__ = [
     "run_compiled_time_loop",
@@ -53,6 +53,10 @@ _AIRSEA_RHO0 = 1025.0
 _EMISS = 0.97
 _BOLZ = 5.670374419e-8
 _LONG = 1.0e15
+_GSW_CP0 = 3991.86795711963
+_GSW_SFAC = 0.0248826675584615
+_GSW_UPS = 35.16504 / 35.0
+_GSW_T0 = 273.15
 
 # Fairall bulk-flux constants (Fairall et al. 1996)
 _FAIRALL_G = 9.81  # gravitational acceleration [m s⁻²]
@@ -237,6 +241,50 @@ _PAYNE_DZA = (
 
 
 @numba.njit(cache=True, fastmath=False)
+def _compute_mld_single(
+    nlev: int,
+    mld_method: int,
+    diff_k: float,
+    ri_crit: float,
+    turb_method: int,
+    h: np.ndarray,
+    NN: np.ndarray,
+    SS: np.ndarray,
+    tke: np.ndarray,
+) -> tuple[float, float]:
+    mld_surf = 0.0
+    mld_bott = 0.0
+
+    if mld_method == 1:
+        if turb_method != 100:
+            for i in range(nlev, 0, -1):
+                if tke[i] < diff_k:
+                    break
+                mld_surf += h[i]
+            for i in range(1, nlev + 1):
+                if tke[i] < diff_k:
+                    break
+                mld_bott += h[i]
+    elif mld_method == 2:
+        mld_surf = h[nlev]
+        for i in range(nlev - 1, 0, -1):
+            if NN[i] / (SS[i] + 1.0e-10) > ri_crit:
+                break
+            mld_surf += h[i]
+    elif mld_method == 3:
+        index = 1
+        max_nn = NN[1]
+        for i in range(2, nlev + 1):
+            if NN[i] > max_nn:
+                max_nn = NN[i]
+                index = i
+        for i in range(index, nlev + 1):
+            mld_surf += h[i]
+
+    return mld_surf, mld_bott
+
+
+@numba.njit(cache=True, fastmath=False)
 def _write_output_slot(
     slot: int,
     step: int,
@@ -275,6 +323,9 @@ def _write_output_slot(
     sss_value: float,
     mld_surf_value: float,
     mld_bott_value: float,
+    us0_value: float,
+    vs0_value: float,
+    ds_value: float,
     ekin_value: float,
     epot_value: float,
     eturb_value: float,
@@ -282,6 +333,7 @@ def _write_output_slot(
     u_taub: np.ndarray,
     taub: np.ndarray,
     rho_p: np.ndarray,
+    rho: np.ndarray,
     u: np.ndarray,
     v: np.ndarray,
     T: np.ndarray,
@@ -329,6 +381,8 @@ def _write_output_slot(
     gamh: np.ndarray,
     gams: np.ndarray,
     rad: np.ndarray,
+    us: np.ndarray,
+    vs: np.ndarray,
     dusdz: np.ndarray,
     dvsdz: np.ndarray,
     nus: np.ndarray,
@@ -481,9 +535,9 @@ def _write_output_slot(
     output_u_taub[slot] = u_taub[0]
     output_taub[slot] = taub[0]
     output_mld_bott[slot] = mld_bott_value
-    output_us0[slot] = 0.0
-    output_vs0[slot] = 0.0
-    output_ds[slot] = 0.0
+    output_us0[slot] = us0_value
+    output_vs0[slot] = vs0_value
+    output_ds[slot] = ds_value
     output_Ekin[slot] = ekin_value
     output_Epot[slot] = epot_value
     output_Eturb[slot] = eturb_value
@@ -503,7 +557,7 @@ def _write_output_slot(
         output_Eturb[slot] = eturb * rho0_value
     for k in range(nlev + 1):
         output_rho_p[slot, k] = rho_p[k]
-        output_rho[slot, k] = rho_p[k]
+        output_rho[slot, k] = rho[k]
         output_u[slot, k] = u[k]
         output_v[slot, k] = v[k]
         output_T[slot, k] = T[k]
@@ -552,7 +606,7 @@ def _write_output_slot(
         output_gamv[slot, k] = 0.0
         output_gamh[slot, k] = gamh[k]
         output_gams[slot, k] = gams[k]
-        output_Rig[slot, k] = NN[k] / (SS[k] + 1.0e-10)
+        output_Rig[slot, k] = 0.0 if step == 0 else NN[k] / (SS[k] + 1.0e-10)
         output_gamb[slot, k] = 0.0
         output_gam[slot, k] = 0.0
         output_r[slot, k] = 0.0
@@ -575,8 +629,8 @@ def _write_output_slot(
                 -num[k] * (v[k + 1] - v[k]) / spacing - nucl[k] * dvsdz[k]
             )
         output_rad[slot, k] = rad[k]
-        output_us[slot, k] = 0.0
-        output_vs[slot, k] = 0.0
+        output_us[slot, k] = us[k]
+        output_vs[slot, k] = vs[k]
         output_dusdz[slot, k] = dusdz[k]
         output_dvsdz[slot, k] = dvsdz[k]
         output_nus[slot, k] = nus[k]
@@ -616,10 +670,19 @@ def time_loop_compiled(
     charnock_val: float,
     calc_bottom_stress: int,
     max_it_z0b: int,
+    plume_active: int,
+    int_press_type: int,
+    plume_type: int,
+    plume_slope_x: float,
+    plume_slope_y: float,
     seagrass_active: int,
     seagrass_alpha: float,
     seagrass_grassind: int,
     seagrass_grassn: int,
+    w_adv_active: int,
+    w_adv_discr: int,
+    s_adv: int,
+    t_adv: int,
     sprof_input_active: int,
     tprof_input_active: int,
     uprof_input_active: int,
@@ -631,8 +694,12 @@ def time_loop_compiled(
     airsea_fluxes_method: int,
     airsea_hum_method: int,
     airsea_shortwave_method: int,
+    airsea_shortwave_type: int,
+    airsea_longwave_method: int,
+    airsea_longwave_type: int,
     airsea_albedo_method: int,
     airsea_ssuv_method: int,
+    airsea_sst_obs_method: int,
     airsea_shortwave_scale_factor: float,
     airsea_heat_scale_factor: float,
     airsea_const_albedo: float,
@@ -645,6 +712,9 @@ def time_loop_compiled(
     turb_method: int,
     stab_method: int,
     prandtl0_fix: float,
+    mld_method: int,
+    mld_diff_k: float,
+    mld_ri_crit: float,
     my_b1: float,
     my_sq: float,
     my_sl: float,
@@ -717,6 +787,9 @@ def time_loop_compiled(
     w: np.ndarray,
     T: np.ndarray,
     S: np.ndarray,
+    Tp: np.ndarray,
+    Ti: np.ndarray,
+    Sp: np.ndarray,
     Tobs: np.ndarray,
     Sobs: np.ndarray,
     NN: np.ndarray,
@@ -738,6 +811,7 @@ def time_loop_compiled(
     alpha_density: np.ndarray,
     beta_density: np.ndarray,
     rho_p: np.ndarray,
+    rho: np.ndarray,
     tke: np.ndarray,
     tkeo: np.ndarray,
     eps: np.ndarray,
@@ -827,13 +901,25 @@ def time_loop_compiled(
     forcing_u10: np.ndarray,
     forcing_v10: np.ndarray,
     forcing_precip: np.ndarray,
+    forcing_longwave: np.ndarray,
     forcing_sst_obs: np.ndarray,
     forcing_sss_obs: np.ndarray,
     forcing_Tobs: np.ndarray,
     forcing_Sobs: np.ndarray,
     forcing_uprof: np.ndarray,
     forcing_vprof: np.ndarray,
+    forcing_dtdx: np.ndarray,
+    forcing_dtdy: np.ndarray,
+    forcing_dsdx: np.ndarray,
+    forcing_dsdy: np.ndarray,
+    forcing_w_adv: np.ndarray,
+    forcing_w_height: np.ndarray,
     forcing_zeta: np.ndarray,
+    forcing_us0: np.ndarray,
+    forcing_vs0: np.ndarray,
+    forcing_ds: np.ndarray,
+    forcing_us: np.ndarray,
+    forcing_vs: np.ndarray,
     forcing_dusdz: np.ndarray,
     forcing_dvsdz: np.ndarray,
     output_step: np.ndarray,
@@ -984,6 +1070,107 @@ def time_loop_compiled(
     if output_enabled != 0:
         if out_index >= output_step.shape[0]:
             return -1
+        initial_evap = 0.0
+        initial_tx_surface = forcing_tx[0]
+        initial_ty_surface = forcing_ty[0]
+        initial_heat = forcing_heat[0]
+        initial_shortwave = forcing_swr[0]
+        initial_albedo = 0.0
+        initial_es = 0.0
+        initial_ea = 0.0
+        initial_qs = 0.0
+        initial_qa = 0.0
+        initial_rhoa = 0.0
+        initial_qh = 0.0
+        initial_qe = 0.0
+        initial_ql = 0.0
+        initial_sst = _output_sst_value(
+            0.0,
+            forcing_sst_obs[0],
+            airsea_sst_obs_method,
+        )
+        if airsea_fluxes_method == 1:
+            (
+                initial_evap,
+                initial_tx_surface,
+                initial_ty_surface,
+                initial_heat,
+                initial_shortwave,
+                initial_albedo,
+                initial_es,
+                initial_ea,
+                initial_qs,
+                initial_qa,
+                initial_rhoa,
+                initial_qh,
+                initial_qe,
+                initial_ql,
+            ) = _airsea_kondo_compiled(
+                forcing_yearday[0],
+                forcing_secondsofday[0],
+                latitude,
+                longitude,
+                airsea_hum_method,
+                airsea_shortwave_method,
+                airsea_shortwave_type,
+                airsea_longwave_method,
+                airsea_longwave_type,
+                airsea_albedo_method,
+                airsea_shortwave_scale_factor,
+                airsea_heat_scale_factor,
+                airsea_const_albedo,
+                0.0,
+                forcing_airp[0],
+                forcing_airt[0],
+                forcing_hum[0],
+                forcing_cloud[0],
+                forcing_u10[0],
+                forcing_v10[0],
+                forcing_precip[0],
+                forcing_longwave[0],
+                forcing_swr[0],
+            )
+        elif airsea_fluxes_method == 2:
+            (
+                initial_evap,
+                initial_tx_surface,
+                initial_ty_surface,
+                initial_heat,
+                initial_shortwave,
+                initial_albedo,
+                initial_es,
+                initial_ea,
+                initial_qs,
+                initial_qa,
+                initial_rhoa,
+                initial_qh,
+                initial_qe,
+                initial_ql,
+            ) = _airsea_fairall_compiled(
+                forcing_yearday[0],
+                forcing_secondsofday[0],
+                latitude,
+                longitude,
+                airsea_hum_method,
+                airsea_shortwave_method,
+                airsea_shortwave_type,
+                airsea_longwave_method,
+                airsea_longwave_type,
+                airsea_albedo_method,
+                airsea_shortwave_scale_factor,
+                airsea_heat_scale_factor,
+                airsea_const_albedo,
+                0.0,
+                forcing_airp[0],
+                forcing_airt[0],
+                forcing_hum[0],
+                forcing_cloud[0],
+                forcing_u10[0],
+                forcing_v10[0],
+                forcing_precip[0],
+                forcing_longwave[0],
+                forcing_swr[0],
+            )
         _write_output_slot(
             out_index,
             0,
@@ -996,32 +1183,35 @@ def time_loop_compiled(
             forcing_airt[0],
             forcing_airp[0],
             forcing_hum[0],
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
+            initial_es,
+            initial_ea,
+            initial_qs,
+            initial_qa,
+            initial_rhoa,
             forcing_cloud[0],
-            0.0,
+            initial_albedo,
             forcing_precip[0],
-            0.0,
+            initial_evap,
             int_precip,
             int_evap,
             int_swr,
             int_heat,
             int_total,
-            forcing_swr[0],
-            0.0,
-            0.0,
-            0.0,
-            forcing_heat[0],
-            forcing_tx[0],
-            forcing_ty[0],
-            0.0,
+            initial_shortwave,
+            initial_qh,
+            initial_qe,
+            initial_ql,
+            initial_heat,
+            initial_tx_surface,
+            initial_ty_surface,
+            initial_sst,
             forcing_sst_obs[0],
             forcing_sss_obs[0],
             0.0,
             0.0,
+            forcing_us0[0],
+            forcing_vs0[0],
+            forcing_ds[0],
             0.0,
             0.0,
             0.0,
@@ -1029,13 +1219,14 @@ def time_loop_compiled(
             u_taub,
             taub,
             rho_p,
+            rho,
             u,
             v,
             T,
             S,
-            T,
-            T,
-            S,
+            Tp,
+            Ti,
+            Sp,
             Tobs,
             Sobs,
             uprof,
@@ -1076,6 +1267,8 @@ def time_loop_compiled(
             gamh,
             gams,
             rad,
+            forcing_us[0],
+            forcing_vs[0],
             dusdz,
             dvsdz,
             nus,
@@ -1195,6 +1388,7 @@ def time_loop_compiled(
 
     cosomega = math.cos(cori * dt)
     sinomega = math.sin(cori * dt)
+    w_adv_for_equations = 1 if w_adv_active != 0 else 0
 
     for step in range(1, nt + 1):
         if uprof_input_active != 0:
@@ -1222,6 +1416,16 @@ def time_loop_compiled(
                 dusdz[k] = forcing_dusdz[step, k]
                 dvsdz[k] = forcing_dvsdz[step, k]
 
+        if w_adv_active != 0:
+            _step_wequation_single(
+                nlev,
+                w_adv_active,
+                forcing_w_adv[step],
+                forcing_w_height[step],
+                zi,
+                w,
+            )
+
         if cori != 0.0:
             step_coriolis_single(nlev, cosomega, sinomega, u, v, uprof, vprof)
 
@@ -1236,7 +1440,11 @@ def time_loop_compiled(
         qe = 0.0
         ql = 0.0
         shortwave = forcing_swr[step]
-        sst_value = 0.0
+        sst_value = _output_sst_value(
+            0.0,
+            forcing_sst_obs[step],
+            airsea_sst_obs_method,
+        )
         sss_value = forcing_sss_obs[step]
         if airsea_fluxes_method == 1:
             wind_u = forcing_u10[step]
@@ -1244,8 +1452,12 @@ def time_loop_compiled(
             if airsea_ssuv_method != 0:
                 wind_u -= u[nlev]
                 wind_v -= v[nlev]
-            sst_value = T[nlev]
-            sss_value = S[nlev]
+            model_sst = _gsw_t_from_ct_surface_compiled(S[nlev], T[nlev])
+            sst_value = _output_sst_value(
+                model_sst,
+                forcing_sst_obs[step],
+                airsea_sst_obs_method,
+            )
             (
                 evap,
                 tx_surface,
@@ -1268,11 +1480,14 @@ def time_loop_compiled(
                 longitude,
                 airsea_hum_method,
                 airsea_shortwave_method,
+                airsea_shortwave_type,
+                airsea_longwave_method,
+                airsea_longwave_type,
                 airsea_albedo_method,
                 airsea_shortwave_scale_factor,
                 airsea_heat_scale_factor,
                 airsea_const_albedo,
-                T[nlev],
+                model_sst,
                 forcing_airp[step],
                 forcing_airt[step],
                 forcing_hum[step],
@@ -1280,21 +1495,31 @@ def time_loop_compiled(
                 wind_u,
                 wind_v,
                 forcing_precip[step],
+                forcing_longwave[step],
                 forcing_swr[step],
             )
             tx_value = tx_surface / rho0
             ty_value = ty_surface / rho0
             swf = forcing_precip[step] + evap
             shf = -heat
-            current_i0 = shortwave * (1.0 - albedo)
+            current_i0 = _net_shortwave_compiled(
+                airsea_shortwave_method,
+                airsea_shortwave_type,
+                shortwave,
+                albedo,
+            )
         elif airsea_fluxes_method == 2:
             wind_u = forcing_u10[step]
             wind_v = forcing_v10[step]
             if airsea_ssuv_method != 0:
                 wind_u -= u[nlev]
                 wind_v -= v[nlev]
-            sst_value = T[nlev]
-            sss_value = S[nlev]
+            model_sst = _gsw_t_from_ct_surface_compiled(S[nlev], T[nlev])
+            sst_value = _output_sst_value(
+                model_sst,
+                forcing_sst_obs[step],
+                airsea_sst_obs_method,
+            )
             (
                 evap,
                 tx_surface,
@@ -1317,11 +1542,14 @@ def time_loop_compiled(
                 longitude,
                 airsea_hum_method,
                 airsea_shortwave_method,
+                airsea_shortwave_type,
+                airsea_longwave_method,
+                airsea_longwave_type,
                 airsea_albedo_method,
                 airsea_shortwave_scale_factor,
                 airsea_heat_scale_factor,
                 airsea_const_albedo,
-                T[nlev],
+                model_sst,
                 forcing_airp[step],
                 forcing_airt[step],
                 forcing_hum[step],
@@ -1329,13 +1557,19 @@ def time_loop_compiled(
                 wind_u,
                 wind_v,
                 forcing_precip[step],
+                forcing_longwave[step],
                 forcing_swr[step],
             )
             tx_value = tx_surface / rho0
             ty_value = ty_surface / rho0
             swf = forcing_precip[step] + evap
             shf = -heat
-            current_i0 = shortwave * (1.0 - albedo)
+            current_i0 = _net_shortwave_compiled(
+                airsea_shortwave_method,
+                airsea_shortwave_type,
+                shortwave,
+                albedo,
+            )
         else:
             tx_surface = forcing_tx[step]
             ty_surface = forcing_ty[step]
@@ -1392,10 +1626,10 @@ def time_loop_compiled(
             avmolu,
             gravity,
             ext_press_mode,
-            0,
-            0,
+            w_adv_for_equations,
+            w_adv_discr,
             seagrass_active,
-            0,
+            plume_active,
             tx_value,
             forcing_dpdx[step],
             u,
@@ -1428,9 +1662,9 @@ def time_loop_compiled(
             avmolu,
             gravity,
             ext_press_mode,
-            0,
-            0,
-            0,
+            w_adv_for_equations,
+            w_adv_discr,
+            plume_active,
             ty_value,
             forcing_dpdy[step],
             v,
@@ -1467,6 +1701,39 @@ def time_loop_compiled(
             v,
             q_sour,
         )
+        if int_press_type == 1:
+            _internal_pressure_gradients_single(
+                nlev,
+                gravity,
+                rho0,
+                density_method,
+                rhob,
+                alpha0,
+                beta0,
+                T0,
+                S0,
+                h,
+                T,
+                S,
+                forcing_dsdx[step],
+                forcing_dsdy[step],
+                forcing_dtdx[step],
+                forcing_dtdy[step],
+                q_sour,
+                l_sour,
+                idpdx,
+                idpdy,
+            )
+        elif int_press_type == 2:
+            _internal_pressure_plume_single(
+                nlev,
+                plume_type,
+                plume_slope_x,
+                plume_slope_y,
+                buoy,
+                idpdx,
+                idpdy,
+            )
         for k in range(nlev + 1):
             avh[k] = work_avh[k]
         step_friction_single(
@@ -1481,7 +1748,7 @@ def time_loop_compiled(
             charnock_val,
             calc_bottom_stress,
             max_it_z0b,
-            0,
+            plume_active,
             1 if step == 1 else 0,
             h,
             u,
@@ -1504,9 +1771,9 @@ def time_loop_compiled(
                 dt,
                 cnpar,
                 avmolS,
-                0,
-                0,
-                0,
+                w_adv_for_equations,
+                w_adv_discr,
+                s_adv,
                 S,
                 h,
                 w,
@@ -1517,8 +1784,8 @@ def time_loop_compiled(
                 Sobs,
                 s_relax_tau,
                 -ssf,
-                idpdx,
-                idpdy,
+                forcing_dsdx[step],
+                forcing_dsdy[step],
                 work_avh,
                 q_sour,
                 l_sour,
@@ -1544,9 +1811,9 @@ def time_loop_compiled(
                 light_A,
                 light_g1,
                 light_g2,
-                0,
-                0,
-                0,
+                w_adv_for_equations,
+                w_adv_discr,
+                t_adv,
                 T,
                 S,
                 h,
@@ -1561,8 +1828,8 @@ def time_loop_compiled(
                 t_relax_tau,
                 current_i0,
                 -shf / (rho0 * cp),
-                idpdx,
-                idpdy,
+                forcing_dtdx[step],
+                forcing_dtdy[step],
                 work_avh,
                 q_sour,
                 l_sour,
@@ -1608,10 +1875,12 @@ def time_loop_compiled(
             rhob,
             T,
             S,
+            z,
             zi,
             alpha_density,
             beta_density,
             rho_p,
+            rho,
             buoy,
         )
         _stratification_from_alpha_beta_single(
@@ -1782,6 +2051,11 @@ def time_loop_compiled(
                 galp,
                 length_lim,
                 prandtl0_fix,
+                cc1,
+                ct1,
+                a2,
+                a3,
+                a5,
                 cw1,
                 cw2,
                 cw3plus,
@@ -1802,6 +2076,8 @@ def time_loop_compiled(
                 h,
                 NN,
                 SS,
+                SSU,
+                SSV,
                 xP,
                 SSCSTK,
                 SSSTK,
@@ -1824,6 +2100,12 @@ def time_loop_compiled(
                 cmue3,
                 as_,
                 an,
+                at,
+                av,
+                aw,
+                uu,
+                vv,
+                ww,
                 u_taus[0],
                 u_taub[0],
                 z0s[0],
@@ -1845,6 +2127,17 @@ def time_loop_compiled(
         ):
             if out_index >= output_step.shape[0]:
                 return -1
+            mld_surf_value, mld_bott_value = _compute_mld_single(
+                nlev,
+                mld_method,
+                mld_diff_k,
+                mld_ri_crit,
+                turb_method,
+                h,
+                NN,
+                SS,
+                tke,
+            )
             _write_output_slot(
                 out_index,
                 step,
@@ -1881,8 +2174,11 @@ def time_loop_compiled(
                 sst_value,
                 forcing_sst_obs[step],
                 sss_value,
-                depth,
-                0.0,
+                mld_surf_value,
+                mld_bott_value,
+                forcing_us0[step],
+                forcing_vs0[step],
+                forcing_ds[step],
                 0.0,
                 0.0,
                 0.0,
@@ -1890,13 +2186,14 @@ def time_loop_compiled(
                 u_taub,
                 taub,
                 rho_p,
+                rho,
                 u,
                 v,
                 T,
                 S,
-                T,
-                T,
-                S,
+                Tp,
+                Ti,
+                Sp,
                 Tobs,
                 Sobs,
                 uprof,
@@ -1937,6 +2234,8 @@ def time_loop_compiled(
                 gamh,
                 gams,
                 rad,
+                forcing_us[step],
+                forcing_vs[step],
                 dusdz,
                 dvsdz,
                 nus,
@@ -2057,6 +2356,30 @@ def time_loop_compiled(
     return out_index
 
 
+def _simple_freezing_temperature(salinity: float) -> float:
+    """Return GOTM's simple ice freezing temperature in degrees Celsius."""
+
+    return -0.0575 * salinity
+
+
+def _populate_simple_ice_reference_scalars(
+    params: RuntimeParams,
+    output: RuntimeOutput,
+    written: int,
+) -> None:
+    tf = output.reference_scalars.get("Tf")
+    if tf is None or written <= 0:
+        return
+
+    top = params.nlev
+    count = min(written, output.nout)
+    for slot in range(count):
+        salinity = (
+            output.Sp[slot, top] if output.Sp[slot, top] != 0.0 else output.S[slot, top]
+        )
+        tf[slot] = _simple_freezing_temperature(float(salinity))
+
+
 def run_compiled_time_loop(
     params: RuntimeParams,
     state: RuntimeState,
@@ -2071,7 +2394,7 @@ def run_compiled_time_loop(
     forcing.validate()
     output.validate(params.nlev)
 
-    return int(
+    written = int(
         time_loop_compiled(
             params.nlev,
             params.nt,
@@ -2102,10 +2425,19 @@ def run_compiled_time_loop(
             params.charnock_val,
             params.calc_bottom_stress,
             params.max_it_z0b,
+            params.plume_active,
+            params.int_press_type,
+            params.plume_type,
+            params.plume_slope_x,
+            params.plume_slope_y,
             params.seagrass_active,
             params.seagrass_alpha,
             params.seagrass_grassind,
             params.seagrass_grassn,
+            params.w_adv_active,
+            params.w_adv_discr,
+            params.s_adv,
+            params.t_adv,
             params.sprof_input_active,
             params.tprof_input_active,
             params.uprof_input_active,
@@ -2117,8 +2449,12 @@ def run_compiled_time_loop(
             params.airsea_fluxes_method,
             params.airsea_hum_method,
             params.airsea_shortwave_method,
+            params.airsea_shortwave_type,
+            params.airsea_longwave_method,
+            params.airsea_longwave_type,
             params.airsea_albedo_method,
             params.airsea_ssuv_method,
+            params.airsea_sst_obs_method,
             params.airsea_shortwave_scale_factor,
             params.airsea_heat_scale_factor,
             params.airsea_const_albedo,
@@ -2131,6 +2467,9 @@ def run_compiled_time_loop(
             params.turb_method,
             params.stab_method,
             params.prandtl0_fix,
+            params.mld_method,
+            params.mld_diff_k,
+            params.mld_ri_crit,
             params.my_b1,
             params.my_sq,
             params.my_sl,
@@ -2203,6 +2542,9 @@ def run_compiled_time_loop(
             state.w,
             state.T,
             state.S,
+            state.Tp,
+            state.Ti,
+            state.Sp,
             state.Tobs,
             state.Sobs,
             state.NN,
@@ -2224,6 +2566,7 @@ def run_compiled_time_loop(
             state.alpha,
             state.beta,
             state.rho_p,
+            state.rho,
             state.tke,
             state.tkeo,
             state.eps,
@@ -2313,13 +2656,25 @@ def run_compiled_time_loop(
             forcing.u10,
             forcing.v10,
             forcing.precip,
+            forcing.longwave,
             forcing.sst_obs,
             forcing.sss_obs,
             forcing.Tobs,
             forcing.Sobs,
             forcing.uprof,
             forcing.vprof,
+            forcing.dtdx,
+            forcing.dtdy,
+            forcing.dsdx,
+            forcing.dsdy,
+            forcing.w_adv,
+            forcing.w_height,
             forcing.zeta,
+            forcing.us0,
+            forcing.vs0,
+            forcing.ds,
+            forcing.us,
+            forcing.vs,
             forcing.dusdz,
             forcing.dvsdz,
             output.output_step,
@@ -2432,6 +2787,9 @@ def run_compiled_time_loop(
             output.zi,
         )
     )
+    if written > 0:
+        _populate_simple_ice_reference_scalars(params, output, written)
+    return written
 
 
 @numba.njit(cache=True, fastmath=False)
@@ -2459,6 +2817,190 @@ def _kolpran_single(
 def _copy_profile(nlev: int, source: np.ndarray, target: np.ndarray) -> None:
     for k in range(nlev + 1):
         target[k] = source[k]
+
+
+@numba.njit(cache=True, fastmath=False)
+def _step_wequation_single(
+    nlev: int,
+    w_adv_method: int,
+    w_adv: float,
+    w_height: float,
+    zi: np.ndarray,
+    w: np.ndarray,
+) -> float:
+    if w_adv_method != 1 and w_adv_method != 2:
+        return w_height
+
+    z_top = zi[nlev]
+    z_bottom = zi[0]
+    column_depth = z_top - z_bottom
+
+    z_crit = z_top - 0.01 * column_depth
+    if w_height > z_crit:
+        w_height = z_crit
+    z_crit = z_bottom + 0.01 * column_depth
+    if w_height < z_crit:
+        w_height = z_crit
+
+    for i in range(1, nlev):
+        if zi[i] > w_height:
+            w[i] = (z_top - zi[i]) / (z_top - w_height) * w_adv
+        else:
+            w[i] = (z_bottom - zi[i]) / (z_bottom - w_height) * w_adv
+    w[0] = 0.0
+    w[nlev] = 0.0
+    return w_height
+
+
+@numba.njit(cache=True, fastmath=False)
+def _density_value_compiled(
+    density_method: int,
+    rhob: float,
+    alpha0: float,
+    beta0: float,
+    T0: float,
+    S0: float,
+    S_value: float,
+    T_value: float,
+    pressure: float,
+) -> float:
+    if density_method == 1:
+        return float(gsw_rho(S_value, T_value, pressure))
+    return rhob * (1.0 - alpha0 * (T_value - T0) + beta0 * (S_value - S0))
+
+
+@numba.njit(cache=True, fastmath=False)
+def _internal_pressure_gradients_single(
+    nlev: int,
+    gravity: float,
+    rho0: float,
+    density_method: int,
+    rhob: float,
+    alpha0: float,
+    beta0: float,
+    T0: float,
+    S0: float,
+    h: np.ndarray,
+    T: np.ndarray,
+    S: np.ndarray,
+    dsdx: np.ndarray,
+    dsdy: np.ndarray,
+    dtdx: np.ndarray,
+    dtdy: np.ndarray,
+    dxB: np.ndarray,
+    dyB: np.ndarray,
+    idpdx: np.ndarray,
+    idpdy: np.ndarray,
+) -> None:
+    for i in range(nlev + 1):
+        idpdx[i] = 0.0
+        idpdy[i] = 0.0
+        dxB[i] = 0.0
+        dyB[i] = 0.0
+
+    dx = 10.0
+    dy = 10.0
+    z = 0.0
+    for i in range(nlev, 0, -1):
+        z += 0.5 * h[i]
+
+        dSS = dx * dsdx[i]
+        dTT = dx * dtdx[i]
+        Bl = (
+            -gravity
+            * (
+                _density_value_compiled(
+                    density_method, rhob, alpha0, beta0, T0, S0, S[i], T[i], z
+                )
+                - rho0
+            )
+            / rho0
+        )
+        Br = (
+            -gravity
+            * (
+                _density_value_compiled(
+                    density_method,
+                    rhob,
+                    alpha0,
+                    beta0,
+                    T0,
+                    S0,
+                    S[i] + dSS,
+                    T[i] + dTT,
+                    z,
+                )
+                - rho0
+            )
+            / rho0
+        )
+        dxB[i] = (Br - Bl) / dx
+
+        dSS = dy * dsdy[i]
+        dTT = dy * dtdy[i]
+        Bl = (
+            -gravity
+            * (
+                _density_value_compiled(
+                    density_method, rhob, alpha0, beta0, T0, S0, S[i], T[i], z
+                )
+                - rho0
+            )
+            / rho0
+        )
+        Br = (
+            -gravity
+            * (
+                _density_value_compiled(
+                    density_method,
+                    rhob,
+                    alpha0,
+                    beta0,
+                    T0,
+                    S0,
+                    S[i] + dSS,
+                    T[i] + dTT,
+                    z,
+                )
+                - rho0
+            )
+            / rho0
+        )
+        dyB[i] = (Br - Bl) / dy
+
+        z += 0.5 * h[i]
+
+    acc = 0.5 * h[nlev] * dxB[nlev]
+    idpdx[nlev] = acc
+    for i in range(nlev - 1, 0, -1):
+        acc += 0.5 * h[i + 1] * dxB[i + 1] + 0.5 * h[i] * dxB[i]
+        idpdx[i] = acc
+
+    acc = 0.5 * h[nlev] * dyB[nlev]
+    idpdy[nlev] = acc
+    for i in range(nlev - 1, 0, -1):
+        acc += 0.5 * h[i + 1] * dyB[i + 1] + 0.5 * h[i] * dyB[i]
+        idpdy[i] = acc
+
+
+@numba.njit(cache=True, fastmath=False)
+def _internal_pressure_plume_single(
+    nlev: int,
+    plume_type: int,
+    plume_slope_x: float,
+    plume_slope_y: float,
+    buoy: np.ndarray,
+    idpdx: np.ndarray,
+    idpdy: np.ndarray,
+) -> None:
+    if plume_type == 1:
+        for k in range(1, nlev + 1):
+            idpdx[k] = plume_slope_x * (buoy[k] - buoy[1])
+            idpdy[k] = plume_slope_y * (buoy[k] - buoy[1])
+    elif plume_type == 2:
+        for k in range(1, nlev + 1):
+            idpdx[k] = -plume_slope_x * (buoy[nlev] - buoy[k])
+            idpdy[k] = -plume_slope_y * (buoy[nlev] - buoy[k])
 
 
 @numba.njit(cache=True, fastmath=False)
@@ -2752,6 +3294,250 @@ def _longwave_clark_compiled(
 
 
 @numba.njit(cache=True, fastmath=False)
+def _longwave_compiled(
+    method: int,
+    longwave_type: int,
+    prescribed_longwave: float,
+    dlat: float,
+    tw_k: float,
+    ta_k: float,
+    cloud: float,
+    ea: float,
+    qa: float,
+) -> float:
+    if method == 0:
+        return prescribed_longwave
+    if method == 2:
+        if longwave_type == 1:
+            return prescribed_longwave
+        return prescribed_longwave - _BOLZ * _EMISS * (tw_k**4)
+
+    idx = _fortran_nint(abs(dlat))
+    if idx < 0:
+        idx = 0
+    if idx >= len(_CLOUD_CORRECTION_FACTOR):
+        idx = len(_CLOUD_CORRECTION_FACTOR) - 1
+    ccf = _CLOUD_CORRECTION_FACTOR[idx]
+
+    if method == 3:
+        x1 = (1.0 - ccf * cloud * cloud) * (tw_k**4)
+        x2 = 0.39 - 0.05 * math.sqrt(ea * 0.01)
+        x3 = 4.0 * (tw_k**3) * (tw_k - ta_k)
+        return -_EMISS * _BOLZ * (x1 * x2 + x3)
+    if method == 4:
+        x1 = (1.0 - ccf * cloud * cloud) * (tw_k**4)
+        x2 = 0.39 - 0.056 * math.sqrt(1000.0 * qa)
+        x3 = 4.0 * (tw_k**3) * (tw_k - ta_k)
+        return -_EMISS * _BOLZ * (x1 * x2 + x3)
+    if method == 5:
+        x1 = (1.0 + 0.1762 * cloud * cloud) * (ta_k**4)
+        x2 = 0.653 + 0.00535 * (ea * 0.01)
+        x3 = _EMISS * (tw_k**4)
+        return -_BOLZ * (-x1 * x2 + x3)
+    if method == 6:
+        x1 = (1.0 - 0.6823 * cloud * cloud) * (ta_k**4)
+        x2 = 0.39 - 0.05 * math.sqrt(0.01 * ea)
+        x3 = 4.0 * ta_k**3 * (tw_k - ta_k)
+        return -_EMISS * _BOLZ * (x1 * x2 + x3)
+    if method == 7:
+        x1 = _EMISS * tw_k**4
+        x2 = (10.77 * cloud + 2.34) * cloud - 18.44
+        x3 = 0.955 * (ta_k + x2) ** 4
+        return -_BOLZ * (x1 - x3)
+    if method == 8:
+        ea_for = ea
+        if ea_for < 10.0:
+            ea_for = 10.0
+        x1 = _EMISS * tw_k**4
+        x2 = 34.07 + 4157.0 / math.log(2.1718e10 / ea_for)
+        x2 = (10.77 * cloud + 2.34) * cloud - 18.44 + 0.84 * (x2 - ta_k + 4.01)
+        x3 = 0.955 * (ta_k + x2) ** 4
+        return -_BOLZ * (x1 - x3)
+    return 0.0
+
+
+@numba.njit(cache=True, fastmath=False)
+def _net_shortwave_compiled(
+    shortwave_method: int,
+    shortwave_type: int,
+    shortwave: float,
+    albedo: float,
+) -> float:
+    if shortwave_method == 3 or shortwave_type == 2:
+        return shortwave * (1.0 - albedo)
+    return shortwave
+
+
+@numba.njit(cache=True, fastmath=False)
+def _output_sst_value(
+    model_sst: float,
+    observed_sst: float,
+    sst_obs_method: int,
+) -> float:
+    if sst_obs_method == 2 and observed_sst == observed_sst:
+        return observed_sst
+    return model_sst
+
+
+@numba.njit(cache=True, fastmath=False)
+def _gsw_ct_from_pt_compiled(sa: float, pt: float) -> float:
+    x2 = _GSW_SFAC * sa
+    x = math.sqrt(x2)
+    y = pt * 0.025
+    pot_enthalpy = (
+        61.01362420681071
+        + y
+        * (
+            168776.46138048015
+            + y
+            * (
+                -2735.2785605119625
+                + y
+                * (
+                    2574.2164453821433
+                    + y
+                    * (
+                        -1536.6644434977543
+                        + y
+                        * (
+                            545.7340497931629
+                            + (-50.91091728474331 - 18.30489878927802 * y) * y
+                        )
+                    )
+                )
+            )
+        )
+        + x2
+        * (
+            268.5520265845071
+            + y
+            * (
+                -12019.028203559312
+                + y
+                * (
+                    3734.858026725145
+                    + y
+                    * (
+                        -2046.7671145057618
+                        + y
+                        * (
+                            465.28655623826234
+                            + (-0.6370820302376359 - 10.650848542359153 * y) * y
+                        )
+                    )
+                )
+            )
+            + x
+            * (
+                937.2099110620707
+                + y
+                * (
+                    588.1802812170108
+                    + y
+                    * (
+                        248.39476522971285
+                        + (-3.871557904936333 - 2.6268019854268356 * y) * y
+                    )
+                )
+                + x
+                * (
+                    -1687.914374187449
+                    + x
+                    * (
+                        246.9598888781377
+                        + x * (123.59576582457964 - 48.5891069025409 * x)
+                    )
+                    + y
+                    * (
+                        936.3206544460336
+                        + y
+                        * (
+                            -942.7827304544439
+                            + y
+                            * (
+                                369.4389437509002
+                                + (-33.83664947895248 - 9.987880382780322 * y) * y
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+    return pot_enthalpy / _GSW_CP0
+
+
+@numba.njit(cache=True, fastmath=False)
+def _gsw_gibbs_pt0_pt0_compiled(sa: float, pt0: float) -> float:
+    x2 = _GSW_SFAC * sa
+    x = math.sqrt(x2)
+    y = pt0 * 0.025
+    g03 = -24715.571866078 + y * (
+        4420.4472249096725
+        + y
+        * (
+            -1778.231237203896
+            + y
+            * (1160.5182516851419 + y * (-569.531539542516 + y * 128.13429152494615))
+        )
+    )
+    g08 = x2 * (
+        1760.062705994408
+        + x
+        * (
+            -86.1329351956084
+            + x
+            * (
+                -137.1145018408982
+                + y
+                * (
+                    296.20061691375236
+                    + y * (-205.67709290374563 + 49.9394019139016 * y)
+                )
+            )
+        )
+        + y * (-60.136422517125 + y * 10.50720794170734)
+    ) + y * (
+        -1351.605895580406
+        + y * (1097.1125373015109 + y * (-433.20648175062206 + 63.905091254154904 * y))
+    )
+    return (g03 + g08) * 0.000625
+
+
+@numba.njit(cache=True, fastmath=False)
+def _gsw_t_from_ct_surface_compiled(sa: float, ct: float) -> float:
+    s1 = sa / _GSW_UPS
+    a0 = -1.446013646344788e-2
+    a1 = -3.305308995852924e-3
+    a2 = 1.062415929128982e-4
+    a3 = 9.477566673794488e-1
+    a4 = 2.166591947736613e-3
+    a5 = 3.828842955039902e-3
+    b0 = 1.0
+    b1 = 6.506097115635800e-4
+    b2 = 3.830289486850898e-3
+    b3 = 1.247811760368034e-6
+
+    a5ct = a5 * ct
+    b3ct = b3 * ct
+    ct_factor = a3 + a4 * s1 + a5ct
+    pt_num = a0 + s1 * (a1 + a2 * s1) + ct * ct_factor
+    pt_recden = 1.0 / (b0 + b1 * s1 + ct * (b2 + b3ct))
+    pt = pt_num * pt_recden
+    dpt_dct = (ct_factor + a5ct - (b2 + b3ct + b3ct) * pt) * pt_recden
+
+    ct_diff = _gsw_ct_from_pt_compiled(sa, pt) - ct
+    pt_old = pt
+    pt = pt_old - ct_diff * dpt_dct
+    ptm = 0.5 * (pt + pt_old)
+    dpt_dct = -_GSW_CP0 / ((ptm + _GSW_T0) * _gsw_gibbs_pt0_pt0_compiled(sa, ptm))
+    pt = pt_old - ct_diff * dpt_dct
+    ct_diff = _gsw_ct_from_pt_compiled(sa, pt) - ct
+    pt_old = pt
+    return float(pt_old - ct_diff * dpt_dct)
+
+
+@numba.njit(cache=True, fastmath=False)
 def _kondo_compiled(
     sst: float,
     airt: float,
@@ -2822,6 +3608,9 @@ def _airsea_kondo_compiled(
     longitude: float,
     hum_method: int,
     shortwave_method: int,
+    shortwave_type: int,
+    longwave_method: int,
+    longwave_type: int,
     albedo_method: int,
     shortwave_scale_factor: float,
     heat_scale_factor: float,
@@ -2834,6 +3623,7 @@ def _airsea_kondo_compiled(
     u10: float,
     v10: float,
     precip: float,
+    prescribed_longwave: float,
     prescribed_shortwave: float,
 ) -> tuple[
     float,
@@ -2856,19 +3646,30 @@ def _airsea_kondo_compiled(
     ta = airt if airt < 100.0 else airt - _KELVIN
     ta_k = airt + _KELVIN if airt < 100.0 else airt
     es, ea, qs, qa, rhoa = _humidity_compiled(hum_method, hum, airp, tw, ta)
-    ql = _longwave_clark_compiled(latitude, tw_k, ta_k, cloud, ea)
+    ql = _longwave_compiled(
+        longwave_method,
+        longwave_type,
+        prescribed_longwave,
+        latitude,
+        tw_k,
+        ta_k,
+        cloud,
+        ea,
+        qa,
+    )
     evap, taux, tauy, qe, qh = _kondo_compiled(tw, ta, u10, v10, precip, qs, qa, rhoa)
     shortwave = prescribed_shortwave
     zenith = 0.0
-    if shortwave_method == 3:
+    if shortwave_method == 3 or shortwave_type == 2:
         zenith = _solar_zenith_angle_compiled(
             yday, secondsofday / 3600.0, longitude, latitude
         )
+    if shortwave_method == 3:
         shortwave = (
             _shortwave_radiation_compiled(zenith, yday, latitude, cloud)
             * shortwave_scale_factor
         )
-    if shortwave_method == 3:
+    if shortwave_method == 3 or shortwave_type == 2:
         if albedo_method == 0:
             albedo = const_albedo
         else:
@@ -2931,6 +3732,9 @@ def _airsea_fairall_compiled(
     longitude: float,
     hum_method: int,
     shortwave_method: int,
+    shortwave_type: int,
+    longwave_method: int,
+    longwave_type: int,
     albedo_method: int,
     shortwave_scale_factor: float,
     heat_scale_factor: float,
@@ -2943,6 +3747,7 @@ def _airsea_fairall_compiled(
     u10: float,
     v10: float,
     precip: float,
+    prescribed_longwave: float,
     prescribed_shortwave: float,
 ) -> tuple[
     float,
@@ -2966,7 +3771,17 @@ def _airsea_fairall_compiled(
     ta = airt if airt < 100.0 else airt - _KELVIN
     ta_k = airt + _KELVIN if airt < 100.0 else airt
     es, ea, qs, qa, rhoa = _humidity_compiled(hum_method, hum, airp, tw, ta)
-    ql = _longwave_clark_compiled(latitude, tw_k, ta_k, cloud, ea)
+    ql = _longwave_compiled(
+        longwave_method,
+        longwave_type,
+        prescribed_longwave,
+        latitude,
+        tw_k,
+        ta_k,
+        cloud,
+        ea,
+        qa,
+    )
 
     evap = 0.0
     w = math.sqrt(u10 * u10 + v10 * v10)
@@ -3054,15 +3869,16 @@ def _airsea_fairall_compiled(
 
     shortwave = prescribed_shortwave
     zenith = 0.0
-    if shortwave_method == 3:
+    if shortwave_method == 3 or shortwave_type == 2:
         zenith = _solar_zenith_angle_compiled(
             yday, secondsofday / 3600.0, longitude, latitude
         )
+    if shortwave_method == 3:
         shortwave = (
             _shortwave_radiation_compiled(zenith, yday, latitude, cloud)
             * shortwave_scale_factor
         )
-    if shortwave_method == 3:
+    if shortwave_method == 3 or shortwave_type == 2:
         if albedo_method == 0:
             albedo = const_albedo
         else:
@@ -3101,16 +3917,19 @@ def _update_density_single(
     rhob: float,
     T: np.ndarray,
     S: np.ndarray,
+    z: np.ndarray,
     zi: np.ndarray,
     alpha: np.ndarray,
     beta: np.ndarray,
     rho_p: np.ndarray,
+    rho: np.ndarray,
     buoy: np.ndarray,
 ) -> None:
     """Mirror of Fortran do_density: update rho_p, alpha, beta, buoy each timestep."""
     if density_method == 1:
         # Full TEOS-10
         for k in range(1, nlev + 1):
+            rho[k] = gsw_rho(S[k], T[k], -z[k])
             rho_p[k] = gsw_sigma0(S[k], T[k]) + 1000.0
         # Interior interfaces: average of adjacent cell-centre values
         for k in range(1, nlev):
@@ -3125,9 +3944,10 @@ def _update_density_single(
         alpha[nlev] = gsw_alpha(S[nlev], T[nlev], -zi[nlev])
         beta[nlev] = gsw_beta(S[nlev], T[nlev], -zi[nlev])
     else:
-        # Linear EOS (methods 2 and 3): alpha/beta are constant, only update rho_p
+        # Linear EOS (methods 2 and 3): no pressure dependency is applied.
         for k in range(1, nlev + 1):
             rho_p[k] = rhob * (1.0 - alpha0 * (T[k] - T0) + beta0 * (S[k] - S0))
+            rho[k] = rho_p[k]
     # Buoyancy from potential density anomaly
     for k in range(1, nlev + 1):
         buoy[k] = -gravity * (rho_p[k] - rho0) / rho0
@@ -3193,6 +4013,11 @@ def step_turbulence_first_order_single(
     galp: float,
     length_lim: int,
     prandtl0_fix: float,
+    cc1: float,
+    ct1: float,
+    a2: float,
+    a3: float,
+    a5: float,
     cw1: float,
     cw2: float,
     cw3plus: float,
@@ -3213,6 +4038,8 @@ def step_turbulence_first_order_single(
     h: np.ndarray,
     NN: np.ndarray,
     SS: np.ndarray,
+    SSU: np.ndarray,
+    SSV: np.ndarray,
     xP: np.ndarray,
     SSCSTK: np.ndarray,
     SSSTK: np.ndarray,
@@ -3235,6 +4062,12 @@ def step_turbulence_first_order_single(
     cmue3: np.ndarray,
     as_: np.ndarray,
     an: np.ndarray,
+    at: np.ndarray,
+    av: np.ndarray,
+    aw: np.ndarray,
+    uu: np.ndarray,
+    vv: np.ndarray,
+    ww: np.ndarray,
     u_taus: float,
     u_taub: float,
     z0s: float,
@@ -3290,9 +4123,9 @@ def step_turbulence_first_order_single(
         SSSTK,  # unused (has_ssstk=0)
         as_,  # correct output array
         an,  # correct output array
-        work_avh,  # at scratch — first_order doesn't use at
-        work_avh,  # av scratch
-        work_avh,  # aw scratch
+        at,
+        av,
+        aw,
     )
     # First-order stability functions
     for k in range(nlev + 1):
@@ -3474,6 +4307,25 @@ def step_turbulence_first_order_single(
             NN,
             SS,
         )
+    step_variances_single(
+        nlev,
+        cc1,
+        ct1,
+        a2,
+        a3,
+        a5,
+        tke,
+        eps,
+        P,
+        B,
+        Px,
+        num,
+        SSU,
+        SSV,
+        uu,
+        vv,
+        ww,
+    )
 
 
 @numba.njit(cache=True, fastmath=False)
