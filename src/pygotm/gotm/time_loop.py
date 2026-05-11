@@ -1030,6 +1030,20 @@ def time_loop_compiled(
     output_nucl: np.ndarray,
     output_z: np.ndarray,
     output_zi: np.ndarray,
+    out_slot_base: int,
+    write_ic: int,
+    init_int_precip: float,
+    init_int_evap: float,
+    init_int_swr: float,
+    init_int_heat: float,
+    init_int_total: float,
+    traj_store: int,
+    traj_T: np.ndarray,
+    traj_S: np.ndarray,
+    traj_rho: np.ndarray,
+    traj_h: np.ndarray,
+    traj_nuh: np.ndarray,
+    traj_rad: np.ndarray,
 ) -> int:
     """Run profile-forced cases through the compiled timestep loop."""
 
@@ -1060,15 +1074,15 @@ def time_loop_compiled(
             cmue2[0] = cmue2[1]
             cmue2[nlev] = cmue2[nlev - 1]
 
-    int_precip = 0.0
-    int_evap = 0.0
-    int_swr = 0.0
-    int_heat = 0.0
-    int_total = 0.0
+    int_precip = init_int_precip
+    int_evap = init_int_evap
+    int_swr = init_int_swr
+    int_heat = init_int_heat
+    int_total = init_int_total
 
     out_index = 0
     if output_enabled != 0:
-        if out_index >= output_step.shape[0]:
+        if out_slot_base + out_index >= output_step.shape[0]:
             return -1
         initial_evap = 0.0
         initial_tx_surface = forcing_tx[0]
@@ -1171,220 +1185,230 @@ def time_loop_compiled(
                 forcing_longwave[0],
                 forcing_swr[0],
             )
-        _write_output_slot(
-            out_index,
-            0,
-            0.0,
-            nlev,
-            rho0,
-            forcing_zeta[0],
-            forcing_u10[0],
-            forcing_v10[0],
-            forcing_airt[0],
-            forcing_airp[0],
-            forcing_hum[0],
-            initial_es,
-            initial_ea,
-            initial_qs,
-            initial_qa,
-            initial_rhoa,
-            forcing_cloud[0],
-            initial_albedo,
-            forcing_precip[0],
-            initial_evap,
-            int_precip,
-            int_evap,
-            int_swr,
-            int_heat,
-            int_total,
-            initial_shortwave,
-            initial_qh,
-            initial_qe,
-            initial_ql,
-            initial_heat,
-            initial_tx_surface,
-            initial_ty_surface,
-            initial_sst,
-            forcing_sst_obs[0],
-            forcing_sss_obs[0],
-            0.0,
-            0.0,
-            forcing_us0[0],
-            forcing_vs0[0],
-            forcing_ds[0],
-            0.0,
-            0.0,
-            0.0,
-            u_taus,
-            u_taub,
-            taub,
-            rho_p,
-            rho,
-            u,
-            v,
-            T,
-            S,
-            Tp,
-            Ti,
-            Sp,
-            Tobs,
-            Sobs,
-            uprof,
-            vprof,
-            idpdx,
-            idpdy,
-            tke,
-            eps,
-            num,
-            nuh,
-            h,
-            xP,
-            fric,
-            drag,
-            avh,
-            bioshade,
-            ga,
-            uu,
-            vv,
-            ww,
-            NN,
-            NNT,
-            NNS,
-            buoy,
-            SS,
-            P,
-            B,
-            Pb,
-            kb,
-            epsb,
-            L,
-            PSTK,
-            cmue1,
-            cmue2,
-            as_,
-            an,
-            at,
-            gamh,
-            gams,
-            rad,
-            forcing_us[0],
-            forcing_vs[0],
-            dusdz,
-            dvsdz,
-            nus,
-            nucl,
-            z,
-            zi,
-            output_step,
-            output_time,
-            output_zeta,
-            output_u_taus,
-            output_u10,
-            output_v10,
-            output_airt,
-            output_airp,
-            output_hum,
-            output_es,
-            output_ea,
-            output_qs,
-            output_qa,
-            output_rhoa,
-            output_cloud,
-            output_albedo,
-            output_precip,
-            output_evap,
-            output_int_precip,
-            output_int_evap,
-            output_int_swr,
-            output_int_heat,
-            output_int_total,
-            output_I_0,
-            output_qh,
-            output_qe,
-            output_ql,
-            output_heat,
-            output_tx,
-            output_ty,
-            output_sst,
-            output_sst_obs,
-            output_sss,
-            output_mld_surf,
-            output_u_taub,
-            output_taub,
-            output_mld_bott,
-            output_us0,
-            output_vs0,
-            output_ds,
-            output_Ekin,
-            output_Epot,
-            output_Eturb,
-            output_rho_p,
-            output_rho,
-            output_u,
-            output_v,
-            output_T,
-            output_S,
-            output_Tp,
-            output_Ti,
-            output_Sp,
-            output_Tobs,
-            output_Sobs,
-            output_u_obs,
-            output_v_obs,
-            output_idpdx,
-            output_idpdy,
-            output_tke,
-            output_eps,
-            output_num,
-            output_nuh,
-            output_h,
-            output_xP,
-            output_fric,
-            output_drag,
-            output_avh,
-            output_bioshade,
-            output_ga,
-            output_uu,
-            output_vv,
-            output_ww,
-            output_NN,
-            output_NNT,
-            output_NNS,
-            output_buoy,
-            output_SS,
-            output_P,
-            output_B,
-            output_Pb,
-            output_kb,
-            output_epsb,
-            output_L,
-            output_PSTK,
-            output_cmue1,
-            output_cmue2,
-            output_as,
-            output_an,
-            output_at,
-            output_gamu,
-            output_gamv,
-            output_gamh,
-            output_gams,
-            output_Rig,
-            output_gamb,
-            output_gam,
-            output_r,
-            output_taux,
-            output_tauy,
-            output_rad,
-            output_us,
-            output_vs,
-            output_dusdz,
-            output_dvsdz,
-            output_nus,
-            output_nucl,
-            output_z,
-            output_zi,
-        )
+        if write_ic != 0:
+            _write_output_slot(
+                out_slot_base + out_index,
+                0,
+                0.0,
+                nlev,
+                rho0,
+                forcing_zeta[0],
+                forcing_u10[0],
+                forcing_v10[0],
+                forcing_airt[0],
+                forcing_airp[0],
+                forcing_hum[0],
+                initial_es,
+                initial_ea,
+                initial_qs,
+                initial_qa,
+                initial_rhoa,
+                forcing_cloud[0],
+                initial_albedo,
+                forcing_precip[0],
+                initial_evap,
+                int_precip,
+                int_evap,
+                int_swr,
+                int_heat,
+                int_total,
+                initial_shortwave,
+                initial_qh,
+                initial_qe,
+                initial_ql,
+                initial_heat,
+                initial_tx_surface,
+                initial_ty_surface,
+                initial_sst,
+                forcing_sst_obs[0],
+                forcing_sss_obs[0],
+                0.0,
+                0.0,
+                forcing_us0[0],
+                forcing_vs0[0],
+                forcing_ds[0],
+                0.0,
+                0.0,
+                0.0,
+                u_taus,
+                u_taub,
+                taub,
+                rho_p,
+                rho,
+                u,
+                v,
+                T,
+                S,
+                Tp,
+                Ti,
+                Sp,
+                Tobs,
+                Sobs,
+                uprof,
+                vprof,
+                idpdx,
+                idpdy,
+                tke,
+                eps,
+                num,
+                nuh,
+                h,
+                xP,
+                fric,
+                drag,
+                avh,
+                bioshade,
+                ga,
+                uu,
+                vv,
+                ww,
+                NN,
+                NNT,
+                NNS,
+                buoy,
+                SS,
+                P,
+                B,
+                Pb,
+                kb,
+                epsb,
+                L,
+                PSTK,
+                cmue1,
+                cmue2,
+                as_,
+                an,
+                at,
+                gamh,
+                gams,
+                rad,
+                forcing_us[0],
+                forcing_vs[0],
+                dusdz,
+                dvsdz,
+                nus,
+                nucl,
+                z,
+                zi,
+                output_step,
+                output_time,
+                output_zeta,
+                output_u_taus,
+                output_u10,
+                output_v10,
+                output_airt,
+                output_airp,
+                output_hum,
+                output_es,
+                output_ea,
+                output_qs,
+                output_qa,
+                output_rhoa,
+                output_cloud,
+                output_albedo,
+                output_precip,
+                output_evap,
+                output_int_precip,
+                output_int_evap,
+                output_int_swr,
+                output_int_heat,
+                output_int_total,
+                output_I_0,
+                output_qh,
+                output_qe,
+                output_ql,
+                output_heat,
+                output_tx,
+                output_ty,
+                output_sst,
+                output_sst_obs,
+                output_sss,
+                output_mld_surf,
+                output_u_taub,
+                output_taub,
+                output_mld_bott,
+                output_us0,
+                output_vs0,
+                output_ds,
+                output_Ekin,
+                output_Epot,
+                output_Eturb,
+                output_rho_p,
+                output_rho,
+                output_u,
+                output_v,
+                output_T,
+                output_S,
+                output_Tp,
+                output_Ti,
+                output_Sp,
+                output_Tobs,
+                output_Sobs,
+                output_u_obs,
+                output_v_obs,
+                output_idpdx,
+                output_idpdy,
+                output_tke,
+                output_eps,
+                output_num,
+                output_nuh,
+                output_h,
+                output_xP,
+                output_fric,
+                output_drag,
+                output_avh,
+                output_bioshade,
+                output_ga,
+                output_uu,
+                output_vv,
+                output_ww,
+                output_NN,
+                output_NNT,
+                output_NNS,
+                output_buoy,
+                output_SS,
+                output_P,
+                output_B,
+                output_Pb,
+                output_kb,
+                output_epsb,
+                output_L,
+                output_PSTK,
+                output_cmue1,
+                output_cmue2,
+                output_as,
+                output_an,
+                output_at,
+                output_gamu,
+                output_gamv,
+                output_gamh,
+                output_gams,
+                output_Rig,
+                output_gamb,
+                output_gam,
+                output_r,
+                output_taux,
+                output_tauy,
+                output_rad,
+                output_us,
+                output_vs,
+                output_dusdz,
+                output_dvsdz,
+                output_nus,
+                output_nucl,
+                output_z,
+                output_zi,
+            )
         out_index += 1
+
+    if traj_store != 0:
+        for k in range(nlev + 1):
+            traj_T[0, k] = T[k]
+            traj_S[0, k] = S[k]
+            traj_rho[0, k] = rho[k]
+            traj_h[0, k] = h[k]
+            traj_nuh[0, k] = nuh[k]
+            traj_rad[0, k] = rad[k]
 
     cosomega = math.cos(cori * dt)
     sinomega = math.sin(cori * dt)
@@ -2122,10 +2146,19 @@ def time_loop_compiled(
                 qu,
             )
 
+        if traj_store != 0:
+            for k in range(nlev + 1):
+                traj_T[step, k] = T[k]
+                traj_S[step, k] = S[k]
+                traj_rho[step, k] = rho[k]
+                traj_h[step, k] = h[k]
+                traj_nuh[step, k] = nuh[k]
+                traj_rad[step, k] = rad[k]
+
         if output_enabled != 0 and (
             step % output_every == 0 or (force_final_output != 0 and step == nt)
         ):
-            if out_index >= output_step.shape[0]:
+            if out_slot_base + out_index >= output_step.shape[0]:
                 return -1
             mld_surf_value, mld_bott_value = _compute_mld_single(
                 nlev,
@@ -2139,7 +2172,7 @@ def time_loop_compiled(
                 tke,
             )
             _write_output_slot(
-                out_index,
+                out_slot_base + out_index,
                 step,
                 step * dt,
                 nlev,
@@ -2386,13 +2419,87 @@ def run_compiled_time_loop(
     work: RuntimeWork,
     forcing: RuntimeForcing,
     output: RuntimeOutput,
+    step_offset: int = 0,
+    out_slot_base: int = 0,
+    write_ic: int = 1,
+    init_int_precip: float = 0.0,
+    init_int_evap: float = 0.0,
+    init_int_swr: float = 0.0,
+    init_int_heat: float = 0.0,
+    init_int_total: float = 0.0,
+    traj_store: int = 0,
+    traj_T: np.ndarray | None = None,
+    traj_S: np.ndarray | None = None,
+    traj_rho: np.ndarray | None = None,
+    traj_h: np.ndarray | None = None,
+    traj_nuh: np.ndarray | None = None,
+    traj_rad: np.ndarray | None = None,
 ) -> int:
-    """Validate runtime containers and cross into the compiled unified loop."""
+    """Validate runtime containers and cross into the compiled unified loop.
+
+    *step_offset* is the global step index where this call starts — used to
+    slice forcing arrays when running one chunk of a larger simulation.
+    *out_slot_base* is the output-array slot offset for this call.
+    Both default to 0 for full-run (non-chunked) execution.
+    """
 
     state.validate()
     work.validate()
     forcing.validate()
     output.validate(params.nlev)
+
+    nlev = params.nlev
+    nt = params.nt
+    _dummy = np.zeros((1, nlev + 1), dtype=np.float64)
+    # Build contiguous forcing slices for this chunk (no-op views when step_offset=0
+    # and params.nt == forcing.nt, but always produces the correct window).
+    _s = step_offset
+    _e = step_offset + params.nt + 1
+    _f_yearday = np.ascontiguousarray(forcing.yearday[_s:_e])
+    _f_secondsofday = np.ascontiguousarray(forcing.secondsofday[_s:_e])
+    _f_dpdx = np.ascontiguousarray(forcing.dpdx[_s:_e])
+    _f_dpdy = np.ascontiguousarray(forcing.dpdy[_s:_e])
+    _f_h_press = np.ascontiguousarray(forcing.h_press[_s:_e])
+    _f_tx = np.ascontiguousarray(forcing.tx[_s:_e])
+    _f_ty = np.ascontiguousarray(forcing.ty[_s:_e])
+    _f_heat = np.ascontiguousarray(forcing.heat[_s:_e])
+    _f_swr = np.ascontiguousarray(forcing.swr[_s:_e])
+    _f_airp = np.ascontiguousarray(forcing.airp[_s:_e])
+    _f_airt = np.ascontiguousarray(forcing.airt[_s:_e])
+    _f_hum = np.ascontiguousarray(forcing.hum[_s:_e])
+    _f_cloud = np.ascontiguousarray(forcing.cloud[_s:_e])
+    _f_u10 = np.ascontiguousarray(forcing.u10[_s:_e])
+    _f_v10 = np.ascontiguousarray(forcing.v10[_s:_e])
+    _f_precip = np.ascontiguousarray(forcing.precip[_s:_e])
+    _f_longwave = np.ascontiguousarray(forcing.longwave[_s:_e])
+    _f_sst_obs = np.ascontiguousarray(forcing.sst_obs[_s:_e])
+    _f_sss_obs = np.ascontiguousarray(forcing.sss_obs[_s:_e])
+    _f_w_adv = np.ascontiguousarray(forcing.w_adv[_s:_e])
+    _f_w_height = np.ascontiguousarray(forcing.w_height[_s:_e])
+    _f_zeta = np.ascontiguousarray(forcing.zeta[_s:_e])
+    _f_us0 = np.ascontiguousarray(forcing.us0[_s:_e])
+    _f_vs0 = np.ascontiguousarray(forcing.vs0[_s:_e])
+    _f_ds = np.ascontiguousarray(forcing.ds[_s:_e])
+    _f_Tobs = np.ascontiguousarray(forcing.Tobs[_s:_e, :])
+    _f_Sobs = np.ascontiguousarray(forcing.Sobs[_s:_e, :])
+    _f_uprof = np.ascontiguousarray(forcing.uprof[_s:_e, :])
+    _f_vprof = np.ascontiguousarray(forcing.vprof[_s:_e, :])
+    _f_dtdx = np.ascontiguousarray(forcing.dtdx[_s:_e, :])
+    _f_dtdy = np.ascontiguousarray(forcing.dtdy[_s:_e, :])
+    _f_dsdx = np.ascontiguousarray(forcing.dsdx[_s:_e, :])
+    _f_dsdy = np.ascontiguousarray(forcing.dsdy[_s:_e, :])
+    _f_us = np.ascontiguousarray(forcing.us[_s:_e, :])
+    _f_vs = np.ascontiguousarray(forcing.vs[_s:_e, :])
+    _f_dusdz = np.ascontiguousarray(forcing.dusdz[_s:_e, :])
+    _f_dvsdz = np.ascontiguousarray(forcing.dvsdz[_s:_e, :])
+    _traj_store = traj_store if traj_store != 0 else 0
+    _traj_T = traj_T if traj_T is not None else _dummy
+    _traj_S = traj_S if traj_S is not None else _dummy
+    _traj_rho = traj_rho if traj_rho is not None else _dummy
+    _traj_h = traj_h if traj_h is not None else _dummy
+    _traj_nuh = traj_nuh if traj_nuh is not None else _dummy
+    _traj_rad = traj_rad if traj_rad is not None else _dummy
+    del nlev
 
     written = int(
         time_loop_compiled(
@@ -2640,43 +2747,43 @@ def run_compiled_time_loop(
             work.seagrass_excur,
             work.seagrass_grassfric,
             params.stokes_active,
-            forcing.yearday,
-            forcing.secondsofday,
-            forcing.dpdx,
-            forcing.dpdy,
-            forcing.h_press,
-            forcing.tx,
-            forcing.ty,
-            forcing.heat,
-            forcing.swr,
-            forcing.airp,
-            forcing.airt,
-            forcing.hum,
-            forcing.cloud,
-            forcing.u10,
-            forcing.v10,
-            forcing.precip,
-            forcing.longwave,
-            forcing.sst_obs,
-            forcing.sss_obs,
-            forcing.Tobs,
-            forcing.Sobs,
-            forcing.uprof,
-            forcing.vprof,
-            forcing.dtdx,
-            forcing.dtdy,
-            forcing.dsdx,
-            forcing.dsdy,
-            forcing.w_adv,
-            forcing.w_height,
-            forcing.zeta,
-            forcing.us0,
-            forcing.vs0,
-            forcing.ds,
-            forcing.us,
-            forcing.vs,
-            forcing.dusdz,
-            forcing.dvsdz,
+            _f_yearday,
+            _f_secondsofday,
+            _f_dpdx,
+            _f_dpdy,
+            _f_h_press,
+            _f_tx,
+            _f_ty,
+            _f_heat,
+            _f_swr,
+            _f_airp,
+            _f_airt,
+            _f_hum,
+            _f_cloud,
+            _f_u10,
+            _f_v10,
+            _f_precip,
+            _f_longwave,
+            _f_sst_obs,
+            _f_sss_obs,
+            _f_Tobs,
+            _f_Sobs,
+            _f_uprof,
+            _f_vprof,
+            _f_dtdx,
+            _f_dtdy,
+            _f_dsdx,
+            _f_dsdy,
+            _f_w_adv,
+            _f_w_height,
+            _f_zeta,
+            _f_us0,
+            _f_vs0,
+            _f_ds,
+            _f_us,
+            _f_vs,
+            _f_dusdz,
+            _f_dvsdz,
             output.output_step,
             output.time,
             output.zeta,
@@ -2785,6 +2892,20 @@ def run_compiled_time_loop(
             output.nucl,
             output.z,
             output.zi,
+            out_slot_base,
+            write_ic,
+            init_int_precip,
+            init_int_evap,
+            init_int_swr,
+            init_int_heat,
+            init_int_total,
+            _traj_store,
+            _traj_T,
+            _traj_S,
+            _traj_rho,
+            _traj_h,
+            _traj_nuh,
+            _traj_rad,
         )
     )
     if written > 0:

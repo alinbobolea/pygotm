@@ -10,6 +10,7 @@ import numpy as np
 import xarray as xr
 
 from pygotm.config import ConfigLike, coerce_config
+from pygotm.config.pygotm_conf import load_pygotm_conf
 from pygotm.gotm.gotm import (
     GotmRun,
     finalize_gotm,
@@ -202,13 +203,18 @@ class GotmDriver:
             msg = "compiled GOTM runtime does not yet support on_step callbacks"
             raise UnsupportedConfigurationError(msg)
 
+        yaml_path = self.config.source_path or Path("gotm.yaml")
+        pygotm_conf = load_pygotm_conf(yaml_path)
+        chunk_size = pygotm_conf.fabm.chunk_size
+
         run = initialize_gotm_from_settings(
             self.config.resolved_settings(),
-            yaml_path=self.config.source_path or Path("gotm.yaml"),
+            yaml_path=yaml_path,
             document=self.config.resolved_document(),
         )
         try:
-            bundle = integrate_gotm_compiled(run, max_steps=max_steps, output=output)
+            bundle = integrate_gotm_compiled(run, max_steps=max_steps, output=output,
+                                             chunk_size=chunk_size)
             dataset = (
                 runtime_output_to_dataset(run, bundle)
                 if output

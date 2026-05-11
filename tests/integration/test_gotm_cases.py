@@ -14,6 +14,9 @@ from pygotm.validate import (
     resolve_reference_case,
     run_case_validation,
 )
+from pygotm.config import load_config
+from pygotm.gotm.gotm import integrate_gotm_compiled, initialize_gotm_from_settings
+from pygotm.gotm.runtime_builder import runtime_output_to_dataset
 
 # ---------------------------------------------------------------------------
 # pytest marks
@@ -159,7 +162,7 @@ def test_full_case_matches_reference(case_name: str) -> None:
     outputs are validation failures because release parity requires matching
     NetCDF structure and content.
 
-    Run with:  uv run pytest -m slow tests/integration/
+    Run with:  python -m pytest -m slow tests/integration/
     """
     from pygotm.driver import GotmDriver
 
@@ -187,3 +190,72 @@ def test_full_case_matches_reference(case_name: str) -> None:
             f"variable(s) exceeded rtol=5e-6. First failures: {details}"
         )
     assert comparison.ok
+
+
+# ---------------------------------------------------------------------------
+# Chunked interleaving tests
+# ---------------------------------------------------------------------------
+
+def test_non_fabm_case_unaffected_by_chunk_size() -> None:
+    """Non-FABM cases must produce identical output regardless of chunk_size."""
+    case = resolve_reference_case("couette")
+    cfg = load_config(case.yaml_path)
+
+    def _run(chunk_size: int | None) -> xr.Dataset:
+        run = initialize_gotm_from_settings(
+            cfg.resolved_settings(),
+            yaml_path=case.yaml_path,
+            document=cfg.resolved_document(),
+        )
+        bundle = integrate_gotm_compiled(run, max_steps=360, chunk_size=chunk_size)
+        return runtime_output_to_dataset(run, bundle)
+
+    ds_default = _run(chunk_size=None)
+    ds_24 = _run(chunk_size=24)
+
+    try:
+        for var in ("temp", "salt", "u", "v", "tke"):
+            if var in ds_default.data_vars and var in ds_24.data_vars:
+                np.testing.assert_array_equal(
+                    ds_default[var].values, ds_24[var].values,
+                    err_msg=f"chunk_size=24 changed non-FABM variable {var!r}",
+                )
+    finally:
+        ds_default.close()
+        ds_24.close()
+
+
+@pytest.mark.slow
+def test_fabm_physics_identical_across_chunk_sizes() -> None:
+    """Physics variables must be identical regardless of chunk_size in a FABM run.
+
+    The end-of-chunk physics state is passed in-place to the next chunk, so
+    chunking must not alter physics trajectories.
+    """
+    case = resolve_reference_case("blacksea")
+    cfg = load_config(case.yaml_path)
+
+    def _run(chunk_size: int) -> xr.Dataset:
+        run = initialize_gotm_from_settings(
+            cfg.resolved_settings(),
+            yaml_path=case.yaml_path,
+            document=cfg.resolved_document(),
+        )
+        bundle = integrate_gotm_compiled(run, max_steps=48, chunk_size=chunk_size)
+        return runtime_output_to_dataset(run, bundle)
+
+    ds_1chunk = _run(chunk_size=48)   # one chunk = old trajectory behaviour
+    ds_2chunk = _run(chunk_size=24)   # two chunks
+
+    try:
+        for var in ("temp", "salt", "u", "v"):
+            if var in ds_1chunk.data_vars and var in ds_2chunk.data_vars:
+                np.testing.assert_array_almost_equal(
+                    ds_1chunk[var].values,
+                    ds_2chunk[var].values,
+                    decimal=12,
+                    err_msg=f"Physics variable {var!r} differs between chunk_size=48 and chunk_size=24",
+                )
+    finally:
+        ds_1chunk.close()
+        ds_2chunk.close()

@@ -1,5 +1,6 @@
 """Runtime configuration modules."""
 
+from pygotm.config.pygotm_conf import FABMConf, PyGotmConf, load_pygotm_conf
 from pygotm.config.runtime import (
     ConfigLike,
     GotmConfig,
@@ -36,6 +37,9 @@ from pygotm.config.settings import (
 )
 
 __all__ = [
+    "FABMConf",
+    "PyGotmConf",
+    "load_pygotm_conf",
     "WRITE_DETAIL_DEFAULT",
     "WRITE_DETAIL_FULL",
     "WRITE_DETAIL_MINIMAL",

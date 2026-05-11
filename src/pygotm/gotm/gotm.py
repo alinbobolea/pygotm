@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +61,11 @@ from pygotm.extras.seagrass.seagrass import (
 )
 from pygotm.fabm.config import FABMConfig, load_fabm_config
 from pygotm.fabm.engine import FABMEngine
+from pygotm.fabm.trajectory import (
+    _record_scalar_diagnostics,
+    integrate_fabm_chunk,
+    integrate_fabm_from_trajectory,
+)
 from pygotm.gotm.diagnostics import (
     DiagnosticsState,
     clean_diagnostics,
@@ -78,6 +83,7 @@ from pygotm.gotm.runtime_builder import (
     UnsupportedConfigurationError,
     build_runtime_from_run,
 )
+from pygotm.gotm.time_loop import run_compiled_time_loop
 from pygotm.input.input import (
     ProfileInput,
     ScalarInput,
@@ -990,22 +996,14 @@ def _save_snapshot(run: GotmRun) -> None:
 
 
 def _ensure_fabm_runtime_ready(run: GotmRun) -> None:
-    """Initialise pyfabm for FABM-active cases before compiled integration."""
+    """Raise if FABM is active — compiled runtime does not yet support it."""
 
     if run.fabm_config is None or not run.fabm_config.use:
         return
-    if run.fabm_config.config_path is None:
-        msg = "FABM is enabled, but no FABM model YAML path was resolved"
-        raise RuntimeError(msg)
-
-    if run.fabm_engine is None:
-        run.fabm_engine = FABMEngine(run.fabm_config.config_path)
-    run.fabm_engine.initialize()
-
     msg = (
-        "FABM is enabled and pyfabm initialized, but the compiled GOTM runtime "
-        "does not yet interleave Python-level FABM source terms with pyGOTM "
-        "tracer transport. Refusing to emit zero-filled FABM parity output."
+        "FABM biogeochemistry is enabled for this case, but the compiled GOTM "
+        "runtime does not yet interleave FABM source terms with tracer transport. "
+        "Refusing to emit zero-filled FABM parity output."
     )
     raise UnsupportedConfigurationError(msg)
 
@@ -1630,28 +1628,164 @@ def integrate_gotm_compiled(
     *,
     max_steps: int | None = None,
     output: bool = True,
+    chunk_size: int | None = None,
 ) -> RuntimeBundle:
     """Advance supported single-column cases through the compiled runtime."""
 
     if not run.initialized:
         raise RuntimeError("run has not been initialised")
 
-    _ensure_fabm_runtime_ready(run)
+    fabm_active = run.fabm_config is not None and run.fabm_config.use
     bundle = build_runtime_from_run(run, max_steps=max_steps, output=output)
-    written = bundle.run()
-    if written < 0:
-        msg = f"compiled GOTM runtime failed with status {written}"
-        raise RuntimeError(msg)
-    if output and written != bundle.output.nout:
-        msg = (
-            f"compiled GOTM runtime wrote {written} outputs, "
-            f"expected {bundle.output.nout}"
+    nt = bundle.params.nt
+    nlev = bundle.params.nlev
+
+    if not fabm_active:
+        written = bundle.run()
+        if written < 0:
+            msg = f"compiled GOTM runtime failed with status {written}"
+            raise RuntimeError(msg)
+        if output and written != bundle.output.nout:
+            msg = (
+                f"compiled GOTM runtime wrote {written} outputs, "
+                f"expected {bundle.output.nout}"
+            )
+            raise RuntimeError(msg)
+        _copy_runtime_state_to_run(run, bundle)
+        run.time.update_time(nt)
+        return bundle
+
+    # --- FABM active: chunked interleaved physics+FABM loop ---
+
+    output_every = bundle.output.output_every
+
+    # Determine effective chunk_size
+    if chunk_size is None:
+        chunk_size = max(int(round(86400.0 / bundle.params.dt)), 1)
+    # Snap chunk_size up to nearest multiple of output_every
+    if chunk_size % output_every != 0:
+        chunk_size = ((chunk_size + output_every - 1) // output_every) * output_every
+    chunk_size = min(chunk_size, nt)
+
+    # Reusable trajectory arrays (chunk_size+1 rows — one per chunk)
+    traj_T   = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    traj_S   = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    traj_rho = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    traj_h   = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    traj_nuh = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    traj_rad = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+
+    # Initialise FABM engine once
+    assert run.fabm_config is not None
+    assert run.fabm_config.config_path is not None
+    h_initial = np.ascontiguousarray(bundle.state.h[1 : nlev + 1], dtype=np.float64)  # noqa: E203
+    engine = FABMEngine(run.fabm_config.config_path)
+    engine.initialize(nlev=nlev, h_col=h_initial, skip_start=True)
+    run.fabm_engine = engine
+
+    cc: np.ndarray | None = None
+    fabm_out_index = 0
+    step_cursor = 0
+
+    while step_cursor < nt:
+        this_chunk = min(chunk_size, nt - step_cursor)
+
+        # Build chunk params with nt=this_chunk
+        chunk_params = dc_replace(bundle.params, nt=this_chunk)
+
+        # Output slot base: step_start // output_every
+        out_slot_base = step_cursor // output_every
+        is_first_physics_chunk = step_cursor == 0
+
+        # For chunks k>0: slot out_slot_base already has correct data from chunk k-1.
+        # Read accumulated values to carry forward, then skip the IC write.
+        if is_first_physics_chunk:
+            init_int_precip = 0.0
+            init_int_evap   = 0.0
+            init_int_swr    = 0.0
+            init_int_heat   = 0.0
+            init_int_total  = 0.0
+        else:
+            prev_slot = out_slot_base
+            init_int_precip = float(bundle.output.int_precip[prev_slot])
+            init_int_evap   = float(bundle.output.int_evap[prev_slot])
+            init_int_swr    = float(bundle.output.int_swr[prev_slot])
+            init_int_heat   = float(bundle.output.int_heat[prev_slot])
+            init_int_total  = float(bundle.output.int_total[prev_slot])
+
+        # Resize trajectory arrays if last chunk is smaller than chunk_size
+        if this_chunk < chunk_size:
+            traj_T   = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            traj_S   = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            traj_rho = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            traj_h   = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            traj_nuh = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            traj_rad = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+
+        # Physics chunk
+        written = run_compiled_time_loop(
+            chunk_params,
+            bundle.state,
+            bundle.work,
+            bundle.forcing,
+            bundle.output,
+            step_offset=step_cursor,
+            out_slot_base=out_slot_base,
+            write_ic=1 if is_first_physics_chunk else 0,
+            init_int_precip=init_int_precip,
+            init_int_evap=init_int_evap,
+            init_int_swr=init_int_swr,
+            init_int_heat=init_int_heat,
+            init_int_total=init_int_total,
+            traj_store=1,
+            traj_T=traj_T,
+            traj_S=traj_S,
+            traj_rho=traj_rho,
+            traj_h=traj_h,
+            traj_nuh=traj_nuh,
+            traj_rad=traj_rad,
         )
-        raise RuntimeError(msg)
+        if written < 0:
+            msg = f"compiled GOTM runtime failed with status {written}"
+            raise RuntimeError(msg)
+
+        if output:
+            # FABM chunk
+            cc, fabm_out_index = integrate_fabm_chunk(
+                engine=engine,
+                chunk_params=chunk_params,
+                output=bundle.output,
+                traj_T=traj_T,
+                traj_S=traj_S,
+                traj_rho=traj_rho,
+                traj_h=traj_h,
+                traj_nuh=traj_nuh,
+                traj_rad=traj_rad,
+                cc_in=cc,
+                out_index_base=fabm_out_index,
+                forcing_u10=bundle.forcing.u10[step_cursor : step_cursor + this_chunk + 1],
+                forcing_v10=bundle.forcing.v10[step_cursor : step_cursor + this_chunk + 1],
+                forcing_yearday=bundle.forcing.yearday[step_cursor : step_cursor + this_chunk + 1],
+                is_first_chunk=(step_cursor == 0),
+            )
+
+        step_cursor += this_chunk
+
+    if output:
+        _record_scalar_diagnostics(engine, bundle.output, fabm_out_index)
 
     _copy_runtime_state_to_run(run, bundle)
-    run.time.update_time(bundle.params.nt)
+    run.time.update_time(nt)
     return bundle
+
+
+def _make_chunk_params(params: RuntimeParams, chunk_nt: int) -> RuntimeParams:
+    """Return a new RuntimeParams identical to params except nt=chunk_nt."""
+    return dc_replace(params, nt=chunk_nt)
+
+
+def _chunk_out_slot_base(step_start: int, output_every: int) -> int:
+    return step_start // output_every
 
 
 def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:
