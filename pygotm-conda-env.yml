@@ -1,0 +1,61 @@
+name: pygotm
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  # Python runtime selected for maximum compatibility with the project
+  # pyproject.toml requires >=3.12 and configures tools for py312.
+  - python=3.12
+
+  # Project build backend
+  - hatchling
+
+  # Core numerical/scientific stack
+  - numba>=0.59
+  - numpy>=1.26
+  - scipy>=1.12
+  - xarray>=2024.1
+  - netcdf4>=1.6
+  - pyyaml>=6.0
+  - pandas>=2.2
+  - gsw>=3.6.0
+
+  # FABM Python interface from conda-forge
+  - pyfabm
+
+  # Web/API/UI stack
+  - fastapi>=0.110
+  - uvicorn-standard>=0.27
+  - websockets>=12.0
+  - pydantic>=2.6
+  - nicegui>=1.4
+  - plotly>=5.19
+  - python-dotenv>=1.0
+  - jinja2>=3.1
+
+  # CLI / terminal utilities
+  - click>=8.1
+  - rich>=13.7
+
+  # Parallel/distributed runtime corresponding to dask[distributed]
+  - dask>=2024.4
+  - distributed>=2024.4
+
+  # Development dependencies
+  - pytest>=8.0
+  - anyio>=4.3
+  - httpx>=0.27
+  - black>=24.0
+  - ruff>=0.3
+  - mypy>=1.9
+  - pre-commit>=3.7
+
+  # Documentation dependencies
+  - sphinx>=8.0
+  - sphinx-autodoc-typehints>=2.0
+  - furo>=2024.0
+  - myst-parser>=4.0
+  - sphinx-copybutton>=0.5.2
+  - matplotlib>=3.8
+  - sphinxcontrib-mermaid>=0.9

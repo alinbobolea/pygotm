@@ -9,14 +9,14 @@ Workflow:
 
 Usage
 -----
-    uv run python -m pygotm.validation.run_validation
-    uv run python -m pygotm.validation.run_validation --cases couette,channel
-    uv run python -m pygotm.validation.run_validation --all
-    uv run python -m pygotm.validation.run_validation --group non-stim
-    uv run python -m pygotm.validation.run_validation --exclude plume,resolute
-    uv run python -m pygotm.validation.run_validation --no-run
-    uv run python -m pygotm.validation.run_validation --workers 4
-    uv run python -m pygotm.validation.run_validation --dashboard-port 8788
+    python -m pygotm.validation.run_validation
+    python -m pygotm.validation.run_validation --cases couette,channel
+    python -m pygotm.validation.run_validation --all
+    python -m pygotm.validation.run_validation --group non-stim
+    python -m pygotm.validation.run_validation --exclude plume,resolute
+    python -m pygotm.validation.run_validation --no-run
+    python -m pygotm.validation.run_validation --workers 4
+    python -m pygotm.validation.run_validation --dashboard-port 8788
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ import click
 import numpy as np
 
 from pygotm.validate import REFERENCE_CASE_NAMES
-from pygotm.validation.compare import ATOL, RTOL
 from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
 from pygotm.validation.report import CaseResult, Report, render_html, save_json
@@ -196,14 +195,21 @@ def _make_on_result(
             )
         else:
             worst = max(
-                (v for v in result.variables if v.status == "FAIL"),
-                key=lambda v: v.nrmse if np.isfinite(v.nrmse) else -1,
+                (
+                    v
+                    for v in result.variables
+                    if v.status in ("MARGINAL", "DISCREPANT", "BROKEN")
+                ),
+                key=lambda v: v.primary_score if np.isfinite(v.primary_score) else -1,
                 default=None,
             )
-            worst_str = f"  worst={worst.name} nrmse={worst.nrmse:.2e}" if worst else ""
+            worst_str = (
+                f"  worst={worst.name} score={worst.primary_score:.2e}" if worst else ""
+            )
+            n_non_pass = result.n_marginal + result.n_discrepant + result.n_broken
             line = (
                 f"  {counter} FAIL   {name}  "
-                f"{result.n_fail}/{result.n_pass + result.n_fail} vars"
+                f"{n_non_pass}/{result.n_pass + n_non_pass} vars"
                 f"{worst_str}  ({_fmt_time(result.wall_time_s)})"
             )
 
@@ -287,8 +293,6 @@ def _make_on_result(
     is_flag=True,
     help="Write per-time turbulence comparison dumps under each run directory.",
 )
-@click.option("--rtol", default=RTOL, show_default=True, type=float)
-@click.option("--atol", default=ATOL, show_default=True, type=float)
 def cli(
     cases: str | None,
     run_all: bool,
@@ -301,8 +305,6 @@ def cli(
     skip_run: bool,
     skip_warmup: bool,
     debug_turbulence: bool,
-    rtol: float,
-    atol: float,
 ) -> None:
     """Run pyGOTM validation and produce JSON + HTML report."""
     # 1. Detect platform
@@ -311,7 +313,7 @@ def cli(
     n_cpus = platform_info.cpu_count
     n_workers = workers if workers is not None else n_cpus
 
-    print(f"pyGOTM Validation  rtol={rtol:.0e}")
+    print("pyGOTM Validation")
     print(f"  CPU count : {n_cpus}  (Dask workers: {n_workers})")
     print(f"  Available archs: {', '.join(arch_choices)}")
 
@@ -392,8 +394,6 @@ def cli(
 
     report = Report(
         generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        rtol=rtol,
-        atol=atol,
         hardware=hw,
         cases=results,
         verdict=verdict,

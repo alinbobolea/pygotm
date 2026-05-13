@@ -68,8 +68,11 @@ Target users: aquaculture site engineers, limnologists, coastal ocean researcher
 ## Quick Start
 
 ```bash
-# Install
-pip install pygotm
+# Clone and create the conda environment
+git clone https://github.com/<org>/pygotm.git
+cd pygotm
+conda env create -f pygotm-conda-env.yml
+conda activate pygotm
 
 # Run validation for a supported reference case
 pygotm validate --case couette

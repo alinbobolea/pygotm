@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from pygotm.validation.hardware import (
     PlatformInfo,

@@ -2,9 +2,9 @@
 
 Usage
 -----
-    uv run python validation/render_report.py
-    uv run python validation/render_report.py validation/results.json
-    uv run python validation/render_report.py results.json --output my_report.html
+    python validation/render_report.py
+    python validation/render_report.py validation/results.json
+    python validation/render_report.py results.json --output my_report.html
 """
 
 from __future__ import annotations

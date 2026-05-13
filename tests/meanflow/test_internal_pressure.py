@@ -44,7 +44,7 @@ from pygotm.meanflow.internal_pressure import (
 )
 from pygotm.meanflow.meanflow import MeanflowState, init_meanflow, post_init_meanflow
 from pygotm.meanflow.updategrid import updategrid
-from pygotm.util.density import DensityState, METHOD_LINEAR_USER, init_density
+from pygotm.util.density import METHOD_LINEAR_USER, DensityState, init_density
 
 # ---------------------------------------------------------------------------
 # Helpers

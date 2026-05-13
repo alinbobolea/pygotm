@@ -86,7 +86,6 @@ def test_single_column_solver_matches_numpy_for_offset_span() -> None:
     du[fi : lt + 1] = rhs
     result = _call_tridiagonal(lower, diagonal, upper, du, fi, lt)
 
-    rhs_inner = lower[1 : n - 1 + 1]  # align with interior
     mat = _dense_tridiagonal_matrix(lower[1:], diagonal[1:], upper[:-1])
     expected = np.linalg.solve(mat, rhs)
     np.testing.assert_allclose(result[fi : lt + 1], expected, rtol=1e-12, atol=1e-12)

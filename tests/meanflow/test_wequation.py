@@ -108,7 +108,6 @@ def test_peak_is_at_w_height() -> None:
 
     wequation(state, nlev, _DT, W_ADV_PROFILE, w_adv=w_adv, w_height=w_height)
 
-    zi = state.w
     # Find the interface level closest to w_height
     zi_arr = np.array(state.zi[1:nlev])
     closest = int(np.argmin(np.abs(zi_arr - w_height))) + 1  # offset back to original index

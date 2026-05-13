@@ -32,8 +32,20 @@ class FABMEngine:
         self._rates = np.zeros(0, dtype=np.float64)
         self._dependency_buffers: dict[str, FloatArray] = {}
 
-    def initialize(self) -> None:
-        """Construct and start the pyfabm model, then validate dependencies."""
+    def initialize(
+        self,
+        nlev: int | None = None,
+        h_col: np.ndarray | None = None,
+        *,
+        skip_start: bool = False,
+    ) -> None:
+        """Construct and start the pyfabm model for a 1-D water column.
+
+        *nlev* is the number of grid cells (pyGOTM ``nlev``). When provided,
+        the model is created with ``shape=(nlev,)`` so pyfabm allocates 1-D
+        arrays of the correct size. *h_col* (length *nlev*, bottom→surface) is
+        the initial cell-thickness array required by pyfabm before ``start()``.
+        """
 
         if not self.config_path.is_file():
             msg = f"FABM model YAML not found: {self.config_path}"
@@ -53,23 +65,27 @@ class FABMEngine:
             factory = pyfabm.Model
 
         try:
-            self.model = factory(str(self.config_path))
+            if nlev is not None:
+                self.model = factory(str(self.config_path), shape=(nlev,))  # type: ignore[call-arg]
+            else:
+                self.model = factory(str(self.config_path))
         except Exception as exc:
             msg = f"failed to initialize pyfabm.Model from {self.config_path}: {exc}"
             raise RuntimeError(msg) from exc
 
-        self._start_model()
-        missing = self.unresolved_dependencies()
-        ready = self._check_ready()
-        if not ready and not missing:
-            missing = ("unknown dependency reported by pyfabm.checkReady()",)
-        if missing:
-            listed = ", ".join(missing)
-            msg = f"FABM model has unresolved dependencies: {listed}"
-            raise RuntimeError(msg)
+        # pyfabm 3.0: cell_thickness is a write-only property setter — use direct
+        # assignment so pyfabm registers the array before start() / getRates().
+        if nlev is not None and h_col is not None:
+            try:
+                arr = np.ascontiguousarray(h_col, dtype=np.float64)
+                self.model.cell_thickness = arr
+            except AttributeError:
+                pass
 
-        self._state = self._read_model_state()
-        self._rates = np.zeros_like(self._state)
+        if not skip_start:
+            self._start_model()
+            self._state = self._read_model_state()
+            self._rates = np.zeros_like(self._state)
 
     def has_dependency(self, name: str) -> bool:
         """Return whether the pyfabm model exposes a dependency by *name*."""
@@ -120,17 +136,29 @@ class FABMEngine:
 
         return self._state
 
-    def get_rates(self) -> np.ndarray:
-        """Return FABM reaction/source rates without applying transport."""
+    def get_rates(
+        self,
+        *,
+        surface: bool = True,
+        bottom: bool = True,
+    ) -> np.ndarray:
+        """Return FABM source rates for each layer.
+
+        When *surface=True* (default for backwards compat) the returned rates
+        include the air-sea surface exchange distributed over ALL layers by
+        pyfabm — which is physically wrong for a 1D column.  Pass
+        ``surface=False, bottom=False`` to get bulk-only reaction rates
+        that can safely be applied to every layer, then handle boundary
+        exchange explicitly on the top/bottom layers.
+        """
 
         model = self._require_model()
-        if hasattr(model, "getRates"):
-            rates = self._call_get_rates(model.getRates)
-        elif hasattr(model, "get_rates"):
-            rates = self._call_get_rates(model.get_rates)
-        else:
+        get_fn = getattr(model, "getRates", None) or getattr(model, "get_rates", None)
+        if get_fn is None:
             msg = "pyfabm model does not expose getRates()"
             raise RuntimeError(msg)
+
+        rates = self._call_get_rates_flags(get_fn, surface=surface, bottom=bottom)
 
         array = np.ascontiguousarray(rates, dtype=np.float64)
         if self._rates.shape != array.shape:
@@ -167,6 +195,17 @@ class FABMEngine:
                 missing.append(name)
         return tuple(dict.fromkeys(missing))
 
+    def start(self) -> None:
+        """Call model.start() after dependencies are set; update state buffers.
+
+        Use this when ``initialize()`` was called with ``skip_start=True`` to
+        defer start until the caller has supplied initial dependency values.
+        """
+
+        self._start_model()
+        self._state = self._read_model_state()
+        self._rates = np.zeros_like(self._state)
+
     def state_variable_names(self) -> tuple[str, ...]:
         """Return state-variable names exposed by the wrapped pyfabm model."""
 
@@ -180,6 +219,11 @@ class FABMEngine:
 
     def _start_model(self) -> None:
         model = self._require_model()
+        if not self._check_ready():
+            missing = self.unresolved_dependencies()
+            deps = ", ".join(missing)
+            msg = f"pyfabm model is not ready; unresolved dependencies: {deps}"
+            raise RuntimeError(msg)
         start = getattr(model, "start", None)
         if callable(start):
             try:
@@ -304,8 +348,20 @@ class FABMEngine:
             return True
         return getattr(dependency, "value", None) is None
 
-    def _call_get_rates(self, method: Callable[..., Any]) -> Any:
-        try:
-            return method()
-        except TypeError:
-            return method(self._state)
+    def _call_get_rates_flags(
+        self,
+        method: Callable[..., Any],
+        *,
+        surface: bool,
+        bottom: bool,
+    ) -> Any:
+        """Call getRates respecting pyfabm 3.0 surface/bottom kwargs."""
+        for kwargs in (
+            {"surface": surface, "bottom": bottom},
+            {},
+        ):
+            try:
+                return method(**kwargs) if kwargs else method()
+            except TypeError:
+                continue
+        return method(self._state)

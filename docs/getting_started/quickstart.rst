@@ -62,7 +62,7 @@ Compare pyGOTM output against the official Fortran GOTM reference cases:
 
 .. code-block:: bash
 
-   uv run python -m pygotm.validation.run_validation \
+   python -m pygotm.validation.run_validation \
        --cases couette,channel,entrainment
 
 Output: ``validation/report.html`` and ``validation/results.json``

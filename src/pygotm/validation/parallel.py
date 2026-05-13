@@ -90,6 +90,8 @@ def run_cases_parallel(
             n_workers=n_workers,
             threads_per_worker=1,
             processes=True,
+        # Disable Dask nanny memory kills; validation owns failure reporting.
+        memory_limit=0,
             silence_logs=logging.CRITICAL,
             dashboard_address=f":{dashboard_port}",
         ) as cluster,
@@ -113,7 +115,18 @@ def run_cases_parallel(
         result_map: dict[int, CaseResult] = {}
         for future in as_completed(futures):  # type: ignore[no-untyped-call]
             index = futures[future]
-            result = future.result()
+            try:
+                result = future.result()
+            except Exception as exc:
+                case = cases[index]
+                result = CaseResult(
+                    case_name=case.run_name,
+                    status="ERROR",
+                    error=f"{type(exc).__name__}: {exc}",
+                    py_nc_path="",
+                    ref_nc_path=str(case.reference_path),
+                    wall_time_s=0.0,
+                )
             result_map[index] = result
             if on_result is not None:
                 on_result(result)

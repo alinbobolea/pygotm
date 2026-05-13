@@ -93,10 +93,22 @@ not yet implement the physics required by that case; an
 Tolerance Parameters
 --------------------
 
-The tolerance parameters used in the validation criterion are:
+Tolerances are defined per variable in ``src/pygotm/validation/tolerances.py``.
+Each variable has three parameters:
 
-* Relative tolerance (field range): :math:`10^{-7}`
-* Absolute tolerance floor: :math:`10^{-12}`
-* Relative tolerance (:math:`|b|`): :math:`10^{-6}`
+* **atol** — absolute tolerance floor
+* **rtol** — relative tolerance
+* **scale_floor** — physical scale floor applied when the reference field is
+  near zero
 
-These match the criterion defined in :doc:`overview`.
+Example entries::
+
+   "temp": VariableTolerance(atol=1e-10, rtol=1e-8, scale_floor=1.0, section="pygotm")
+   "tke":  VariableTolerance(atol=1e-14, rtol=1e-7, scale_floor=1e-10, section="pygotm")
+
+Variables not in the registry are treated as FABM biogeochemical variables
+using the project-approved ``DEFAULT_PYFABM_TOLERANCE``.
+
+Deprecated tolerance parameters ``rtol=5e-6`` (global relative) and
+``atol=1e-12`` (global absolute floor) from the previous range-aware criterion
+are no longer used.

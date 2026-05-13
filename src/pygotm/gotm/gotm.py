@@ -21,7 +21,8 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from copy import deepcopy
-from dataclasses import dataclass, field, replace as dc_replace
+from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from pathlib import Path
 from typing import Any
 
@@ -61,10 +62,9 @@ from pygotm.extras.seagrass.seagrass import (
 )
 from pygotm.fabm.config import FABMConfig, load_fabm_config
 from pygotm.fabm.engine import FABMEngine
-from pygotm.fabm.trajectory import (
+from pygotm.fabm.fabm_loop import (
     _record_scalar_diagnostics,
-    integrate_fabm_chunk,
-    integrate_fabm_from_trajectory,
+    run_fabm_chunk,
 )
 from pygotm.gotm.diagnostics import (
     DiagnosticsState,
@@ -995,18 +995,6 @@ def _save_snapshot(run: GotmRun) -> None:
         run.accum_count = 0
 
 
-def _ensure_fabm_runtime_ready(run: GotmRun) -> None:
-    """Raise if FABM is active — compiled runtime does not yet support it."""
-
-    if run.fabm_config is None or not run.fabm_config.use:
-        return
-    msg = (
-        "FABM biogeochemistry is enabled for this case, but the compiled GOTM "
-        "runtime does not yet interleave FABM source terms with tracer transport. "
-        "Refusing to emit zero-filled FABM parity output."
-    )
-    raise UnsupportedConfigurationError(msg)
-
 
 def initialize_gotm_from_settings(
     settings: GotmSettings,
@@ -1667,13 +1655,14 @@ def integrate_gotm_compiled(
         chunk_size = ((chunk_size + output_every - 1) // output_every) * output_every
     chunk_size = min(chunk_size, nt)
 
-    # Reusable trajectory arrays (chunk_size+1 rows — one per chunk)
-    traj_T   = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    traj_S   = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    traj_rho = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    traj_h   = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    traj_nuh = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    traj_rad = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    # Reusable GOTM hydrodynamic state buffers (chunk_size+1 rows — one per chunk)
+    hydro_T    = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_S    = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_rho  = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_h    = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_nuh  = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_rad  = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_taub = np.zeros((chunk_size + 1,), dtype=np.float64)
 
     # Initialise FABM engine once
     assert run.fabm_config is not None
@@ -1713,14 +1702,15 @@ def integrate_gotm_compiled(
             init_int_heat   = float(bundle.output.int_heat[prev_slot])
             init_int_total  = float(bundle.output.int_total[prev_slot])
 
-        # Resize trajectory arrays if last chunk is smaller than chunk_size
+        # Resize hydrodynamic state buffers if last chunk is smaller than chunk_size
         if this_chunk < chunk_size:
-            traj_T   = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            traj_S   = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            traj_rho = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            traj_h   = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            traj_nuh = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            traj_rad = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_T    = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_S    = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_rho  = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_h    = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_nuh  = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_rad  = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_taub = np.zeros((this_chunk + 1,), dtype=np.float64)
 
         # Physics chunk
         written = run_compiled_time_loop(
@@ -1737,13 +1727,14 @@ def integrate_gotm_compiled(
             init_int_swr=init_int_swr,
             init_int_heat=init_int_heat,
             init_int_total=init_int_total,
-            traj_store=1,
-            traj_T=traj_T,
-            traj_S=traj_S,
-            traj_rho=traj_rho,
-            traj_h=traj_h,
-            traj_nuh=traj_nuh,
-            traj_rad=traj_rad,
+            hydro_store=1,
+            hydro_T=hydro_T,
+            hydro_S=hydro_S,
+            hydro_rho=hydro_rho,
+            hydro_h=hydro_h,
+            hydro_nuh=hydro_nuh,
+            hydro_rad=hydro_rad,
+            hydro_taub=hydro_taub,
         )
         if written < 0:
             msg = f"compiled GOTM runtime failed with status {written}"
@@ -1751,21 +1742,28 @@ def integrate_gotm_compiled(
 
         if output:
             # FABM chunk
-            cc, fabm_out_index = integrate_fabm_chunk(
+            cc, fabm_out_index = run_fabm_chunk(
                 engine=engine,
                 chunk_params=chunk_params,
                 output=bundle.output,
-                traj_T=traj_T,
-                traj_S=traj_S,
-                traj_rho=traj_rho,
-                traj_h=traj_h,
-                traj_nuh=traj_nuh,
-                traj_rad=traj_rad,
+                hydro_T=hydro_T,
+                hydro_S=hydro_S,
+                hydro_rho=hydro_rho,
+                hydro_h=hydro_h,
+                hydro_nuh=hydro_nuh,
+                hydro_rad=hydro_rad,
+                hydro_taub=hydro_taub,
                 cc_in=cc,
                 out_index_base=fabm_out_index,
-                forcing_u10=bundle.forcing.u10[step_cursor : step_cursor + this_chunk + 1],
-                forcing_v10=bundle.forcing.v10[step_cursor : step_cursor + this_chunk + 1],
-                forcing_yearday=bundle.forcing.yearday[step_cursor : step_cursor + this_chunk + 1],
+                forcing_u10=bundle.forcing.u10[
+                    step_cursor : step_cursor + this_chunk + 1
+                ],
+                forcing_v10=bundle.forcing.v10[
+                    step_cursor : step_cursor + this_chunk + 1
+                ],
+                forcing_yearday=bundle.forcing.yearday[
+                    step_cursor : step_cursor + this_chunk + 1
+                ],
                 is_first_chunk=(step_cursor == 0),
             )
 
@@ -1778,14 +1776,6 @@ def integrate_gotm_compiled(
     run.time.update_time(nt)
     return bundle
 
-
-def _make_chunk_params(params: RuntimeParams, chunk_nt: int) -> RuntimeParams:
-    """Return a new RuntimeParams identical to params except nt=chunk_nt."""
-    return dc_replace(params, nt=chunk_nt)
-
-
-def _chunk_out_slot_base(step_start: int, output_every: int) -> int:
-    return step_start // output_every
 
 
 def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:

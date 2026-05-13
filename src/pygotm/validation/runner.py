@@ -97,7 +97,7 @@ def validate_case(
                 wall_time_s=0.0,
             )
 
-    var_results = compare_nc(py_path, ref_path)
+    var_results = compare_nc(py_path, ref_path, case_name=case.run_name)
     if debug_turbulence:
         write_turbulence_debug_dump(
             py_path,
@@ -105,19 +105,23 @@ def validate_case(
             runs_dir / case.run_name / "turbulence_debug.json",
         )
     n_pass = sum(1 for v in var_results if v.status == "PASS")
-    n_fail = sum(1 for v in var_results if v.status == "FAIL")
+    n_marginal = sum(1 for v in var_results if v.status == "MARGINAL")
+    n_discrepant = sum(1 for v in var_results if v.status == "DISCREPANT")
+    n_broken = sum(1 for v in var_results if v.status == "BROKEN")
+    case_pass = n_marginal == 0 and n_discrepant == 0 and n_broken == 0
 
     return CaseResult(
         case_name=case.run_name,
-        status="PASS" if n_fail == 0 else "FAIL",
+        status="PASS" if case_pass else "FAIL",
         error=None,
         py_nc_path=str(py_path),
         ref_nc_path=str(ref_path),
         wall_time_s=elapsed,
         variables=var_results,
         n_pass=n_pass,
-        n_fail=n_fail,
-        n_skip=0,
+        n_marginal=n_marginal,
+        n_discrepant=n_discrepant,
+        n_broken=n_broken,
     )
 
 

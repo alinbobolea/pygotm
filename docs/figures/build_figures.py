@@ -6,8 +6,8 @@ Section 3.1.2, page 25.
 
 Usage
 -----
-    uv run docs/figures/build_figures.py
-    python docs/figures/build_figures.py   # if matplotlib is already installed
+    conda activate pygotm
+    python docs/figures/build_figures.py
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 
 OUT_DIR = Path(__file__).parent.resolve()

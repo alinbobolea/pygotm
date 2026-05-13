@@ -61,7 +61,7 @@ def test_validate_case_skip_run_existing_nc(tmp_path: Path) -> None:
     assert result.status == "PASS"
     assert result.wall_time_s == 0.0
     assert result.n_pass >= 1
-    assert result.n_fail == 0
+    assert result.n_broken == 0 and result.n_marginal == 0 and result.n_discrepant == 0
 
 
 def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
@@ -71,8 +71,8 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
 
     arr = np.linspace(0.0, 1.0, 10)
     # u: present in both, identical → PASS
-    # v: present in both, large error → FAIL
-    # w: only in ref → FAIL; pyGOTM must emit every Fortran reference variable.
+    # v: present in both, large error → BROKEN (primary_score >> 10)
+    # w: only in ref → BROKEN; pyGOTM must emit every Fortran reference variable.
     py_ds = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr + 1000.0)})
     ref_ds = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr), "w": (["t"], arr)})
 
@@ -87,8 +87,7 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
         result = validate_case("couette", runs_dir, skip_run=True)
 
     assert result.n_pass == 1
-    assert result.n_fail == 2
-    assert result.n_skip == 0
+    assert result.n_broken == 2
     assert result.status == "FAIL"
 
 

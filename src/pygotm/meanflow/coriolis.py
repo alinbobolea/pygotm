@@ -98,7 +98,8 @@ def coriolis(
     Parameters
     ----------
     state:
-        MeanflowState with u, v (horizontal velocities), cori (Coriolis parameter f [rad/s]).
+        MeanflowState with u, v (horizontal velocities),
+        cori (Coriolis parameter f [rad/s]).
     nlev:
         Number of model layers.
     dt:

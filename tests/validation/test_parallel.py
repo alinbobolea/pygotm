@@ -81,8 +81,9 @@ def test_run_cases_parallel_calls_on_result_for_each_case(tmp_path: Path) -> Non
         for f, _name, _key in submitted:
             yield f
 
+    mock_lc: MagicMock
     with (
-        patch("pygotm.validation.parallel.LocalCluster", return_value=mock_cluster),
+        patch("pygotm.validation.parallel.LocalCluster", return_value=mock_cluster) as mock_lc,
         patch("pygotm.validation.parallel.Client", return_value=mock_client),
         patch(
             "pygotm.validation.parallel.resolve_reference_case",
@@ -104,6 +105,7 @@ def test_run_cases_parallel_calls_on_result_for_each_case(tmp_path: Path) -> Non
 
     assert set(received) == {"couette", "channel"}
     assert [key for _f, _name, key in submitted] == ["couette-gotm", "channel-gotm"]
+    assert mock_lc.call_args.kwargs["memory_limit"] == 0
 
 
 def test_run_cases_parallel_clamps_workers_to_case_count(tmp_path: Path) -> None:
@@ -167,3 +169,4 @@ def test_run_cases_parallel_clamps_workers_to_case_count(tmp_path: Path) -> None
         )
 
     assert cluster_calls[0]["n_workers"] == 1
+    assert cluster_calls[0]["memory_limit"] == 0

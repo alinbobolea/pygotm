@@ -68,8 +68,6 @@ r"""
 
 from __future__ import annotations
 
-import numpy as np
-
 from pygotm.meanflow.meanflow import MeanflowState
 
 __all__ = [

@@ -23,26 +23,41 @@ __all__ = [
     "save_json",
 ]
 
+_STATUS_COLORS: dict[str, str] = {
+    "PASS":       "#2e7d32",
+    "MARGINAL":   "#f9a825",
+    "DISCREPANT": "#e65100",
+    "BROKEN":     "#c62828",
+    "ERROR":      "#c62828",
+}
+
+_BADGE_CLASSES: dict[str, str] = {
+    "PASS":       "badge-pass",
+    "MARGINAL":   "badge-marginal",
+    "DISCREPANT": "badge-discrepant",
+    "BROKEN":     "badge-broken",
+    "ERROR":      "badge-error",
+}
+
 
 @dataclass
 class CaseResult:
     case_name: str
-    status: str            # "PASS" | "FAIL" | "ERROR"
+    status: str           # "PASS" | "FAIL" | "ERROR"
     error: str | None
     py_nc_path: str
     ref_nc_path: str
     wall_time_s: float
     variables: list[VarResult] = field(default_factory=list)
     n_pass: int = 0
-    n_fail: int = 0
-    n_skip: int = 0
+    n_marginal: int = 0
+    n_discrepant: int = 0
+    n_broken: int = 0
 
 
 @dataclass
 class Report:
     generated_at: str
-    rtol: float
-    atol: float
     hardware: dict[str, str]
     cases: list[CaseResult]
     verdict: str           # "FULL PARITY" | "PARTIAL PARITY" | "FAILED VALIDATION"
@@ -75,39 +90,31 @@ def load_json(path: Path) -> Report:
         data = json.load(f)
     cases = []
     for cd in data["cases"]:
-        vars_ = [VarResult(**v) for v in cd.pop("variables", [])]
+        vars_data = cd.pop("variables", [])
+        vars_ = [VarResult(**v) for v in vars_data]
+        cd.setdefault("n_marginal", 0)
+        cd.setdefault("n_discrepant", 0)
+        cd.setdefault("n_broken", 0)
+        cd.pop("n_fail", None)
+        cd.pop("n_skip", None)
         cases.append(CaseResult(**cd, variables=vars_))
     data["cases"] = cases
     data.setdefault("hardware", {})
+    data.pop("atol", None)
+    data.pop("rtol", None)
     return Report(**data)
 
 
 def _fmt(v: float | None, precision: int = 3) -> str:
-    """Format a float in scientific notation with *precision* significant digits."""
     if v is None or (isinstance(v, float) and (v != v or abs(v) == float("inf"))):
         return "—"
     return f"{v:.{precision}e}"
 
 
 def _fmt_full(v: float | None) -> str:
-    """Format a float with full IEEE 754 double precision (all significant digits).
-
-    Uses Python's repr(), which produces the shortest string guaranteed to
-    round-trip back to the exact same float value (up to 17 significant digits).
-    """
     if v is None or (isinstance(v, float) and (v != v or abs(v) == float("inf"))):
         return "—"
-    return repr(v)
-
-
-def _rtol_latex(rtol: float) -> str:
-    """Format rtol as a LaTeX string, e.g. '5 \\times 10^{-6}'."""
-    exp = int(math.floor(math.log10(abs(rtol))))
-    mantissa = rtol / 10.0 ** exp
-    mantissa_str = f"{mantissa:.6g}".rstrip("0").rstrip(".")
-    if mantissa_str == "1":
-        return f"10^{{{exp}}}"
-    return f"{mantissa_str} \\times 10^{{{exp}}}"
+    return format(v, ".17g")
 
 
 def _fmt_time(s: float) -> str:
@@ -117,56 +124,26 @@ def _fmt_time(s: float) -> str:
     return f"{int(m)}m {sec:.0f}s"
 
 
-def _status_cell(status: str) -> str:
-    colours = {
-        "PASS": "#2e7d32", "FAIL": "#c62828",
-        "ERROR": "#c62828",
-    }
-    colour = colours.get(status, "#333")
-    return f'<td style="color:{colour};font-weight:bold">{status}</td>'
+def _status_cell(status: str, label: str | None = None) -> str:
+    colour = _STATUS_COLORS.get(status, "#333")
+    text = label or status
+    return f'<td style="color:{colour};font-weight:bold">{text}</td>'
 
 
 def _hardware_section(hw: dict[str, str]) -> str:
     if not hw:
         return ""
-    cpu_model = hw.get("cpu_model", "unknown")
-    cpu_count = hw.get("cpu_count", "?")
-    cores_per_socket = hw.get("cores_per_socket", "")
-    sockets = hw.get("sockets", "")
-    cpu_max_mhz = hw.get("cpu_max_mhz", "")
-    ram = hw.get("ram_total", "unknown")
-    numba = hw.get("numba_version", "unknown")
-    python_ver = hw.get("python_version", "unknown")
-    os_platform = hw.get("platform", "unknown")
-    gpu_info = hw.get("gpu_info", "")
-    execution_backend = hw.get("execution_backend", "cpu")
-
-    core_detail = ""
-    if cores_per_socket and sockets:
-        try:
-            total_phys = int(cores_per_socket) * int(sockets)
-            core_detail = f" ({total_phys} physical cores)"
-        except ValueError:
-            pass
-    freq_detail = ""
-    if cpu_max_mhz:
-        try:
-            freq_detail = f" @ {float(cpu_max_mhz) / 1000:.2f} GHz"
-        except ValueError:
-            pass
-
     rows: list[tuple[str, str]] = [
-        ("CPU", f"{cpu_model}{freq_detail}"),
-        ("Logical CPUs", f"{cpu_count}{core_detail}"),
-        ("RAM", ram),
-        ("Execution backend", execution_backend),
-        ("Numba", numba),
-        ("Python", python_ver),
-        ("OS", os_platform),
+        ("CPU", hw.get("cpu_model", "unknown")),
+        ("Logical CPUs", hw.get("cpu_count", "?")),
+        ("RAM", hw.get("ram_total", "unknown")),
+        ("Execution backend", hw.get("execution_backend", "cpu")),
+        ("Numba", hw.get("numba_version", "unknown")),
+        ("Python", hw.get("python_version", "unknown")),
+        ("OS", hw.get("platform", "unknown")),
     ]
-    if gpu_info:
-        rows.insert(2, ("GPU", gpu_info))
-
+    if hw.get("gpu_info"):
+        rows.insert(2, ("GPU", hw["gpu_info"]))
     cells = "".join(
         f"<tr><th>{label}</th><td>{_html.escape(value)}</td></tr>"
         for label, value in rows
@@ -174,52 +151,98 @@ def _hardware_section(hw: dict[str, str]) -> str:
     return f"""
 <div class="hardware-box">
   <h3 style="margin:0 0 .5em">Hardware</h3>
-  <table class="hw-table">
-    <tbody>{cells}</tbody>
-  </table>
+  <table class="hw-table"><tbody>{cells}</tbody></table>
 </div>"""
+
+
+def _var_rows_html(variables: list[VarResult]) -> str:
+    rows = ""
+    for v in variables:
+        colour = _STATUS_COLORS.get(v.status, "#333")
+        rows += (
+            "<tr>"
+            f'<td style="color:{colour};font-weight:bold">{v.status}</td>'
+            f"<td>{_html.escape(v.name)}</td>"
+            f"<td><code>{_fmt_full(v.reference_at_worst)}</code></td>"
+            f"<td><code>{_fmt_full(v.calculated_at_worst)}</code></td>"
+            f"<td>{_fmt(v.primary_score)}</td>"
+            f"<td>{_fmt(v.birge_ratio)}</td>"
+            f"<td>{_fmt(v.normalized_signed_bias)}</td>"
+            f"<td>{'—' if v.plot_html is None else '↓ see below'}</td>"
+            f"</tr>\n"
+        )
+        if v.plot_html is not None:
+            rows += (
+                '<tr><td colspan="8" style="padding:0;border-top:none">'
+                f'<div class="plot-container">{v.plot_html}</div>'
+                "</td></tr>\n"
+            )
+    return rows
+
+
+def _section_html(section_label: str, variables: list[VarResult]) -> str:
+    if not variables:
+        return f'<p style="color:#888;font-style:italic">No {section_label} variables.</p>'
+    table_header = (
+        "<table>"
+        "<thead><tr>"
+        "<th>Status</th><th>Variable</th>"
+        "<th>Reference (full precision)</th>"
+        "<th>Calculated (full precision)</th>"
+        "<th>Primary score (p99)</th>"
+        "<th>Birge ratio</th>"
+        "<th>Normalized signed bias</th>"
+        "<th>Parameter plot</th>"
+        "</tr></thead>"
+        f"<tbody>{_var_rows_html(variables)}</tbody></table>"
+    )
+    return f'<h4 style="margin:1em 0 .4em">{section_label} variables</h4>{table_header}'
 
 
 def render_html(report: Report) -> str:
     """Render the validation report as a standalone HTML page."""
-    rtol_latex = _rtol_latex(report.rtol)
     cases_passed = sum(1 for c in report.cases if c.status == "PASS")
-    total_cases  = len(report.cases)
-    verdict_colour = "#2e7d32" if report.verdict == "FULL PARITY" else (
-        "#e65100" if report.verdict == "PARTIAL PARITY" else "#c62828"
+    total_cases = len(report.cases)
+    verdict_colour = (
+        "#2e7d32"
+        if report.verdict == "FULL PARITY"
+        else ("#e65100" if report.verdict == "PARTIAL PARITY" else "#c62828")
     )
     total_wall = sum(c.wall_time_s for c in report.cases)
 
     rows_summary = ""
     for c in report.cases:
-        total_checked = c.n_pass + c.n_fail
+        n_total = c.n_pass + c.n_marginal + c.n_discrepant + c.n_broken
         time_str = _fmt_time(c.wall_time_s) if c.wall_time_s > 0 else "—"
+        badge_cls = _BADGE_CLASSES.get(c.status, "badge-error")
         rows_summary += (
             f"<tr>"
             f"<td>{c.case_name}</td>"
-            + _status_cell(c.status) +
-            f"<td>{c.n_pass}/{total_checked}</td>"
-            f"<td>{c.n_fail}</td>"
+            f'<td><span class="case-badge {badge_cls}">{c.status}</span></td>'
+            f"<td>{c.n_pass}</td><td>{c.n_marginal}</td>"
+            f"<td>{c.n_discrepant}</td><td>{c.n_broken}</td>"
+            f"<td>{n_total}</td>"
             f"<td style='font-variant-numeric:tabular-nums'>{time_str}</td>"
             f"</tr>\n"
         )
-
-    total_pass = sum(c.n_pass for c in report.cases)
-    total_fail = sum(c.n_fail for c in report.cases)
     rows_summary += (
         f"<tr style='font-weight:bold;border-top:2px solid #ccc'>"
-        f"<td>TOTAL ({total_cases} cases)</td>"
+        f"<td>TOTAL ({total_cases} cases)</td><td>—</td>"
+        f"<td>{sum(c.n_pass for c in report.cases)}</td>"
+        f"<td>{sum(c.n_marginal for c in report.cases)}</td>"
+        f"<td>{sum(c.n_discrepant for c in report.cases)}</td>"
+        f"<td>{sum(c.n_broken for c in report.cases)}</td>"
         f"<td>—</td>"
-        f"<td>{total_pass}/{total_pass + total_fail}</td>"
-        f"<td>{total_fail}</td>"
         f"<td style='font-variant-numeric:tabular-nums'>{_fmt_time(total_wall)}</td>"
         f"</tr>\n"
     )
 
     case_sections = ""
     for c in report.cases:
-        open_attr = " open" if c.status in ("FAIL", "ERROR") else ""
+        is_open = c.status in ("FAIL", "ERROR") or c.n_marginal + c.n_discrepant + c.n_broken > 0
+        open_attr = " open" if is_open else ""
         time_str = _fmt_time(c.wall_time_s) if c.wall_time_s > 0 else "—"
+        badge_cls = _BADGE_CLASSES.get(c.status, "badge-error")
 
         if c.status == "ERROR":
             case_sections += f"""
@@ -234,32 +257,19 @@ def render_html(report: Report) -> str:
 """
             continue
 
-        rows = ""
-        for v in c.variables:
-            # ref_at_worst and calc_at_worst: full precision via repr()
-            # error metrics: 3-digit scientific notation for readability
-            rows += (
-                "<tr>"
-                + _status_cell(v.status) +
-                f"<td>{_html.escape(v.name)}</td>"
-                f"<td><code>{_fmt_full(v.ref_at_worst)}</code></td>"
-                f"<td><code>{_fmt_full(v.calc_at_worst)}</code></td>"
-                f"<td>{_fmt(v.max_abs_err)}</td>"
-                f"<td>{_fmt(v.max_rel_err)}</td>"
-                f"<td>{_fmt(v.rmse)}</td>"
-                f"<td>{_fmt(v.nrmse)}</td>"
-                f"</tr>\n"
-            )
+        pygotm_vars = [v for v in c.variables if v.section == "pygotm"]
+        pyfabm_vars = [v for v in c.variables if v.section == "pyfabm"]
 
-        badge_cls = "badge-pass" if c.status == "PASS" else "badge-fail"
         case_sections += f"""
 <details class="case-section" data-status="{c.status}"{open_attr}>
   <summary class="case-summary">
     <span class="case-title">{_html.escape(c.case_name)}</span>
     <span class="case-badge {badge_cls}">{c.status}</span>
     <span class="case-meta">
-      {c.n_pass}/{c.n_pass+c.n_fail} vars pass &nbsp;·&nbsp;
-      {c.n_fail} failed &nbsp;·&nbsp;
+      PASS: {c.n_pass} &nbsp;·&nbsp;
+      MARGINAL: {c.n_marginal} &nbsp;·&nbsp;
+      DISCREPANT: {c.n_discrepant} &nbsp;·&nbsp;
+      BROKEN: {c.n_broken} &nbsp;·&nbsp;
       wall time: {time_str}
     </span>
   </summary>
@@ -268,19 +278,8 @@ def render_html(report: Report) -> str:
       Python: <code>{_html.escape(c.py_nc_path)}</code><br>
       Reference: <code>{_html.escape(c.ref_nc_path)}</code>
     </p>
-    <table>
-      <thead>
-        <tr>
-          <th>Status</th><th>Variable</th>
-          <th>Reference (full precision)</th>
-          <th>Calculated (full precision)</th>
-          <th>max_abs_err</th><th>max_rel_err ⚠</th>
-          <th>RMSE</th><th>NRMSE</th>
-        </tr>
-      </thead>
-      <tbody>
-{rows}      </tbody>
-    </table>
+    {_section_html("1. PyGOTM", pygotm_vars)}
+    {_section_html("2. PyFABM", pyfabm_vars)}
   </div>
 </details>
 """
@@ -292,6 +291,7 @@ def render_html(report: Report) -> str:
 <head>
 <meta charset="utf-8">
 <title>pyGOTM Validation Report</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>
 MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\\\]']] }} }};
 </script>
@@ -300,6 +300,7 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
   body   {{ font-family: system-ui, sans-serif; max-width: 1600px; margin: 2rem auto; padding: 0 1rem; color: #222; }}
   h1     {{ border-bottom: 2px solid #ccc; padding-bottom: .4em; }}
   h2     {{ margin-top: 2.5em; border-bottom: 1px solid #ddd; padding-bottom: .3em; }}
+  h4     {{ color: #444; }}
   table  {{ border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.85em; }}
   th, td {{ border: 1px solid #ddd; padding: .35em .6em; text-align: left; white-space: nowrap; }}
   th     {{ background: #f5f5f5; font-weight: 600; }}
@@ -308,21 +309,10 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
                border-left: 6px solid; margin: 1.2em 0; }}
   code   {{ background: #f5f5f5; padding: .1em .4em; border-radius: 3px; font-size: 0.9em; }}
   .hardware-box {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;
-                   padding: .8em 1.2em; margin: 1.2em 0; display: inline-block;
-                   min-width: 420px; }}
+                   padding: .8em 1.2em; margin: 1.2em 0; display: inline-block; min-width: 420px; }}
   .hw-table {{ margin: 0; font-size: 0.88em; border: none; }}
   .hw-table th, .hw-table td {{ border: none; padding: .2em .7em .2em 0; background: transparent; }}
   .hw-table th {{ width: 140px; color: #555; font-weight: 600; }}
-  .methodology {{ background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px;
-                  padding: 1em 1.4em; margin: 1.2em 0; }}
-  .methodology h3 {{ margin: 0 0 .6em; font-size: 1em; color: #444; }}
-  .metric-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: .5em 2em; }}
-  .metric-item {{ padding: .4em 0; border-bottom: 1px solid #eee; }}
-  .metric-name {{ font-weight: 600; font-size: 0.9em; }}
-  .metric-desc {{ font-size: 0.85em; color: #555; margin-top: .15em; }}
-  .pass-criterion {{ background: #e8f5e9; border-left: 4px solid #2e7d32;
-                     padding: .6em 1em; margin-top: .8em; border-radius: 0 4px 4px 0; }}
-  .pass-criterion strong {{ color: #1b5e20; }}
   .case-section {{ border: 1px solid #e0e0e0; border-radius: 6px; margin: .8em 0; }}
   .case-summary {{ display: flex; align-items: center; gap: .7em; cursor: pointer;
                    padding: .6em 1em; list-style: none; user-select: none; }}
@@ -333,14 +323,21 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
   .case-title {{ font-size: 1.1em; font-weight: 600; }}
   .case-meta  {{ font-size: 0.8em; color: #666; margin-left: auto; }}
   .case-badge {{ font-size: 0.8em; font-weight: 700; padding: .15em .5em; border-radius: 3px; }}
-  .badge-pass  {{ background: #e8f5e9; color: #2e7d32; }}
-  .badge-fail  {{ background: #ffebee; color: #c62828; }}
-  .badge-error {{ background: #ffebee; color: #c62828; }}
+  .badge-pass       {{ background: #e8f5e9; color: #2e7d32; }}
+  .badge-marginal   {{ background: #fff9c4; color: #f57f17; }}
+  .badge-discrepant {{ background: #ffe0b2; color: #e65100; }}
+  .badge-broken     {{ background: #ffebee; color: #c62828; }}
+  .badge-error      {{ background: #ffebee; color: #c62828; }}
   .case-body  {{ padding: 0 1em 1em; }}
+  .plot-container {{ margin: .5em 0; }}
   .controls {{ display: flex; gap: .5em; margin: 1em 0; }}
   .btn {{ padding: .35em .9em; border: 1px solid #bbb; border-radius: 4px;
           background: #f5f5f5; cursor: pointer; font-size: 0.85em; }}
   .btn:hover {{ background: #e8e8e8; }}
+  .methodology {{ background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px;
+                  padding: 1em 1.4em; margin: 1.2em 0; }}
+  .status-band {{ display: grid; grid-template-columns: auto auto auto 1fr; gap: .3em 1em;
+                  font-size: 0.88em; margin-top: .6em; }}
 </style>
 </head>
 <body>
@@ -353,60 +350,48 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
 
 {hw_html}
 
-<h2>Methodology</h2>
+<h2>Validation Methodology</h2>
 <div class="methodology">
-  <h3>Metrics</h3>
   <p style="font-size:0.85em;color:#555;margin:.2em 0 .8em">
-    All metrics are computed over every time step and grid point in the flattened arrays
-    \\(a\\) (pyGOTM) and \\(b\\) (Fortran reference).
-    Reference and Calculated columns show all significant digits (IEEE 754 double precision).
+    Three indicators are used. Status is driven exclusively by the primary tolerance-normalized score.
   </p>
-  <div class="metric-grid">
-    <div class="metric-item">
-      <div class="metric-name">Reference (full precision)</div>
-      <div class="metric-desc">
-        Fortran GOTM value \\(b_i\\) at \\(i^* = \\arg\\max |a - b|\\), shown with all significant digits.
-      </div>
-    </div>
-    <div class="metric-item">
-      <div class="metric-name">Calculated (full precision)</div>
-      <div class="metric-desc">
-        pyGOTM value \\(a_{{i^*}}\\) at that same index, shown with all significant digits.
-      </div>
-    </div>
-    <div class="metric-item">
-      <div class="metric-name">max_abs_err</div>
-      <div class="metric-desc">\\(\\max_i |a_i - b_i|\\)</div>
-    </div>
-    <div class="metric-item">
-      <div class="metric-name">max_rel_err ⚠</div>
-      <div class="metric-desc">Unreliable near zero; use NRMSE as primary metric.</div>
-    </div>
-    <div class="metric-item">
-      <div class="metric-name">RMSE</div>
-      <div class="metric-desc">\\(\\sqrt{{\\frac{{1}}{{N}}\\sum_i (a_i - b_i)^2}}\\)</div>
-    </div>
-    <div class="metric-item">
-      <div class="metric-name">NRMSE</div>
-      <div class="metric-desc">\\(\\text{{RMSE}} / (\\max b - \\min b)\\) — primary metric.</div>
-    </div>
+  <p style="font-size:0.85em">
+    <strong>Pointwise normalized error:</strong>
+    \\[E_i = \\frac{{|\\text{{calc}}_i - \\text{{ref}}_i|}}{{a_{{tol}} + r_{{tol}} \\cdot \\max(|\\text{{ref}}_i|,\\, s_{{floor}})}}\\]
+  </p>
+  <p style="font-size:0.85em">
+    <strong>Primary score (p99):</strong> \\(P_{{99}} = \\text{{percentile}}(E_i, 99)\\) — drives status classification.<br>
+    <strong>Birge ratio:</strong> \\(B = \\sqrt{{\\text{{mean}}(E_i^2)}}\\) — RMS diagnostic only, not used for status.<br>
+    <strong>Normalized signed bias:</strong> \\(\\text{{NSB}} = \\bar{{(\\text{{calc}} - \\text{{ref}})}} \\;/\\; (a_{{tol}} + r_{{tol}} \\cdot \\max(\\bar{{|\\text{{ref}}|}}, s_{{floor}}))\\)
+  </p>
+  <div class="status-band">
+    <span style="color:#2e7d32;font-weight:bold">PASS</span>     <span>green</span>  <span>\\(P_{{99}} \\leq 1\\)</span>       <span>Within tolerance.</span>
+    <span style="color:#f9a825;font-weight:bold">MARGINAL</span> <span>yellow</span> <span>\\(1 &lt; P_{{99}} \\leq 3\\)</span>  <span>Slightly outside. Possible float32 sensitivity.</span>
+    <span style="color:#e65100;font-weight:bold">DISCREPANT</span><span>orange</span><span>\\(3 &lt; P_{{99}} \\leq 10\\)</span> <span>Deterministic implementation difference likely.</span>
+    <span style="color:#c62828;font-weight:bold">BROKEN</span>    <span>red</span>   <span>\\(P_{{99}} > 10\\)</span>          <span>Severe mismatch. Debug before inspecting plots.</span>
   </div>
-  <div class="pass-criterion">
-    <strong>Pass criterion:</strong>
-    \\[|a_i - b_i| \\leq \\max\\!\\left(10^{{-7}} \\cdot \\text{{range}}(b),\\; 10^{{-12}}\\right) + {rtol_latex} \\cdot |b_i|\\]
-  </div>
+  <p style="font-size:0.85em;margin-top:.6em">
+    Comparison plots are generated only for <strong>MARGINAL</strong> and <strong>DISCREPANT</strong> variables.
+    Each case is split into <strong>PyGOTM</strong> and <strong>PyFABM</strong> sections.
+  </p>
 </div>
 
 <h2>Summary</h2>
 <table>
-  <thead><tr><th>Case</th><th>Status</th><th>Vars passed</th><th>Vars failed</th><th>Wall time</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Case</th><th>Status</th>
+      <th>PASS</th><th>MARGINAL</th><th>DISCREPANT</th><th>BROKEN</th>
+      <th>Total vars</th><th>Wall time</th>
+    </tr>
+  </thead>
   <tbody>{rows_summary}</tbody>
 </table>
 
 <div class="controls">
   <button class="btn" onclick="expandAll()">Expand All</button>
   <button class="btn" onclick="collapseAll()">Collapse All</button>
-  <button class="btn" onclick="showFailed()">Show Failed</button>
+  <button class="btn" onclick="showFailed()">Show Non-Pass</button>
 </div>
 
 {case_sections}
@@ -416,7 +401,8 @@ function expandAll()   {{ document.querySelectorAll('details.case-section').forE
 function collapseAll() {{ document.querySelectorAll('details.case-section').forEach(d => d.open = false); }}
 function showFailed()  {{
   document.querySelectorAll('details.case-section').forEach(d => {{
-    d.open = d.dataset.status === 'FAIL' || d.dataset.status === 'ERROR';
+    const s = d.dataset.status;
+    d.open = s === 'FAIL' || s === 'ERROR';
   }});
 }}
 </script>

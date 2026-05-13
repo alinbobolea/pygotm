@@ -3,21 +3,20 @@
 from pygotm.util import util
 from pygotm.util.util import (
     CENTRAL,
-    Dirichlet,
     MUSCL,
-    Neumann,
     P1,
     P2,
     P2_PDM,
     SPLMAX13,
-    Superbee,
     UPSTREAM,
+    Dirichlet,
+    Neumann,
+    Superbee,
     flux,
     oneSided,
     value,
     zeroDivergence,
 )
-
 
 # ---------------------------------------------------------------------------
 # Import / smoke

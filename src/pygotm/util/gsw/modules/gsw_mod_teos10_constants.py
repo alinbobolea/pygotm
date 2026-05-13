@@ -7,8 +7,6 @@ All values are identical to the Fortran parameters so that Numba-compiled
 callers produce bit-for-bit matching results.
 """
 
-import numba
-import numpy as np
 
 __all__ = [
     "gsw_cp0",

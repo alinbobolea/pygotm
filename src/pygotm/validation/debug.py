@@ -9,7 +9,12 @@ import numpy as np
 import xarray as xr
 
 from pygotm.validate import open_validation_dataset
-from pygotm.validation.compare import ATOL, RTOL
+
+# Diagnostic-only fallback tolerances used to compute the "passes" field in
+# debug dumps.  These are not parity-decision values; real parity uses the
+# per-variable tolerance registry in pygotm.validation.tolerances.
+_ATOL: float = 1e-12
+_RTOL: float = 5e-6
 
 __all__ = ["TURBULENCE_DEBUG_VARIABLES", "write_turbulence_debug_dump"]
 
@@ -112,8 +117,8 @@ def _metric_record(
     nonzero = np.abs(ref_values) > 0.0
     rel_err = np.zeros_like(abs_err)
     rel_err[nonzero] = abs_err[nonzero] / np.abs(ref_values[nonzero])
-    atol_var = max(1.0e-7 * ref_range, ATOL)
-    passes = bool(np.all(abs_err <= atol_var + RTOL * np.abs(ref_values)))
+    atol_var = max(1.0e-7 * ref_range, _ATOL)
+    passes = bool(np.all(abs_err <= atol_var + _RTOL * np.abs(ref_values)))
 
     record: dict[str, object] = {
         "variable": variable,

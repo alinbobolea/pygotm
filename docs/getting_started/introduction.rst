@@ -65,17 +65,21 @@ Key differences from the Fortran GOTM:
      - NetCDF (CF conventions, xarray-compatible)
    * - Deployment
      - Compile from source
-     - ``uv add pygotm``; browser SaaS planned
+     - ``conda activate pygotm``; browser SaaS planned
 
-**Scientific parity:** pyGOTM must pass every official GOTM test case with
-the range-aware combined tolerance
+**Scientific parity:** pyGOTM must pass every official GOTM test case using a
+per-variable three-indicator validation system.  Each variable is scored by the
+99th-percentile pointwise normalised error
 
 .. math::
 
-   |a - b| \leq \max(10^{-7} \times \mathrm{ref\_range},\, 10^{-12})
-                + 10^{-6} \times |b|
+   E_i = \frac{|\text{calc}_i - \text{ref}_i|}
+              {a_\text{tol} + r_\text{tol} \cdot \max(|\text{ref}_i|,\, s_\text{floor})}
 
-against the Fortran GOTM 6.0.7 reference output.
+against the Fortran GOTM 6.0.7 reference output.  A variable **passes** when
+:math:`P_{99} = \text{percentile}(E_i,\,99) \leq 1`.  Per-variable tolerance
+parameters are defined in ``src/pygotm/validation/tolerances.py``; see
+:doc:`../validation/overview` for the full scoring system.
 
 Execution Model
 ---------------

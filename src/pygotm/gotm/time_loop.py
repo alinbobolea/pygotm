@@ -1037,13 +1037,14 @@ def time_loop_compiled(
     init_int_swr: float,
     init_int_heat: float,
     init_int_total: float,
-    traj_store: int,
-    traj_T: np.ndarray,
-    traj_S: np.ndarray,
-    traj_rho: np.ndarray,
-    traj_h: np.ndarray,
-    traj_nuh: np.ndarray,
-    traj_rad: np.ndarray,
+    hydro_store: int,
+    hydro_T: np.ndarray,
+    hydro_S: np.ndarray,
+    hydro_rho: np.ndarray,
+    hydro_h: np.ndarray,
+    hydro_nuh: np.ndarray,
+    hydro_rad: np.ndarray,
+    hydro_taub: np.ndarray,
 ) -> int:
     """Run profile-forced cases through the compiled timestep loop."""
 
@@ -1401,14 +1402,15 @@ def time_loop_compiled(
             )
         out_index += 1
 
-    if traj_store != 0:
+    if hydro_store != 0:
         for k in range(nlev + 1):
-            traj_T[0, k] = T[k]
-            traj_S[0, k] = S[k]
-            traj_rho[0, k] = rho[k]
-            traj_h[0, k] = h[k]
-            traj_nuh[0, k] = nuh[k]
-            traj_rad[0, k] = rad[k]
+            hydro_T[0, k] = T[k]
+            hydro_S[0, k] = S[k]
+            hydro_rho[0, k] = rho[k]
+            hydro_h[0, k] = h[k]
+            hydro_nuh[0, k] = nuh[k]
+            hydro_rad[0, k] = rad[k]
+        hydro_taub[0] = taub[0]
 
     cosomega = math.cos(cori * dt)
     sinomega = math.sin(cori * dt)
@@ -2146,14 +2148,15 @@ def time_loop_compiled(
                 qu,
             )
 
-        if traj_store != 0:
+        if hydro_store != 0:
             for k in range(nlev + 1):
-                traj_T[step, k] = T[k]
-                traj_S[step, k] = S[k]
-                traj_rho[step, k] = rho[k]
-                traj_h[step, k] = h[k]
-                traj_nuh[step, k] = nuh[k]
-                traj_rad[step, k] = rad[k]
+                hydro_T[step, k] = T[k]
+                hydro_S[step, k] = S[k]
+                hydro_rho[step, k] = rho[k]
+                hydro_h[step, k] = h[k]
+                hydro_nuh[step, k] = nuh[k]
+                hydro_rad[step, k] = rad[k]
+            hydro_taub[step] = taub[0]
 
         if output_enabled != 0 and (
             step % output_every == 0 or (force_final_output != 0 and step == nt)
@@ -2427,13 +2430,14 @@ def run_compiled_time_loop(
     init_int_swr: float = 0.0,
     init_int_heat: float = 0.0,
     init_int_total: float = 0.0,
-    traj_store: int = 0,
-    traj_T: np.ndarray | None = None,
-    traj_S: np.ndarray | None = None,
-    traj_rho: np.ndarray | None = None,
-    traj_h: np.ndarray | None = None,
-    traj_nuh: np.ndarray | None = None,
-    traj_rad: np.ndarray | None = None,
+    hydro_store: int = 0,
+    hydro_T: np.ndarray | None = None,
+    hydro_S: np.ndarray | None = None,
+    hydro_rho: np.ndarray | None = None,
+    hydro_h: np.ndarray | None = None,
+    hydro_nuh: np.ndarray | None = None,
+    hydro_rad: np.ndarray | None = None,
+    hydro_taub: np.ndarray | None = None,
 ) -> int:
     """Validate runtime containers and cross into the compiled unified loop.
 
@@ -2449,7 +2453,6 @@ def run_compiled_time_loop(
     output.validate(params.nlev)
 
     nlev = params.nlev
-    nt = params.nt
     _dummy = np.zeros((1, nlev + 1), dtype=np.float64)
     # Build contiguous forcing slices for this chunk (no-op views when step_offset=0
     # and params.nt == forcing.nt, but always produces the correct window).
@@ -2492,13 +2495,15 @@ def run_compiled_time_loop(
     _f_vs = np.ascontiguousarray(forcing.vs[_s:_e, :])
     _f_dusdz = np.ascontiguousarray(forcing.dusdz[_s:_e, :])
     _f_dvsdz = np.ascontiguousarray(forcing.dvsdz[_s:_e, :])
-    _traj_store = traj_store if traj_store != 0 else 0
-    _traj_T = traj_T if traj_T is not None else _dummy
-    _traj_S = traj_S if traj_S is not None else _dummy
-    _traj_rho = traj_rho if traj_rho is not None else _dummy
-    _traj_h = traj_h if traj_h is not None else _dummy
-    _traj_nuh = traj_nuh if traj_nuh is not None else _dummy
-    _traj_rad = traj_rad if traj_rad is not None else _dummy
+    _hydro_store = hydro_store if hydro_store != 0 else 0
+    _hydro_T = hydro_T if hydro_T is not None else _dummy
+    _hydro_S = hydro_S if hydro_S is not None else _dummy
+    _hydro_rho = hydro_rho if hydro_rho is not None else _dummy
+    _hydro_h = hydro_h if hydro_h is not None else _dummy
+    _hydro_nuh = hydro_nuh if hydro_nuh is not None else _dummy
+    _hydro_rad = hydro_rad if hydro_rad is not None else _dummy
+    _dummy_scalar = np.zeros(1, dtype=np.float64)
+    _hydro_taub = hydro_taub if hydro_taub is not None else _dummy_scalar
     del nlev
 
     written = int(
@@ -2899,13 +2904,14 @@ def run_compiled_time_loop(
             init_int_swr,
             init_int_heat,
             init_int_total,
-            _traj_store,
-            _traj_T,
-            _traj_S,
-            _traj_rho,
-            _traj_h,
-            _traj_nuh,
-            _traj_rad,
+            _hydro_store,
+            _hydro_T,
+            _hydro_S,
+            _hydro_rho,
+            _hydro_h,
+            _hydro_nuh,
+            _hydro_rad,
+            _hydro_taub,
         )
     )
     if written > 0:

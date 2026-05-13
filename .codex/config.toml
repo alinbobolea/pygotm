@@ -2,6 +2,7 @@ model = "gpt-5.5"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 allow_login_shell = false
+approvals_reviewer = "auto_review"
 
 [agents]
 max_threads = 6

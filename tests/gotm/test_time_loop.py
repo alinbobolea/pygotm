@@ -489,12 +489,8 @@ def test_compiled_airsea_first_slot_matches_fortran(case_name: str) -> None:
     case = resolve_reference_case(case_name)
     compiled_run = initialize_gotm(case.yaml_path)
     if compiled_run.fabm_config is not None and compiled_run.fabm_config.use:
-        try:
-            with pytest.raises(RuntimeError, match="FABM|pyfabm"):
-                integrate_gotm_compiled(compiled_run, max_steps=0, output=True)
-        finally:
-            finalize_gotm(compiled_run)
-        return
+        finalize_gotm(compiled_run)
+        pytest.skip("FABM cases need a separate IC-slot test; airsea-only comparison skipped")
 
     reference = open_reference_dataset(case)
     actual = None
@@ -599,12 +595,8 @@ def test_compiled_profile_cases_emit_parity_comparable_output(case_name: str) ->
     case = resolve_reference_case(case_name)
     compiled_run = initialize_gotm(case.yaml_path)
     if compiled_run.fabm_config is not None and compiled_run.fabm_config.use:
-        try:
-            with pytest.raises(RuntimeError, match="FABM|pyfabm"):
-                integrate_gotm_compiled(compiled_run, max_steps=24, output=True)
-        finally:
-            finalize_gotm(compiled_run)
-        return
+        finalize_gotm(compiled_run)
+        pytest.skip("FABM cases run the full FABM loop; profile parity tested separately")
 
     reference = open_reference_dataset(case)
     actual = None

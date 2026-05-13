@@ -4,7 +4,10 @@ import numpy as np
 import pytest
 import xarray as xr
 
+from pygotm.config import load_config
 from pygotm.driver import GotmDriver
+from pygotm.gotm.gotm import initialize_gotm_from_settings, integrate_gotm_compiled
+from pygotm.gotm.runtime_builder import runtime_output_to_dataset
 from pygotm.validate import (
     REFERENCE_CASE_NAMES,
     ValidationCase,
@@ -14,9 +17,6 @@ from pygotm.validate import (
     resolve_reference_case,
     run_case_validation,
 )
-from pygotm.config import load_config
-from pygotm.gotm.gotm import integrate_gotm_compiled, initialize_gotm_from_settings
-from pygotm.gotm.runtime_builder import runtime_output_to_dataset
 
 # ---------------------------------------------------------------------------
 # pytest marks
@@ -244,7 +244,7 @@ def test_fabm_physics_identical_across_chunk_sizes() -> None:
         bundle = integrate_gotm_compiled(run, max_steps=48, chunk_size=chunk_size)
         return runtime_output_to_dataset(run, bundle)
 
-    ds_1chunk = _run(chunk_size=48)   # one chunk = old trajectory behaviour
+    ds_1chunk = _run(chunk_size=48)   # one chunk = single-pass FABM loop
     ds_2chunk = _run(chunk_size=24)   # two chunks
 
     try:

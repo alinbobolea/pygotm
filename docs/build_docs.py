@@ -3,11 +3,12 @@
 
 Usage
 -----
-    uv run docs/build_docs.py            # standard build
-    uv run docs/build_docs.py --clean    # wipe build dir first
-    uv run docs/build_docs.py --strict   # treat warnings as errors
-    uv run docs/build_docs.py --open     # open browser after build
-    uv run docs/build_docs.py --clean --strict --open
+    conda activate pygotm
+    python docs/build_docs.py            # standard build
+    python docs/build_docs.py --clean    # wipe build dir first
+    python docs/build_docs.py --strict   # treat warnings as errors
+    python docs/build_docs.py --open     # open browser after build
+    python docs/build_docs.py --clean --strict --open
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ def main() -> None:
     print("Generating figures …")
     build_figures()
 
-    cmd = ["uv", "run", "--group", "docs", "sphinx-build", "-b", "html"]
+    cmd = ["sphinx-build", "-b", "html"]
     if args.strict:
         cmd += ["-W", "--keep-going"]
     cmd += [str(DOCS_DIR), str(BUILD_DIR)]

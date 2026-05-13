@@ -44,7 +44,6 @@ def _make_particles(
     n: int, zlev: np.ndarray, depth: float = DEPTH
 ) -> tuple[np.ndarray, np.ndarray]:
     """Create n particles uniformly distributed in the water column."""
-    nlev = len(zlev) - 1
     zp = np.linspace(-depth + 1.0, -1.0, n)
     zi = np.array([_find_layer(z, zlev) for z in zp], dtype=int)
     return zi, zp
@@ -284,7 +283,6 @@ def test_layer_index_updates_when_particle_crosses_layer_boundary() -> None:
     """A particle that drifts from layer 3 to layer 4 must have zi updated."""
     zlev = np.linspace(-50.0, 0.0, 11)  # 10 layers, 5 m each
     nuh = _zero_nuh(nlev=10)
-    w = 0.0
     dt = 1.0
 
     # Place particle at top of layer 3: just below zlev[3]

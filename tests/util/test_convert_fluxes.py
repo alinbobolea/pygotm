@@ -152,7 +152,6 @@ def test_t_rad_formula() -> None:
 
 def test_b_rad_formula() -> None:
     """bRad = gravity * alpha * tRad (profile)."""
-    from pygotm.util.density import CP0
 
     state = _make_state(METHOD_LINEAR_TEOS10)
     rad_val = 150.0
