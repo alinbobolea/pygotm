@@ -183,8 +183,22 @@ def diff_face_batch(
     """Batch variant: process batch_size columns in parallel with numba.prange."""
     for b in numba.prange(batch_size):
         diff_face(
-            nlev, dt, cnpar,
-            h[b], bc_up, bc_down, y_up, y_down,
-            nu_y[b], l_sour[b], q_sour[b], y[b],
-            au[b], bu[b], cu[b], du[b], ru[b], qu[b],
+            nlev,
+            dt,
+            cnpar,
+            h[b],
+            bc_up,
+            bc_down,
+            y_up,
+            y_down,
+            nu_y[b],
+            l_sour[b],
+            q_sour[b],
+            y[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
         )

@@ -67,7 +67,8 @@ this is passed as ``sflux = S_sfc * (P - E)`` [psu m s⁻¹] —
 Both surface and bottom boundary conditions are of Neumann type; the bottom
 flux is zero.
 
-Authors (original Fortran): Lars Umlauf (scalar transport), Hans Burchard, Karsten Bolding.
+Authors (original Fortran): Lars Umlauf (scalar transport), Hans Burchard,
+Karsten Bolding.
 """
 
 import numba
@@ -136,16 +137,43 @@ def _step_salinity(
 
     if w_adv_active == 1:
         adv_center(
-            nlev, dt, h, h, w,
-            _ONE_SIDED, _ONE_SIDED, 0.0, 0.0,
-            w_adv_discr, _ADV_MODE, S, adv_cu,
+            nlev,
+            dt,
+            h,
+            h,
+            w,
+            _ONE_SIDED,
+            _ONE_SIDED,
+            0.0,
+            0.0,
+            w_adv_discr,
+            _ADV_MODE,
+            S,
+            adv_cu,
         )
 
     diff_center(
-        nlev, dt, cnpar, _POS_CONC, h,
-        _NEUMANN, _NEUMANN, diff_s_up, 0.0,
-        avh, l_sour, q_sour, tau_r, Sobs, S,
-        au, bu, cu, du, ru, qu,
+        nlev,
+        dt,
+        cnpar,
+        _POS_CONC,
+        h,
+        _NEUMANN,
+        _NEUMANN,
+        diff_s_up,
+        0.0,
+        avh,
+        l_sour,
+        q_sour,
+        tau_r,
+        Sobs,
+        S,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
     )
 
 
@@ -185,12 +213,35 @@ def step_salinity(
     """Batch variant: process batch_size columns in parallel."""
     for b in numba.prange(batch_size):
         _step_salinity(
-            nlev, dt, cnpar, avmolS, w_adv_active, w_adv_discr, s_adv,
-            S[b], h[b], w[b], u[b], v[b],
-            nus[b], gams[b], Sobs[b], tau_r[b], diff_s_up[b],
-            dsdx[b], dsdy[b],
-            avh[b], q_sour[b], l_sour[b],
-            au[b], bu[b], cu[b], du[b], ru[b], qu[b], adv_cu[b],
+            nlev,
+            dt,
+            cnpar,
+            avmolS,
+            w_adv_active,
+            w_adv_discr,
+            s_adv,
+            S[b],
+            h[b],
+            w[b],
+            u[b],
+            v[b],
+            nus[b],
+            gams[b],
+            Sobs[b],
+            tau_r[b],
+            diff_s_up[b],
+            dsdx[b],
+            dsdy[b],
+            avh[b],
+            q_sour[b],
+            l_sour[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
+            adv_cu[b],
         )
 
 
@@ -263,13 +314,35 @@ def salinity(
     adv_cu = np.zeros(n, dtype=np.float64)
 
     _step_salinity(
-        nlev, dt, cnpar, state.avmolS,
-        int(w_adv_active), w_adv_discr, int(s_adv),
-        state.S, state.h, state.w, state.u, state.v,
-        nus, gams, _Sobs, _tau_r,
+        nlev,
+        dt,
+        cnpar,
+        state.avmolS,
+        int(w_adv_active),
+        w_adv_discr,
+        int(s_adv),
+        state.S,
+        state.h,
+        state.w,
+        state.u,
+        state.v,
+        nus,
+        gams,
+        _Sobs,
+        _tau_r,
         -sflux,
-        _dsdx, _dsdy,
-        state.avh, q_sour, l_sour, au, bu, cu, du, ru, qu, adv_cu,
+        _dsdx,
+        _dsdy,
+        state.avh,
+        q_sour,
+        l_sour,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+        adv_cu,
     )
 
 

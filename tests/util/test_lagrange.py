@@ -79,8 +79,9 @@ def test_smoke_multiple_particles() -> None:
     zi, zp = _make_particles(npar, zlev)
     active = np.ones(npar, dtype=bool)
 
-    lagrange(nlev, 600.0, zlev, nuh, 0.0, npar, active, zi, zp,
-             rng=np.random.default_rng(42))
+    lagrange(
+        nlev, 600.0, zlev, nuh, 0.0, npar, active, zi, zp, rng=np.random.default_rng(42)
+    )
 
     assert zi.shape == (npar,)
     assert zp.shape == (npar,)
@@ -100,8 +101,18 @@ def test_particles_remain_in_domain_calm() -> None:
     active = np.ones(npar, dtype=bool)
 
     for _ in range(100):
-        lagrange(NLEV, 60.0, zlev, nuh, 0.0, npar, active, zi, zp,
-                 rng=np.random.default_rng(7))
+        lagrange(
+            NLEV,
+            60.0,
+            zlev,
+            nuh,
+            0.0,
+            npar,
+            active,
+            zi,
+            zp,
+            rng=np.random.default_rng(7),
+        )
 
     assert np.all(zp >= -DEPTH)
     assert np.all(zp <= 0.0)
@@ -116,8 +127,18 @@ def test_particles_remain_in_domain_strong_upwelling() -> None:
     active = np.ones(npar, dtype=bool)
 
     for _ in range(50):
-        lagrange(NLEV, 60.0, zlev, nuh, 5.0, npar, active, zi, zp,
-                 rng=np.random.default_rng(13))
+        lagrange(
+            NLEV,
+            60.0,
+            zlev,
+            nuh,
+            5.0,
+            npar,
+            active,
+            zi,
+            zp,
+            rng=np.random.default_rng(13),
+        )
 
     assert np.all(zp >= -DEPTH)
     assert np.all(zp <= 0.0)
@@ -132,8 +153,18 @@ def test_particles_remain_in_domain_strong_downwelling() -> None:
     active = np.ones(npar, dtype=bool)
 
     for _ in range(50):
-        lagrange(NLEV, 60.0, zlev, nuh, -5.0, npar, active, zi, zp,
-                 rng=np.random.default_rng(99))
+        lagrange(
+            NLEV,
+            60.0,
+            zlev,
+            nuh,
+            -5.0,
+            npar,
+            active,
+            zi,
+            zp,
+            rng=np.random.default_rng(99),
+        )
 
     assert np.all(zp >= -DEPTH)
     assert np.all(zp <= 0.0)
@@ -154,8 +185,9 @@ def test_zero_viscosity_zero_velocity_particle_stationary() -> None:
     zp = zp_init.copy()
     active = np.array([True])
 
-    lagrange(NLEV, 100.0, zlev, nuh, 0.0, 1, active, zi, zp,
-             rng=np.random.default_rng(0))
+    lagrange(
+        NLEV, 100.0, zlev, nuh, 0.0, 1, active, zi, zp, rng=np.random.default_rng(0)
+    )
 
     assert zp[0] == pytest.approx(zp_init[0], abs=1e-15)
     assert zi[0] == zi_init[0]
@@ -174,8 +206,7 @@ def test_zero_viscosity_pure_upward_drift() -> None:
     zp = zp_start.copy()
     active = np.array([True])
 
-    lagrange(10, dt, zlev, nuh, w, 1, active, zi, zp,
-             rng=np.random.default_rng(0))
+    lagrange(10, dt, zlev, nuh, w, 1, active, zi, zp, rng=np.random.default_rng(0))
 
     assert zp[0] == pytest.approx(zp_start[0] + expected_step, rel=1e-12)
 
@@ -193,8 +224,7 @@ def test_zero_viscosity_pure_downward_drift() -> None:
     zp = zp_start.copy()
     active = np.array([True])
 
-    lagrange(10, dt, zlev, nuh, w, 1, active, zi, zp,
-             rng=np.random.default_rng(0))
+    lagrange(10, dt, zlev, nuh, w, 1, active, zi, zp, rng=np.random.default_rng(0))
 
     assert zp[0] == pytest.approx(zp_start[0] + expected_step, rel=1e-12)
 
@@ -215,8 +245,7 @@ def test_reflective_bc_at_surface() -> None:
     zp = np.array([-0.5])  # very close to surface
     active = np.array([True])
 
-    lagrange(4, dt, zlev, nuh, w, 1, active, zi, zp,
-             rng=np.random.default_rng(0))
+    lagrange(4, dt, zlev, nuh, w, 1, active, zi, zp, rng=np.random.default_rng(0))
 
     assert zp[0] <= 0.0
     assert zp[0] >= -10.0
@@ -233,8 +262,7 @@ def test_reflective_bc_at_bottom() -> None:
     zp = np.array([-9.5])  # very close to bottom
     active = np.array([True])
 
-    lagrange(4, dt, zlev, nuh, w, 1, active, zi, zp,
-             rng=np.random.default_rng(0))
+    lagrange(4, dt, zlev, nuh, w, 1, active, zi, zp, rng=np.random.default_rng(0))
 
     assert zp[0] >= -10.0
     assert zp[0] <= 0.0
@@ -296,8 +324,9 @@ def test_layer_index_updates_when_particle_crosses_layer_boundary() -> None:
     gap_to_next = zlev[3] - zp_start + 0.1
     w_cross = gap_to_next / dt
 
-    lagrange(10, dt, zlev, nuh, w_cross, 1, active, zi, zp,
-             rng=np.random.default_rng(0))
+    lagrange(
+        10, dt, zlev, nuh, w_cross, 1, active, zi, zp, rng=np.random.default_rng(0)
+    )
 
     assert zi[0] == 4
     assert zp[0] > zlev[3]
@@ -323,8 +352,9 @@ def test_diffusion_step_magnitude() -> None:
     zp = np.full(npar, zp_start)
     active = np.ones(npar, dtype=bool)
 
-    lagrange(4, dt, zlev, nuh, 0.0, npar, active, zi, zp,
-             rng=np.random.default_rng(123))
+    lagrange(
+        4, dt, zlev, nuh, 0.0, npar, active, zi, zp, rng=np.random.default_rng(123)
+    )
 
     steps = zp - zp_start
     rms = math.sqrt(np.mean(steps**2))
@@ -348,8 +378,18 @@ def test_no_nan_inf_standard_run() -> None:
     active = np.ones(npar, dtype=bool)
 
     for _ in range(50):
-        lagrange(NLEV, 300.0, zlev, nuh, 0.0, npar, active, zi, zp,
-                 rng=np.random.default_rng(5))
+        lagrange(
+            NLEV,
+            300.0,
+            zlev,
+            nuh,
+            0.0,
+            npar,
+            active,
+            zi,
+            zp,
+            rng=np.random.default_rng(5),
+        )
 
     assert not np.any(np.isnan(zp))
     assert not np.any(np.isinf(zp))
@@ -364,8 +404,9 @@ def test_no_nan_inf_zero_viscosity() -> None:
     zi, zp = _make_particles(npar, zlev)
     active = np.ones(npar, dtype=bool)
 
-    lagrange(NLEV, 100.0, zlev, nuh, 0.0, npar, active, zi, zp,
-             rng=np.random.default_rng(3))
+    lagrange(
+        NLEV, 100.0, zlev, nuh, 0.0, npar, active, zi, zp, rng=np.random.default_rng(3)
+    )
 
     assert not np.any(np.isnan(zp))
     assert not np.any(np.isinf(zp))
@@ -398,10 +439,30 @@ def test_reproducible_with_seeded_rng() -> None:
     zi2 = zi1.copy()
     zp2 = zp1.copy()
 
-    lagrange(NLEV, 300.0, zlev, nuh, 0.01, npar, active, zi1, zp1,
-             rng=np.random.default_rng(42))
-    lagrange(NLEV, 300.0, zlev, nuh, 0.01, npar, active, zi2, zp2,
-             rng=np.random.default_rng(42))
+    lagrange(
+        NLEV,
+        300.0,
+        zlev,
+        nuh,
+        0.01,
+        npar,
+        active,
+        zi1,
+        zp1,
+        rng=np.random.default_rng(42),
+    )
+    lagrange(
+        NLEV,
+        300.0,
+        zlev,
+        nuh,
+        0.01,
+        npar,
+        active,
+        zi2,
+        zp2,
+        rng=np.random.default_rng(42),
+    )
 
     np.testing.assert_array_equal(zp1, zp2)
     np.testing.assert_array_equal(zi1, zi2)

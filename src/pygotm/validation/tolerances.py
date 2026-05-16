@@ -1,6 +1,4 @@
-"""Per-variable tolerance configuration and section classification for pyGOTM validation."""
-
-# ruff: noqa: E501  -- tabular tolerance registry intentionally exceeds line limit
+"""Validation configuration and section classification for Frechet comparison."""
 
 from __future__ import annotations
 
@@ -8,172 +6,162 @@ from dataclasses import dataclass
 from typing import Literal
 
 __all__ = [
-    "DEFAULT_PYFABM_TOLERANCE",
-    "VARIABLE_TOLERANCES",
-    "ValidationConfigurationError",
-    "VariableTolerance",
+    "DEFAULT_FRECHET_CONFIG",
+    "PYGOTM_VARIABLES",
+    "VARIABLE_MAGNITUDE_FLOORS",
+    "FrechetConfig",
     "classify_section",
-    "get_tolerance",
 ]
 
 
-class ValidationConfigurationError(Exception):
-    """Raised when a variable has no tolerance configuration and no safe default."""
-
-
 @dataclass(frozen=True)
-class VariableTolerance:
-    """Per-variable tolerance parameters for the three-indicator validation system.
+class FrechetConfig:
+    """Thresholds and normalization controls for validation Frechet distance."""
 
-    E_i = abs(calc_i - ref_i) / (atol + rtol * max(abs(ref_i), scale_floor))
+    pass_tol: float = 0.01
+    marginal_tol: float = 0.05
+    discrepant_tol: float = 0.20
+    frechet_abs_tol: float = 1.0e-12
+    frechet_rel_tol: float = 1.0e-6
+    frechet_k: int = 400
+    robust: bool = True
+    q_low: float = 1.0
+    q_high: float = 99.0
+    switch_oom: float = 2.0
+    eps_floor: float = 1.0e-12
+    default_magnitude_floor: float = 1.0e-6
 
-    section: "pygotm" for core GOTM physics variables, "pyfabm" for FABM variables.
-    """
+    def __post_init__(self) -> None:
+        if not (0.0 < self.pass_tol < self.marginal_tol < self.discrepant_tol):
+            msg = "Frechet status thresholds must satisfy pass < marginal < discrepant"
+            raise ValueError(msg)
+        if self.frechet_abs_tol < 0.0:
+            msg = "frechet_abs_tol must be non-negative"
+            raise ValueError(msg)
+        if self.frechet_rel_tol < 0.0:
+            msg = "frechet_rel_tol must be non-negative"
+            raise ValueError(msg)
+        if self.frechet_k <= 0:
+            msg = "frechet_k must be positive"
+            raise ValueError(msg)
+        if not (0.0 <= self.q_low < self.q_high <= 100.0):
+            msg = "normalization quantiles must satisfy 0 <= q_low < q_high <= 100"
+            raise ValueError(msg)
+        if self.switch_oom < 0.0:
+            msg = "switch_oom must be non-negative"
+            raise ValueError(msg)
+        if self.eps_floor <= 0.0:
+            msg = "eps_floor must be positive"
+            raise ValueError(msg)
+        if self.default_magnitude_floor <= 0.0:
+            msg = "default_magnitude_floor must be positive"
+            raise ValueError(msg)
 
-    atol: float
-    rtol: float
-    scale_floor: float
-    section: Literal["pygotm", "pyfabm"]
+    def effective_score(
+        self,
+        name: str,
+        d_raw: float,
+        d_norm: float,
+        signal_scale: float,
+    ) -> tuple[float, Literal["d_norm", "d_rel"]]:
+        """Return the Frechet score and metric mode used for classification."""
+
+        floor = VARIABLE_MAGNITUDE_FLOORS.get(name, self.default_magnitude_floor)
+        if 0.0 < signal_scale < floor:
+            return d_raw / signal_scale, "d_rel"
+        return d_norm, "d_norm"
 
 
-# Project-approved default tolerance for FABM variables not explicitly registered.
-# FABM variable names are model-specific and cannot all be pre-registered.
-DEFAULT_PYFABM_TOLERANCE = VariableTolerance(
-    atol=1.0e-10,
-    rtol=1.0e-6,
-    scale_floor=1.0e-6,
-    section="pyfabm",
+DEFAULT_FRECHET_CONFIG = FrechetConfig()
+
+
+PYGOTM_VARIABLES: frozenset[str] = frozenset(
+    {
+        "temp",
+        "salt",
+        "u",
+        "v",
+        "h",
+        "rho",
+        "buoy",
+        "NN",
+        "SS",
+        "ga",
+        "tke",
+        "eps",
+        "num",
+        "nuh",
+        "nus",
+        "nucl",
+        "L",
+        "P",
+        "G",
+        "Pb",
+        "kb",
+        "epsb",
+        "an",
+        "cmue1",
+        "cmue2",
+        "as",
+        "at",
+        "avh",
+        "xP",
+        "fric",
+        "drag",
+        "taub",
+        "I_0",
+        "bioshade",
+        "PSTK",
+        "idpdy",
+        "idpdx",
+        "w",
+    }
 )
 
-# Registry of known GOTM physics output variables.
-# Any variable NOT in this registry is classified as pyfabm using DEFAULT_PYFABM_TOLERANCE.
-VARIABLE_TOLERANCES: dict[str, VariableTolerance] = {
-    "temp": VariableTolerance(
-        atol=1.0e-10, rtol=1.0e-8, scale_floor=1.0, section="pygotm"
-    ),
-    "salt": VariableTolerance(
-        atol=1.0e-10, rtol=1.0e-8, scale_floor=1.0, section="pygotm"
-    ),
-    "u": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "v": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "h": VariableTolerance(
-        atol=1.0e-10, rtol=1.0e-8, scale_floor=1.0e-4, section="pygotm"
-    ),
-    "rho": VariableTolerance(
-        atol=1.0e-10, rtol=1.0e-8, scale_floor=1.0, section="pygotm"
-    ),
-    "buoy": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "NN": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-8, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "SS": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-8, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "ga": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "tke": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-7, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "eps": VariableTolerance(
-        atol=1.0e-18, rtol=1.0e-7, scale_floor=1.0e-12, section="pygotm"
-    ),
-    "num": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-7, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "nuh": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-7, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "nus": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-7, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "nucl": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-7, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "L": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "P": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-8, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "G": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-8, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "Pb": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-8, scale_floor=1.0e-12, section="pygotm"
-    ),
-    "kb": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-7, scale_floor=1.0e-12, section="pygotm"
-    ),
-    "epsb": VariableTolerance(
-        atol=1.0e-18, rtol=1.0e-7, scale_floor=1.0e-14, section="pygotm"
-    ),
-    "an": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "cmue1": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "cmue2": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "as": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "at": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "avh": VariableTolerance(
-        atol=1.0e-14, rtol=1.0e-7, scale_floor=1.0e-10, section="pygotm"
-    ),
-    "xP": VariableTolerance(
-        atol=1.0e-10, rtol=1.0e-8, scale_floor=1.0e-3, section="pygotm"
-    ),
-    "fric": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "drag": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "taub": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "I_0": VariableTolerance(
-        atol=1.0e-10, rtol=1.0e-8, scale_floor=1.0e-3, section="pygotm"
-    ),
-    "bioshade": VariableTolerance(
-        atol=1.0e-10, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "PSTK": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-6, section="pygotm"
-    ),
-    "idpdy": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-8, section="pygotm"
-    ),
-    "idpdx": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-8, section="pygotm"
-    ),
-    "w": VariableTolerance(
-        atol=1.0e-12, rtol=1.0e-8, scale_floor=1.0e-8, section="pygotm"
-    ),
+
+VARIABLE_MAGNITUDE_FLOORS: dict[str, float] = {
+    "temp": 1.0e-2,
+    "salt": 1.0e-2,
+    "u": 1.0e-4,
+    "v": 1.0e-4,
+    "h": 1.0e-3,
+    "rho": 1.0e-2,
+    "buoy": 1.0e-5,
+    "NN": 1.0e-4,
+    "SS": 1.0e-4,
+    "ga": 1.0e-8,
+    "tke": 1.0e-8,
+    "eps": 1.0e-12,
+    "num": 1.0e-7,
+    "nuh": 1.0e-7,
+    "nus": 1.0e-7,
+    "nucl": 1.0e-7,
+    "avh": 1.0e-7,
+    "L": 1.0e-4,
+    "P": 1.0e-12,
+    "G": 1.0e-12,
+    "Pb": 1.0e-12,
+    "kb": 1.0e-8,
+    "epsb": 1.0e-12,
+    "an": 1.0e-6,
+    "cmue1": 1.0e-6,
+    "cmue2": 1.0e-6,
+    "as": 1.0e-6,
+    "at": 1.0e-6,
+    "xP": 1.0e-12,
+    "fric": 1.0e-6,
+    "drag": 1.0e-6,
+    "taub": 1.0e-6,
+    "I_0": 1.0e-2,
+    "bioshade": 1.0e-4,
+    "PSTK": 1.0e-8,
+    "idpdy": 1.0e-8,
+    "idpdx": 1.0e-8,
+    "w": 1.0e-8,
 }
 
 
-def get_tolerance(name: str) -> VariableTolerance:
-    """Return per-variable tolerance parameters.
-
-    Falls back to DEFAULT_PYFABM_TOLERANCE for variables not in the registry,
-    treating them as FABM biogeochemical variables (names are model-specific).
-    """
-    return VARIABLE_TOLERANCES.get(name, DEFAULT_PYFABM_TOLERANCE)
-
-
 def classify_section(name: str) -> Literal["pygotm", "pyfabm"]:
-    """Return 'pygotm' for registered GOTM physics variables, 'pyfabm' otherwise."""
-    return VARIABLE_TOLERANCES.get(name, DEFAULT_PYFABM_TOLERANCE).section
+    """Return 'pygotm' for known GOTM physics variables, 'pyfabm' otherwise."""
+
+    return "pygotm" if name in PYGOTM_VARIABLES else "pyfabm"

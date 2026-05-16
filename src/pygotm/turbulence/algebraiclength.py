@@ -92,12 +92,7 @@ def _step_algebraiclength(
         for i in range(1, nlev):
             db = db + h[i]
             ds = depth - db
-            L[i] = (
-                kappa
-                * (ds + z0s)
-                * (db + z0b)
-                / (ds + db + z0b + z0s)
-            )
+            L[i] = kappa * (ds + z0s) * (db + z0b) / (ds + db + z0b + z0s)
         L[0] = kappa * z0b
         L[nlev] = kappa * z0s
 
@@ -114,12 +109,7 @@ def _step_algebraiclength(
             db = db + h[i]
             ds = depth - db
             db_xing = db * math.exp(-_BETA_XING * db / depth)
-            L[i] = (
-                kappa
-                * (ds + z0s)
-                * (db_xing + z0b)
-                / (ds + db_xing + z0s + z0b)
-            )
+            L[i] = kappa * (ds + z0s) * (db_xing + z0b) / (ds + db_xing + z0s + z0b)
         L[0] = kappa * z0b
         L[nlev] = kappa * z0s
 
@@ -127,17 +117,9 @@ def _step_algebraiclength(
         for i in range(1, nlev):
             db = db + h[i]
             ds = depth - db
-            L[i] = (
-                kappa
-                * (db + z0b)
-                * math.sqrt(1.0 - (db - z0s) / depth)
-            )
+            L[i] = kappa * (db + z0b) * math.sqrt(1.0 - (db - z0s) / depth)
         L[0] = kappa * z0b
-        L[nlev] = (
-            kappa
-            * (depth + z0b)
-            * math.sqrt(z0s / depth)
-        )
+        L[nlev] = kappa * (depth + z0b) * math.sqrt(z0s / depth)
 
     elif method == _BLACKADAR:
         int_qz = 0.0
@@ -156,9 +138,7 @@ def _step_algebraiclength(
             db = db + h[i]
             ds = depth - db
             L[i] = 1.0 / (
-                1.0 / (kappa * (ds + z0s))
-                + 1.0 / (kappa * (db + z0b))
-                + 1.0 / la
+                1.0 / (kappa * (ds + z0s)) + 1.0 / (kappa * (db + z0b)) + 1.0 / la
             )
 
         L[0] = kappa * z0b
@@ -200,7 +180,19 @@ def step_algebraiclength(
     r"""Update algebraic mixing-length profiles and dissipation (batch)."""
     for b in numba.prange(batch_size):
         _step_algebraiclength(
-            method, nlev, kappa, cde, galp, length_lim, eps_min,
-            tke[b], eps[b], L[b], h[b], NN[b],
-            depth[b, 0], z0b[b, 0], z0s[b, 0],
+            method,
+            nlev,
+            kappa,
+            cde,
+            galp,
+            length_lim,
+            eps_min,
+            tke[b],
+            eps[b],
+            L[b],
+            h[b],
+            NN[b],
+            depth[b, 0],
+            z0b[b, 0],
+            z0s[b, 0],
         )

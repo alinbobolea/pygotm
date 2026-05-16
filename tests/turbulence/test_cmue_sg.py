@@ -84,9 +84,10 @@ def test_formula_matches_fortran_and_prandtl_limit() -> None:
     for i in range(1, nlev):
         ri = an[i] / (as_[i] + 1.0e-8)
         if ri >= 1.0e-10:
-            prandtl = state.Prandtl0_fix * np.exp(
-                -ri / (state.Prandtl0_fix * 0.25)
-            ) + ri / 0.25
+            prandtl = (
+                state.Prandtl0_fix * np.exp(-ri / (state.Prandtl0_fix * 0.25))
+                + ri / 0.25
+            )
         else:
             prandtl = state.Prandtl0_fix
         expected_1[i] = state.cm0_fix

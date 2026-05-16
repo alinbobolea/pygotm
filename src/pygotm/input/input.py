@@ -76,7 +76,7 @@ def _parse_timestamp(text: str) -> tuple[int, int, int, int, int, int]:
 
 
 def _timestamp_to_julian_seconds(
-    timestamp: tuple[int, int, int, int, int, int]
+    timestamp: tuple[int, int, int, int, int, int],
 ) -> tuple[int, int]:
     year, month, day, hour, minute, second = timestamp
     jul = julian_day(year, month, day)

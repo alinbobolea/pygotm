@@ -156,10 +156,14 @@ def init_stokes_drift_yaml(
 
     raw = {} if settings is None else settings
     state.usprof_method = _method_from_token(
-        dict(raw.get("us", {})).get("method") if isinstance(raw.get("us"), dict) else None
+        dict(raw.get("us", {})).get("method")
+        if isinstance(raw.get("us"), dict)
+        else None
     )
     state.vsprof_method = _method_from_token(
-        dict(raw.get("vs", {})).get("method") if isinstance(raw.get("vs"), dict) else None
+        dict(raw.get("vs", {})).get("method")
+        if isinstance(raw.get("vs"), dict)
+        else None
     )
     state.dusdz_method = _method_from_token(
         dict(raw.get("dusdz", {})).get("method")
@@ -257,9 +261,7 @@ def do_stokes_drift(
     _sync_registered_inputs(state)
 
     profile_method = (
-        state.usprof_method
-        if state.usprof_method != NOTHING
-        else state.vsprof_method
+        state.usprof_method if state.usprof_method != NOTHING else state.vsprof_method
     )
 
     if profile_method == EXPONENTIAL:
@@ -363,7 +365,10 @@ def _langmuir_number_kernel(
         z0 = max(0.02, hsw) * 4.0
         theta_wl = math.atan(
             math.sin(theta_ww)
-            / (u_taus / us_srf / _KAPPA * math.log(max(hbl / z0, 1.0)) + math.cos(theta_ww))
+            / (
+                u_taus / us_srf / _KAPPA * math.log(max(hbl / z0, 1.0))
+                + math.cos(theta_ww)
+            )
         )
         la_slp_vr12 = la_sl * math.sqrt(
             abs(math.cos(theta_wl)) / (abs(math.cos(theta_ww - theta_wl)) + _SMALL)
@@ -382,7 +387,9 @@ def _langmuir_number_kernel(
     efactor_lwf16 = min(
         2.0,
         abs(math.cos(theta_wl))
-        * math.sqrt(1.0 + (1.5 * la_slp_vr12) ** (-2.0) + (5.4 * la_slp_vr12) ** (-4.0)),
+        * math.sqrt(
+            1.0 + (1.5 * la_slp_vr12) ** (-2.0) + (5.4 * la_slp_vr12) ** (-4.0)
+        ),
     )
     efactor_rwh16 = min(2.25, 1.0 + 1.0 / la_slp_rwh16)
     return (

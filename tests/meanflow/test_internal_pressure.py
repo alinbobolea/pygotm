@@ -61,9 +61,7 @@ _ALPHA0 = 2.0e-4
 _BETA0 = 7.0e-4
 
 
-def _make_state(
-    nlev: int = _NLEV, depth: float = _DEPTH
-) -> MeanflowState:
+def _make_state(nlev: int = _NLEV, depth: float = _DEPTH) -> MeanflowState:
     state = MeanflowState()
     init_meanflow(state, gravity=_GRAVITY)
     state.depth = depth
@@ -127,7 +125,7 @@ def test_type0_noop_idpdx() -> None:
     state = _make_state(nlev=nlev)
     ds = _make_density(nlev=nlev)
     idpdx, idpdy = _make_outputs(nlev)
-    idpdx[1:nlev + 1] = 0.5  # sentinel
+    idpdx[1 : nlev + 1] = 0.5  # sentinel
     sentinel = idpdx.copy()
 
     internal_pressure(
@@ -139,7 +137,9 @@ def test_type0_noop_idpdx() -> None:
         int_press_type=INT_PRESS_NONE,
     )
 
-    np.testing.assert_array_equal(idpdx, sentinel, err_msg="Type 0 must not modify idpdx")
+    np.testing.assert_array_equal(
+        idpdx, sentinel, err_msg="Type 0 must not modify idpdx"
+    )
 
 
 def test_type0_noop_idpdy() -> None:
@@ -148,7 +148,7 @@ def test_type0_noop_idpdy() -> None:
     state = _make_state(nlev=nlev)
     ds = _make_density(nlev=nlev)
     idpdx, idpdy = _make_outputs(nlev)
-    idpdy[1:nlev + 1] = -0.3  # sentinel
+    idpdy[1 : nlev + 1] = -0.3  # sentinel
     sentinel = idpdy.copy()
 
     internal_pressure(
@@ -160,7 +160,9 @@ def test_type0_noop_idpdy() -> None:
         int_press_type=INT_PRESS_NONE,
     )
 
-    np.testing.assert_array_equal(idpdy, sentinel, err_msg="Type 0 must not modify idpdy")
+    np.testing.assert_array_equal(
+        idpdy, sentinel, err_msg="Type 0 must not modify idpdy"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -175,8 +177,8 @@ def test_type1_zero_gradient_idpdx() -> None:
     ds = _make_density(nlev=nlev)
     assert state.T is not None
     assert state.S is not None
-    state.T[1:nlev + 1] = 10.0
-    state.S[1:nlev + 1] = 35.0
+    state.T[1 : nlev + 1] = 10.0
+    state.S[1 : nlev + 1] = 35.0
 
     idpdx, idpdy = _make_outputs(nlev)
     dsdx = np.zeros(nlev + 1)
@@ -198,7 +200,10 @@ def test_type1_zero_gradient_idpdx() -> None:
     )
 
     np.testing.assert_allclose(
-        idpdx[1:nlev + 1], 0.0, atol=1e-14, err_msg="Zero gradient must give zero idpdx"
+        idpdx[1 : nlev + 1],
+        0.0,
+        atol=1e-14,
+        err_msg="Zero gradient must give zero idpdx",
     )
 
 
@@ -209,8 +214,8 @@ def test_type1_zero_gradient_idpdy() -> None:
     ds = _make_density(nlev=nlev)
     assert state.T is not None
     assert state.S is not None
-    state.T[1:nlev + 1] = 10.0
-    state.S[1:nlev + 1] = 35.0
+    state.T[1 : nlev + 1] = 10.0
+    state.S[1 : nlev + 1] = 35.0
 
     idpdx, idpdy = _make_outputs(nlev)
     dsdx = np.zeros(nlev + 1)
@@ -232,7 +237,10 @@ def test_type1_zero_gradient_idpdy() -> None:
     )
 
     np.testing.assert_allclose(
-        idpdy[1:nlev + 1], 0.0, atol=1e-14, err_msg="Zero gradient must give zero idpdy"
+        idpdy[1 : nlev + 1],
+        0.0,
+        atol=1e-14,
+        err_msg="Zero gradient must give zero idpdy",
     )
 
 
@@ -267,8 +275,8 @@ def test_type1_analytic_uniform_T_gradient_idpdx() -> None:
     assert state.S is not None
     T0 = ds.T0
     S0 = ds.S0
-    state.T[1:nlev + 1] = T0
-    state.S[1:nlev + 1] = S0
+    state.T[1 : nlev + 1] = T0
+    state.S[1 : nlev + 1] = S0
 
     G_T = 1e-3  # K/m temperature gradient
     dtdx = np.full(nlev + 1, G_T)
@@ -300,8 +308,8 @@ def test_type1_analytic_uniform_T_gradient_idpdx() -> None:
         expected[k] = (nlev - k + 0.5) * D * C
 
     np.testing.assert_allclose(
-        idpdx[1:nlev + 1],
-        expected[1:nlev + 1],
+        idpdx[1 : nlev + 1],
+        expected[1 : nlev + 1],
         rtol=1e-10,
         err_msg="Type 1 uniform T gradient: analytic trapezoidal mismatch",
     )
@@ -321,8 +329,8 @@ def test_type1_analytic_uniform_S_gradient_idpdy() -> None:
     ds = _make_density(nlev=nlev)
     assert state.T is not None
     assert state.S is not None
-    state.T[1:nlev + 1] = ds.T0
-    state.S[1:nlev + 1] = ds.S0
+    state.T[1 : nlev + 1] = ds.T0
+    state.S[1 : nlev + 1] = ds.S0
 
     G_S = 5e-4  # g/(kg·m) salinity gradient
     dsdy = np.full(nlev + 1, G_S)
@@ -347,15 +355,17 @@ def test_type1_analytic_uniform_S_gradient_idpdy() -> None:
 
     assert state.h is not None
     D = state.h[1]
-    C = -_GRAVITY * _BETA0 * G_S  # negative: salinity increases density → decreases buoyancy
+    C = (
+        -_GRAVITY * _BETA0 * G_S
+    )  # negative: salinity increases density → decreases buoyancy
 
     expected = np.zeros(nlev + 1)
     for k in range(1, nlev + 1):
         expected[k] = (nlev - k + 0.5) * D * C
 
     np.testing.assert_allclose(
-        idpdy[1:nlev + 1],
-        expected[1:nlev + 1],
+        idpdy[1 : nlev + 1],
+        expected[1 : nlev + 1],
         rtol=1e-10,
         err_msg="Type 1 uniform S gradient: analytic trapezoidal mismatch",
     )
@@ -373,8 +383,8 @@ def test_type1_x_gradient_does_not_affect_idpdy() -> None:
     ds = _make_density(nlev=nlev)
     assert state.T is not None
     assert state.S is not None
-    state.T[1:nlev + 1] = ds.T0
-    state.S[1:nlev + 1] = ds.S0
+    state.T[1 : nlev + 1] = ds.T0
+    state.S[1 : nlev + 1] = ds.S0
 
     dtdx = np.full(nlev + 1, 1e-3)
     dsdx = np.zeros(nlev + 1)
@@ -397,7 +407,7 @@ def test_type1_x_gradient_does_not_affect_idpdy() -> None:
     )
 
     np.testing.assert_allclose(
-        idpdy[1:nlev + 1], 0.0, atol=1e-14, err_msg="dT/dx must not affect idpdy"
+        idpdy[1 : nlev + 1], 0.0, atol=1e-14, err_msg="dT/dx must not affect idpdy"
     )
 
 
@@ -408,8 +418,8 @@ def test_type1_y_gradient_does_not_affect_idpdx() -> None:
     ds = _make_density(nlev=nlev)
     assert state.T is not None
     assert state.S is not None
-    state.T[1:nlev + 1] = ds.T0
-    state.S[1:nlev + 1] = ds.S0
+    state.T[1 : nlev + 1] = ds.T0
+    state.S[1 : nlev + 1] = ds.S0
 
     dtdy = np.full(nlev + 1, 1e-3)
     dsdx = np.zeros(nlev + 1)
@@ -432,7 +442,7 @@ def test_type1_y_gradient_does_not_affect_idpdx() -> None:
     )
 
     np.testing.assert_allclose(
-        idpdx[1:nlev + 1], 0.0, atol=1e-14, err_msg="dT/dy must not affect idpdx"
+        idpdx[1 : nlev + 1], 0.0, atol=1e-14, err_msg="dT/dy must not affect idpdx"
     )
 
 
@@ -467,7 +477,9 @@ def test_type2_surface_plume_zero_at_bottom() -> None:
         plume_slope_y=slope_y,
     )
 
-    assert idpdx[1] == pytest.approx(0.0, abs=1e-14), "Surface plume: idpdx(1) must be zero"
+    assert idpdx[1] == pytest.approx(
+        0.0, abs=1e-14
+    ), "Surface plume: idpdx(1) must be zero"
 
 
 def test_type2_surface_plume_maximum_at_surface() -> None:
@@ -508,7 +520,7 @@ def test_type2_surface_plume_formula() -> None:
     assert state.buoy is not None
 
     rng = np.random.default_rng(42)
-    state.buoy[1:nlev + 1] = rng.uniform(-0.05, 0.05, nlev)
+    state.buoy[1 : nlev + 1] = rng.uniform(-0.05, 0.05, nlev)
     buoy_ref = state.buoy.copy()
 
     idpdx, idpdy = _make_outputs(nlev)
@@ -526,9 +538,13 @@ def test_type2_surface_plume_formula() -> None:
         plume_slope_y=0.0,
     )
 
-    expected = np.array([slope_x * (buoy_ref[k] - buoy_ref[1]) for k in range(nlev + 1)])
+    expected = np.array(
+        [slope_x * (buoy_ref[k] - buoy_ref[1]) for k in range(nlev + 1)]
+    )
     np.testing.assert_allclose(
-        idpdx[1:nlev + 1], expected[1:nlev + 1], rtol=1e-14,
+        idpdx[1 : nlev + 1],
+        expected[1 : nlev + 1],
+        rtol=1e-14,
         err_msg="Surface plume formula mismatch",
     )
 
@@ -562,7 +578,9 @@ def test_type2_bottom_plume_zero_at_surface() -> None:
         plume_slope_y=0.0,
     )
 
-    assert idpdx[nlev] == pytest.approx(0.0, abs=1e-14), "Bottom plume: idpdx(nlev) must be zero"
+    assert idpdx[nlev] == pytest.approx(
+        0.0, abs=1e-14
+    ), "Bottom plume: idpdx(nlev) must be zero"
 
 
 def test_type2_bottom_plume_formula() -> None:
@@ -573,7 +591,7 @@ def test_type2_bottom_plume_formula() -> None:
     assert state.buoy is not None
 
     rng = np.random.default_rng(7)
-    state.buoy[1:nlev + 1] = rng.uniform(-0.05, 0.05, nlev)
+    state.buoy[1 : nlev + 1] = rng.uniform(-0.05, 0.05, nlev)
     buoy_ref = state.buoy.copy()
 
     idpdx, idpdy = _make_outputs(nlev)
@@ -591,9 +609,13 @@ def test_type2_bottom_plume_formula() -> None:
         plume_slope_y=0.0,
     )
 
-    expected = np.array([-slope_x * (buoy_ref[nlev] - buoy_ref[k]) for k in range(nlev + 1)])
+    expected = np.array(
+        [-slope_x * (buoy_ref[nlev] - buoy_ref[k]) for k in range(nlev + 1)]
+    )
     np.testing.assert_allclose(
-        idpdx[1:nlev + 1], expected[1:nlev + 1], rtol=1e-14,
+        idpdx[1 : nlev + 1],
+        expected[1 : nlev + 1],
+        rtol=1e-14,
         err_msg="Bottom plume formula mismatch",
     )
 
@@ -631,8 +653,12 @@ def test_type2_surface_plume_both_components() -> None:
     )
 
     for k in range(1, nlev + 1):
-        assert idpdx[k] == pytest.approx(slope_x * (buoy_ref[k] - buoy_ref[1]), rel=1e-12)
-        assert idpdy[k] == pytest.approx(slope_y * (buoy_ref[k] - buoy_ref[1]), rel=1e-12)
+        assert idpdx[k] == pytest.approx(
+            slope_x * (buoy_ref[k] - buoy_ref[1]), rel=1e-12
+        )
+        assert idpdy[k] == pytest.approx(
+            slope_y * (buoy_ref[k] - buoy_ref[1]), rel=1e-12
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -658,9 +684,9 @@ def test_no_nan_inf(int_press_type: int, plume_type: int) -> None:
     assert state.S is not None
     assert state.buoy is not None
 
-    state.T[1:nlev + 1] = 10.0
-    state.S[1:nlev + 1] = 35.0
-    state.buoy[1:nlev + 1] = np.linspace(-0.02, 0.02, nlev)
+    state.T[1 : nlev + 1] = 10.0
+    state.S[1 : nlev + 1] = 35.0
+    state.buoy[1 : nlev + 1] = np.linspace(-0.02, 0.02, nlev)
 
     idpdx, idpdy = _make_outputs(nlev)
     dsdx = np.full(nlev + 1, 1e-4)
@@ -684,8 +710,8 @@ def test_no_nan_inf(int_press_type: int, plume_type: int) -> None:
         plume_slope_y=-1e-3,
     )
 
-    assert np.all(np.isfinite(idpdx[1:nlev + 1])), "NaN/Inf in idpdx"
-    assert np.all(np.isfinite(idpdy[1:nlev + 1])), "NaN/Inf in idpdy"
+    assert np.all(np.isfinite(idpdx[1 : nlev + 1])), "NaN/Inf in idpdx"
+    assert np.all(np.isfinite(idpdy[1 : nlev + 1])), "NaN/Inf in idpdy"
 
 
 # ---------------------------------------------------------------------------
@@ -702,9 +728,9 @@ def test_boundary_k0_not_modified() -> None:
     assert state.S is not None
     assert state.buoy is not None
 
-    state.T[1:nlev + 1] = 10.0
-    state.S[1:nlev + 1] = 35.0
-    state.buoy[1:nlev + 1] = np.linspace(0.0, 0.05, nlev)
+    state.T[1 : nlev + 1] = 10.0
+    state.S[1 : nlev + 1] = 35.0
+    state.buoy[1 : nlev + 1] = np.linspace(0.0, 0.05, nlev)
 
     idpdx, idpdy = _make_outputs(nlev)
     idpdx[0] = 99.0

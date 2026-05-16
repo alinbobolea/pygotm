@@ -176,13 +176,13 @@ def tridiagonal(
     lt: int,
 ) -> None:
     r"""! !IROUTINE: Simplified Gaussian elimination
-!
-! !DESCRIPTION:
-! A linear equation with tridiagonal matrix structure is solved here. The main
-! diagonal is stored on {\tt bu}, the upper diagonal on {\tt au}, and the
-! lower diagonal on {\tt cu}, the right hand side is stored on {\tt du}.
-! The method used here is the simplified Gauss elimination, also called
-! \emph{Thomas algorithm}.
+    !
+    ! !DESCRIPTION:
+    ! A linear equation with tridiagonal matrix structure is solved here. The main
+    ! diagonal is stored on {\tt bu}, the upper diagonal on {\tt au}, and the
+    ! lower diagonal on {\tt cu}, the right hand side is stored on {\tt du}.
+    ! The method used here is the simplified Gauss elimination, also called
+    ! \emph{Thomas algorithm}.
     """
 
     if fi == lt:

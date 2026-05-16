@@ -7,7 +7,6 @@ All values are identical to the Fortran parameters so that Numba-compiled
 callers produce bit-for-bit matching results.
 """
 
-
 __all__ = [
     "gsw_cp0",
     "gsw_sfac",

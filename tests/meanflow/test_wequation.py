@@ -70,7 +70,9 @@ def test_method0_noop() -> None:
 
     wequation(state, nlev, _DT, W_ADV_NONE, w_adv=0.5, w_height=_DEPTH * 0.5)
 
-    np.testing.assert_array_equal(state.w, sentinel, err_msg="Method 0 must not modify w")
+    np.testing.assert_array_equal(
+        state.w, sentinel, err_msg="Method 0 must not modify w"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -110,15 +112,17 @@ def test_peak_is_at_w_height() -> None:
 
     # Find the interface level closest to w_height
     zi_arr = np.array(state.zi[1:nlev])
-    closest = int(np.argmin(np.abs(zi_arr - w_height))) + 1  # offset back to original index
+    closest = (
+        int(np.argmin(np.abs(zi_arr - w_height))) + 1
+    )  # offset back to original index
 
     w_inner = np.abs(state.w[1:nlev])
     peak_idx = int(np.argmax(w_inner)) + 1
 
     # Within one layer of the expected peak
-    assert abs(peak_idx - closest) <= 1, (
-        f"Peak at level {peak_idx} but expected near level {closest}"
-    )
+    assert (
+        abs(peak_idx - closest) <= 1
+    ), f"Peak at level {peak_idx} but expected near level {closest}"
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +136,9 @@ def test_positive_w_adv_gives_positive_w() -> None:
     state = _make_state(nlev=nlev)
     assert state.w is not None
     wequation(state, nlev, _DT, W_ADV_PROFILE, w_adv=0.03, w_height=_DEPTH * 0.5)
-    assert np.all(state.w[1:nlev] >= 0.0), "Positive w_adv must give non-negative interior w"
+    assert np.all(
+        state.w[1:nlev] >= 0.0
+    ), "Positive w_adv must give non-negative interior w"
 
 
 def test_negative_w_adv_gives_negative_w() -> None:
@@ -141,7 +147,9 @@ def test_negative_w_adv_gives_negative_w() -> None:
     state = _make_state(nlev=nlev)
     assert state.w is not None
     wequation(state, nlev, _DT, W_ADV_PROFILE, w_adv=-0.03, w_height=_DEPTH * 0.5)
-    assert np.all(state.w[1:nlev] <= 0.0), "Negative w_adv must give non-positive interior w"
+    assert np.all(
+        state.w[1:nlev] <= 0.0
+    ), "Negative w_adv must give non-positive interior w"
 
 
 # ---------------------------------------------------------------------------
@@ -175,14 +183,18 @@ def test_clamping_top() -> None:
 
     w_adv = 0.05
     # Request peak at 99.9 % of depth (above the 99 % clamp threshold).
-    w_height_in = float(state.zi[0]) + 0.999 * (float(state.zi[nlev]) - float(state.zi[0]))
+    w_height_in = float(state.zi[0]) + 0.999 * (
+        float(state.zi[nlev]) - float(state.zi[0])
+    )
     returned_height = wequation(
         state, nlev, _DT, W_ADV_PROFILE, w_adv=w_adv, w_height=w_height_in
     )
 
     col_depth = float(state.zi[nlev]) - float(state.zi[0])
     expected_max = float(state.zi[nlev]) - 0.01 * col_depth
-    assert returned_height <= expected_max + 1e-12, "Returned w_height must be clamped at top"
+    assert (
+        returned_height <= expected_max + 1e-12
+    ), "Returned w_height must be clamped at top"
 
 
 def test_clamping_bottom() -> None:
@@ -192,14 +204,18 @@ def test_clamping_bottom() -> None:
     assert state.w is not None
     assert state.zi is not None
 
-    w_height_in = float(state.zi[0]) + 0.001 * (float(state.zi[nlev]) - float(state.zi[0]))
+    w_height_in = float(state.zi[0]) + 0.001 * (
+        float(state.zi[nlev]) - float(state.zi[0])
+    )
     returned_height = wequation(
         state, nlev, _DT, W_ADV_PROFILE, w_adv=0.05, w_height=w_height_in
     )
 
     col_depth = float(state.zi[nlev]) - float(state.zi[0])
     expected_min = float(state.zi[0]) + 0.01 * col_depth
-    assert returned_height >= expected_min - 1e-12, "Returned w_height must be clamped at bottom"
+    assert (
+        returned_height >= expected_min - 1e-12
+    ), "Returned w_height must be clamped at bottom"
 
 
 # ---------------------------------------------------------------------------
@@ -272,8 +288,12 @@ def test_returned_height_matches_clamped() -> None:
     assert state.zi is not None
 
     # Request exactly at 50 % — no clamping expected.
-    w_height_in = float(state.zi[0]) + 0.5 * (float(state.zi[nlev]) - float(state.zi[0]))
-    returned = wequation(state, nlev, _DT, W_ADV_PROFILE, w_adv=0.1, w_height=w_height_in)
+    w_height_in = float(state.zi[0]) + 0.5 * (
+        float(state.zi[nlev]) - float(state.zi[0])
+    )
+    returned = wequation(
+        state, nlev, _DT, W_ADV_PROFILE, w_adv=0.1, w_height=w_height_in
+    )
     np.testing.assert_allclose(returned, w_height_in, rtol=1e-12)
 
 
@@ -305,9 +325,7 @@ def test_no_nan_inf(w_adv: float, frac: float) -> None:
 
     wequation(state, nlev, _DT, W_ADV_PROFILE, w_adv=w_adv, w_height=w_height)
 
-    assert np.all(np.isfinite(state.w)), (
-        f"NaN/Inf in w for w_adv={w_adv}, frac={frac}"
-    )
+    assert np.all(np.isfinite(state.w)), f"NaN/Inf in w for w_adv={w_adv}, frac={frac}"
 
 
 # ---------------------------------------------------------------------------

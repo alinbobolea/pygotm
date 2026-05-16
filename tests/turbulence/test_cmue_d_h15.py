@@ -28,24 +28,21 @@ _GVOFF = 0.006
 _SXMAX = 2.12
 _SHN0 = _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1)
 _SHNH = -9.0 * _MY_A1 * _MY_A2 * (_MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1))
-_SHNS = (
+_SHNS = 9.0 * _MY_A1 * _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1) * (2.0 * _MY_A1 + _MY_A2)
+_SHNV = (
     9.0
     * _MY_A1
     * _MY_A2
-    * (1.0 - 6.0 * _MY_A1 / _MY_B1)
-    * (2.0 * _MY_A1 + _MY_A2)
-)
-_SHNV = 9.0 * _MY_A1 * _MY_A2 * (
-    _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1 - 3.0 * _MY_C1)
-    - 2.0 * _MY_A1 * (1.0 - 6.0 * _MY_A1 / _MY_B1 + 3.0 * _MY_C1)
+    * (
+        _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1 - 3.0 * _MY_C1)
+        - 2.0 * _MY_A1 * (1.0 - 6.0 * _MY_A1 / _MY_B1 + 3.0 * _MY_C1)
+    )
 )
 _SHDAH = -9.0 * _MY_A1 * _MY_A2
 _SHDAV = -36.0 * _MY_A1 * _MY_A1
 _SHDBH = -3.0 * _MY_A2 * (6.0 * _MY_A1 + _MY_B2 * (1.0 - _MY_C3))
 _SHDV = -9.0 * _MY_A2 * _MY_A2 * (1.0 - _MY_C2)
-_SHDVH = -162.0 * _MY_A1 * _MY_A1 * _MY_A2 * (
-    2.0 * _MY_A1 + (2.0 - _MY_C2) * _MY_A2
-)
+_SHDVH = -162.0 * _MY_A1 * _MY_A1 * _MY_A2 * (2.0 * _MY_A1 + (2.0 - _MY_C2) * _MY_A2)
 _SHDVV = 324.0 * _MY_A1 * _MY_A1 * _MY_A2 * _MY_A2 * (1.0 - _MY_C2)
 _SSN0 = _MY_A1 * (1.0 - 6.0 * _MY_A1 / _MY_B1)
 _SSDH = -9.0 * _MY_A1 * _MY_A2

@@ -367,6 +367,11 @@ def _make_runtime_params_from_run(run: Any, nt: int) -> RuntimeParams:
         airsea_shortwave_scale_factor=float(run.airsea.shortwave_scale_factor),
         airsea_heat_scale_factor=float(run.airsea.heat_scale_factor),
         airsea_const_albedo=float(run.airsea.const_albedo),
+        ice_model=(
+            int(run.ice_params.model)
+            if getattr(run, "ice_params", None) is not None
+            else 1
+        ),
         turb_method=int(turbulence.turb_method),
         tke_method=int(turbulence.tke_method),
         len_scale_method=int(turbulence.len_scale_method),
@@ -602,12 +607,16 @@ def _populate_runtime_forcing_from_run(
                 run.meanflow.z,
                 run.meanflow.zi,
                 run.meanflow.gravity,
-                float(run.surface_inputs.u10.value)
-                if run.surface_inputs.u10 is not None
-                else 0.0,
-                float(run.surface_inputs.v10.value)
-                if run.surface_inputs.v10 is not None
-                else 0.0,
+                (
+                    float(run.surface_inputs.u10.value)
+                    if run.surface_inputs.u10 is not None
+                    else 0.0
+                ),
+                (
+                    float(run.surface_inputs.v10.value)
+                    if run.surface_inputs.v10 is not None
+                    else 0.0
+                ),
             )
         _update_runtime_relaxation_targets(run)
         _record_forcing_step(run, forcing, step)
@@ -771,6 +780,30 @@ def build_runtime_from_run(
     state.taub[0] = float(run.meanflow.taub)
     state.tx[0] = params.tx
     state.ty[0] = params.ty
+    ice_state = getattr(run, "ice_state", None)
+    if ice_state is not None:
+        for name in (
+            "Hice",
+            "Hsnow",
+            "Hfrazil",
+            "T1",
+            "T2",
+            "Tice_surface",
+            "fdd",
+            "ice_cover",
+            "Tf",
+            "albedo_ice",
+            "transmissivity",
+            "ocean_ice_flux",
+            "ocean_ice_heat_flux",
+            "ocean_ice_salt_flux",
+            "surface_ice_energy",
+            "bottom_ice_energy",
+            "melt_rate",
+            "T_melt",
+            "S_melt",
+        ):
+            getattr(state, name)[0] = float(getattr(ice_state, name)[0])
 
     if run.stokes_drift.dusdz is not None:
         np.copyto(bundle.work.dusdz, run.stokes_drift.dusdz)
@@ -908,7 +941,7 @@ def _reference_scalar_output_names(run: Any, output: RuntimeOutput) -> tuple[str
     surface = _document_mapping(document.get("surface"))
     ice = _document_mapping(surface.get("ice"))
     ice_model = _document_token(ice.get("model"), "simple")
-    if ice_model in {"simple", "basal_melt", "winton"}:
+    if ice_model in {"simple", "basal_melt", "lebedev", "mylake", "winton"}:
         names.extend(_ICE_REFERENCE_SCALARS)
         if ice_model == "winton":
             names.extend(_WINTON_REFERENCE_SCALARS)
@@ -967,9 +1000,12 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
     nlev = bundle.params.nlev
     output.validate(nlev)
 
-    start = np.datetime64(str(run.time.start).replace(" ", "T"), "s")
-    offsets = output.time.astype("timedelta64[s]")
-    time = start + offsets
+    time = np.asarray(output.time, dtype=np.float64)
+    time_attrs = {
+        "long_name": "time",
+        "units": f"seconds since {run.time.start}",
+        "calendar": "standard",
+    }
 
     z_start = min(max(int(getattr(run.output_schedule, "k_start", 1)), 1), nlev)
     zi_start = min(max(int(getattr(run.output_schedule, "k1_start", 1)) - 1, 0), nlev)
@@ -995,8 +1031,14 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
             np.asarray(values, dtype=np.float64)[:, None, None],
         )
 
+    def diagnostic_z_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
+        return (
+            ("time", "z", "lat", "lon"),
+            np.asarray(values, dtype=np.float64)[:, :, None, None],
+        )
+
     coords: dict[str, Any] = {
-        "time": time,
+        "time": ("time", time, time_attrs),
         "z": (("time", "z", "lat", "lon"), z_profiles[:, :, None, None]),
         "zi": (("time", "zi", "lat", "lon"), zi_profiles[:, :, None, None]),
         "lat": ("lat", np.asarray([float(run.latitude)], dtype=np.float64)),
@@ -1111,12 +1153,30 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
         data_vars[name] = z_profile(output.reference_z_profiles[name])
 
     if int(bundle.params.density_method) == 1:
+        conservative_temperature = np.asarray(output.T[:, z_start:], dtype=np.float64)
+        absolute_salinity = np.asarray(output.S[:, z_start:], dtype=np.float64)
+        pressure = np.asarray(-z_profiles, dtype=np.float64)
         data_vars.update(
             {
                 "rho": z_profile(output.rho),
-                "temp_p": z_profile(output.Tp),
-                "temp_i": z_profile(output.Ti),
-                "salt_p": z_profile(output.Sp),
+                "temp_p": diagnostic_z_profile(
+                    gsw.pt_from_CT(absolute_salinity, conservative_temperature)
+                ),
+                "temp_i": diagnostic_z_profile(
+                    gsw.t_from_CT(
+                        absolute_salinity,
+                        conservative_temperature,
+                        pressure,
+                    )
+                ),
+                "salt_p": diagnostic_z_profile(
+                    gsw.SP_from_SA(
+                        absolute_salinity,
+                        pressure,
+                        float(run.longitude),
+                        float(run.latitude),
+                    )
+                ),
             }
         )
 

@@ -4,7 +4,8 @@ r"""!-----------------------------------------------------------------------
 ! !ROUTINE: General ODE solver \label{sec:ode-solver}
 !
 ! !INTERFACE:
-!    subroutine ode_solver(solver,numc,nlev,dt,cc,right_hand_side_rhs,right_hand_side_ppdd)
+!    subroutine ode_solver(solver,numc,nlev,dt,cc,right_hand_side_rhs,
+!                          right_hand_side_ppdd)
 !
 ! !DESCRIPTION:
 ! Here, 10 different numerical solvers for the right hand sides of the
@@ -77,12 +78,12 @@ __all__ = [
 ]
 
 # Callback type aliases matching Fortran interface signatures.
-# get_rhs(first, numc, nlev, cc) -> rhs, where cc and rhs have shape (numc, nlev+1).
-# get_ppdd(first, numc, nlev, cc) -> (pp, dd), where pp and dd have shape (numc, numc, nlev+1).
+# get_rhs(first, numc, nlev, cc) -> rhs, where cc and rhs have shape
+# (numc, nlev+1).
+# get_ppdd(first, numc, nlev, cc) -> (pp, dd), where pp and dd have shape
+# (numc, numc, nlev+1).
 RhsCallback = Callable[[bool, int, int, np.ndarray], np.ndarray]
-PpddCallback = Callable[
-    [bool, int, int, np.ndarray], tuple[np.ndarray, np.ndarray]
-]
+PpddCallback = Callable[[bool, int, int, np.ndarray], tuple[np.ndarray, np.ndarray]]
 
 
 def matrix_solve(n: int, a: np.ndarray, r: np.ndarray) -> np.ndarray:
@@ -183,9 +184,7 @@ def findp_bisection(
         if derivative[i] < 0.0:
             # State variable could become zero or less; include it in J.
             if cc[i] == 0.0:
-                print(
-                    f"Error: state variable {i} is zero and has negative derivative!"
-                )
+                print(f"Error: state variable {i} is zero and has negative derivative!")
             rd = dt * derivative[i] / cc[i]
             rel_deriv.append(rd)
             # Negative derivative places an upper bound on pi.
@@ -350,14 +349,7 @@ def runge_kutta_4(
     rhs3 = get_rhs(False, numc, nlev, cc1)
 
     cc[:, 1:] += (
-        dt
-        / 3.0
-        * (
-            0.5 * rhs[:, 1:]
-            + rhs1[:, 1:]
-            + rhs2[:, 1:]
-            + 0.5 * rhs3[:, 1:]
-        )
+        dt / 3.0 * (0.5 * rhs[:, 1:] + rhs1[:, 1:] + rhs2[:, 1:] + 0.5 * rhs3[:, 1:])
     )
 
 
@@ -392,9 +384,7 @@ def patankar(
         for i in range(numc):
             ppsum = float(pp[i, :, ci].sum())
             ddsum = float(dd[i, :, ci].sum())
-            cc[i, ci] = (cc[i, ci] + dt * ppsum) / (
-                1.0 + dt * ddsum / cc[i, ci]
-            )
+            cc[i, ci] = (cc[i, ci] + dt * ppsum) / (1.0 + dt * ddsum / cc[i, ci])
 
 
 def patankar_runge_kutta_2(
@@ -517,16 +507,10 @@ def patankar_runge_kutta_4(
             ppsum3[i, ci] = float(pp[i, :, ci].sum())
             ddsum3[i, ci] = float(dd[i, :, ci].sum())
             ppsum[i, ci] = (
-                0.5 * ppsum[i, ci]
-                + ppsum1[i, ci]
-                + ppsum2[i, ci]
-                + 0.5 * ppsum3[i, ci]
+                0.5 * ppsum[i, ci] + ppsum1[i, ci] + ppsum2[i, ci] + 0.5 * ppsum3[i, ci]
             ) / 3.0
             ddsum[i, ci] = (
-                0.5 * ddsum[i, ci]
-                + ddsum1[i, ci]
-                + ddsum2[i, ci]
-                + 0.5 * ddsum3[i, ci]
+                0.5 * ddsum[i, ci] + ddsum1[i, ci] + ddsum2[i, ci] + 0.5 * ddsum3[i, ci]
             ) / 3.0
             cc[i, ci] = (cc[i, ci] + dt * ppsum[i, ci]) / (
                 1.0 + dt * ddsum[i, ci] / cc1[i, ci]

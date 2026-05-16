@@ -192,17 +192,12 @@ def _epsilon_bc_value(
 
     if type_ == _INJECTION:
         f_k = _fk_craig(u_tau, cw)
-        capital_k = (
-            (-sig_k * f_k / (cmsf * gen_alpha * gen_l)) ** (2.0 / 3.0)
-        ) / (z0**gen_alpha)
+        capital_k = ((-sig_k * f_k / (cmsf * gen_alpha * gen_l)) ** (2.0 / 3.0)) / (
+            z0**gen_alpha
+        )
 
         if bc == _DIRICHLET:
-            value = (
-                cde
-                * capital_k**1.5
-                / gen_l
-                * (zi + z0) ** (1.5 * gen_alpha - 1.0)
-            )
+            value = cde * capital_k**1.5 / gen_l * (zi + z0) ** (1.5 * gen_alpha - 1.0)
         else:
             value = (
                 -cmsf
@@ -295,9 +290,7 @@ def _step_dissipationeq(
             ce3 = ce3plus
 
         eps_over_tke = eps[i] / tkeo[i]
-        prod = eps_over_tke * (
-            ce1 * P[i] + cex * Px[i] + ce4 * PSTK[i]
-        )
+        prod = eps_over_tke * (ce1 * P[i] + cex * Px[i] + ce4 * PSTK[i])
         buoyan = ce3 * eps_over_tke * B[i]
         diss = ce2 * eps_over_tke * eps[i]
 
@@ -313,8 +306,22 @@ def _step_dissipationeq(
     if psi_ubc == _NEUMANN:
         pos_bc = 0.5 * h[nlev]
     diff_eps_up = _epsilon_bc_value(
-        psi_ubc, ubc_type, pos_bc, ki, z0s, u_taus,
-        cm0, cde, kappa, sig_k, sig_e, sig_e0, cmsf, cw, gen_alpha, gen_l,
+        psi_ubc,
+        ubc_type,
+        pos_bc,
+        ki,
+        z0s,
+        u_taus,
+        cm0,
+        cde,
+        kappa,
+        sig_k,
+        sig_e,
+        sig_e0,
+        cmsf,
+        cw,
+        gen_alpha,
+        gen_l,
     )
 
     ki = tke[1]
@@ -322,24 +329,80 @@ def _step_dissipationeq(
     if psi_lbc == _NEUMANN:
         pos_bc = 0.5 * h[1]
     diff_eps_down = _epsilon_bc_value(
-        psi_lbc, lbc_type, pos_bc, ki, z0b, u_taub,
-        cm0, cde, kappa, sig_k, sig_e, sig_e0, cmsf, cw, gen_alpha, gen_l,
+        psi_lbc,
+        lbc_type,
+        pos_bc,
+        ki,
+        z0b,
+        u_taub,
+        cm0,
+        cde,
+        kappa,
+        sig_k,
+        sig_e,
+        sig_e0,
+        cmsf,
+        cw,
+        gen_alpha,
+        gen_l,
     )
 
     diff_face(
-        nlev, dt, _CNPAR, h,
-        psi_ubc, psi_lbc, diff_eps_up, diff_eps_down,
-        avh, l_sour, q_sour, eps,
-        au, bu, cu, du, ru, qu,
+        nlev,
+        dt,
+        _CNPAR,
+        h,
+        psi_ubc,
+        psi_lbc,
+        diff_eps_up,
+        diff_eps_down,
+        avh,
+        l_sour,
+        q_sour,
+        eps,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
     )
 
     eps[nlev] = _epsilon_bc_value(
-        _DIRICHLET, ubc_type, z0s, tke[nlev], z0s, u_taus,
-        cm0, cde, kappa, sig_k, sig_e, sig_e0, cmsf, cw, gen_alpha, gen_l,
+        _DIRICHLET,
+        ubc_type,
+        z0s,
+        tke[nlev],
+        z0s,
+        u_taus,
+        cm0,
+        cde,
+        kappa,
+        sig_k,
+        sig_e,
+        sig_e0,
+        cmsf,
+        cw,
+        gen_alpha,
+        gen_l,
     )
     eps[0] = _epsilon_bc_value(
-        _DIRICHLET, lbc_type, z0b, tke[0], z0b, u_taub,
-        cm0, cde, kappa, sig_k, sig_e, sig_e0, cmsf, cw, gen_alpha, gen_l,
+        _DIRICHLET,
+        lbc_type,
+        z0b,
+        tke[0],
+        z0b,
+        u_taub,
+        cm0,
+        cde,
+        kappa,
+        sig_k,
+        sig_e,
+        sig_e0,
+        cmsf,
+        cw,
+        gen_alpha,
+        gen_l,
     )
 
     for i in range(nlev + 1):
@@ -416,15 +479,58 @@ def step_dissipationeq(
     r"""Advance the dynamic epsilon-equation (batch)."""
     for b in numba.prange(batch_size):
         _step_dissipationeq(
-            nlev, dt, ce1, ce2, ce3plus, ce3minus, cex, ce4,
-            cm0, cde, kappa, galp, sig_k, sig_e, sig_e0, sig_peps,
-            length_lim, eps_min, psi_ubc, psi_lbc, ubc_type, lbc_type,
-            cmsf, cw, gen_alpha, gen_l,
-            tke[b], tkeo[b], eps[b], L[b], h[b], NN[b], SS[b],
-            P[b], B[b], Px[b], PSTK[b], num[b],
-            avh[b], sig_eff[b], l_sour[b], q_sour[b],
-            u_taus[b, 0], u_taub[b, 0], z0s[b, 0], z0b[b, 0],
-            au[b], bu[b], cu[b], du[b], ru[b], qu[b],
+            nlev,
+            dt,
+            ce1,
+            ce2,
+            ce3plus,
+            ce3minus,
+            cex,
+            ce4,
+            cm0,
+            cde,
+            kappa,
+            galp,
+            sig_k,
+            sig_e,
+            sig_e0,
+            sig_peps,
+            length_lim,
+            eps_min,
+            psi_ubc,
+            psi_lbc,
+            ubc_type,
+            lbc_type,
+            cmsf,
+            cw,
+            gen_alpha,
+            gen_l,
+            tke[b],
+            tkeo[b],
+            eps[b],
+            L[b],
+            h[b],
+            NN[b],
+            SS[b],
+            P[b],
+            B[b],
+            Px[b],
+            PSTK[b],
+            num[b],
+            avh[b],
+            sig_eff[b],
+            l_sour[b],
+            q_sour[b],
+            u_taus[b, 0],
+            u_taub[b, 0],
+            z0s[b, 0],
+            z0b[b, 0],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
         )
 
 

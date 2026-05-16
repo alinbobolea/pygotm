@@ -142,12 +142,7 @@ def _step_variances(
         )
 
         ww[i] = tke[i] * (
-            _TWO_THIRDS
-            + fac2
-            * (
-                fac4 * (P[i] + Px[i])
-                + _EIGHT_THIRDS * a5 * B[i]
-            )
+            _TWO_THIRDS + fac2 * (fac4 * (P[i] + Px[i]) + _EIGHT_THIRDS * a5 * B[i])
         )
 
 
@@ -175,9 +170,23 @@ def step_variances(
     r"""Update the algebraic velocity variances (batch)."""
     for b in numba.prange(batch_size):
         _step_variances(
-            nlev, cc1, ct1, a2, a3, a5,
-            tke[b], eps[b], P[b], B[b], Px[b], num[b], SSU[b], SSV[b],
-            uu[b], vv[b], ww[b],
+            nlev,
+            cc1,
+            ct1,
+            a2,
+            a3,
+            a5,
+            tke[b],
+            eps[b],
+            P[b],
+            B[b],
+            Px[b],
+            num[b],
+            SSU[b],
+            SSV[b],
+            uu[b],
+            vv[b],
+            ww[b],
         )
 
 

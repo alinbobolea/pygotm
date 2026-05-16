@@ -28,9 +28,27 @@ def _call_diff_center(
     ws = _make_ws(nlev)
     y_out = y.copy()
     diff_center(
-        nlev, dt, cnpar, posconc, h, bc_up, bc_down, y_up, y_down,
-        nu_y, l_sour, q_sour, tau_r, y_obs, y_out,
-        ws.au, ws.bu, ws.cu, ws.du, ws.ru, ws.qu,
+        nlev,
+        dt,
+        cnpar,
+        posconc,
+        h,
+        bc_up,
+        bc_down,
+        y_up,
+        y_down,
+        nu_y,
+        l_sour,
+        q_sour,
+        tau_r,
+        y_obs,
+        y_out,
+        ws.au,
+        ws.bu,
+        ws.cu,
+        ws.du,
+        ws.ru,
+        ws.qu,
     )
     return y_out
 
@@ -54,12 +72,25 @@ def test_dirichlet_bc_recovers_prescribed_values() -> None:
     # Run many steps toward steady state
     for _ in range(500):
         y = _call_diff_center(
-            nlev, dt, cnpar, 0, h, DIRICHLET, DIRICHLET,
-            y_up, y_down, nu_y, l_sour, q_sour, tau_r, y_obs, y,
+            nlev,
+            dt,
+            cnpar,
+            0,
+            h,
+            DIRICHLET,
+            DIRICHLET,
+            y_up,
+            y_down,
+            nu_y,
+            l_sour,
+            q_sour,
+            tau_r,
+            y_obs,
+            y,
         )
 
-    assert y[nlev] == 2.0    # Dirichlet BC at top
-    assert y[1] == 0.5       # Dirichlet BC at bottom
+    assert y[nlev] == 2.0  # Dirichlet BC at top
+    assert y[1] == 0.5  # Dirichlet BC at bottom
 
 
 def test_neumann_zero_flux_gives_uniform_profile() -> None:
@@ -80,8 +111,21 @@ def test_neumann_zero_flux_gives_uniform_profile() -> None:
 
     for _ in range(2000):
         y = _call_diff_center(
-            nlev, dt, cnpar, 0, h, NEUMANN, NEUMANN,
-            0.0, 0.0, nu_y, l_sour, q_sour, tau_r, y_obs, y,
+            nlev,
+            dt,
+            cnpar,
+            0,
+            h,
+            NEUMANN,
+            NEUMANN,
+            0.0,
+            0.0,
+            nu_y,
+            l_sour,
+            q_sour,
+            tau_r,
+            y_obs,
+            y,
         )
 
     np.testing.assert_allclose(y[1:], y_mean, rtol=1e-6, atol=1e-8)
@@ -96,7 +140,7 @@ def test_patankar_linearisation_prevents_negative_values() -> None:
     flux over a short run is insufficient to drive y to zero.
     """
     nlev = 4
-    dt = 100.0          # short step — y stays well above zero
+    dt = 100.0  # short step — y stays well above zero
     cnpar = 1.0
     h = np.ones(nlev + 1, dtype=np.float64)
     h[0] = 0.0
@@ -107,13 +151,26 @@ def test_patankar_linearisation_prevents_negative_values() -> None:
     y_obs = np.zeros(nlev + 1, dtype=np.float64)
 
     y = np.array([0.0, 0.5, 0.4, 0.3, 0.2], dtype=np.float64)
-    y_up = -1e-5    # small negative flux (loss) at surface
+    y_up = -1e-5  # small negative flux (loss) at surface
     y_down = -1e-5  # small negative flux (loss) at bottom
 
     for _ in range(20):
         y = _call_diff_center(
-            nlev, dt, cnpar, 1, h, NEUMANN, NEUMANN,
-            y_up, y_down, nu_y, l_sour, q_sour, tau_r, y_obs, y,
+            nlev,
+            dt,
+            cnpar,
+            1,
+            h,
+            NEUMANN,
+            NEUMANN,
+            y_up,
+            y_down,
+            nu_y,
+            l_sour,
+            q_sour,
+            tau_r,
+            y_obs,
+            y,
         )
 
     assert np.all(y[1:] >= 0.0), "Patankar: concentrations must stay non-negative"
@@ -137,8 +194,21 @@ def test_dirichlet_matches_numpy_solve() -> None:
     y_down = 1.8
 
     result = _call_diff_center(
-        nlev, dt, cnpar, posconc, h, DIRICHLET, DIRICHLET,
-        y_up, y_down, nu_y, l_sour, q_sour, tau_r, y_obs, y0,
+        nlev,
+        dt,
+        cnpar,
+        posconc,
+        h,
+        DIRICHLET,
+        DIRICHLET,
+        y_up,
+        y_down,
+        nu_y,
+        l_sour,
+        q_sour,
+        tau_r,
+        y_obs,
+        y0,
     )
 
     # Build reference tridiagonal matrix manually
@@ -157,8 +227,12 @@ def test_dirichlet_matches_numpy_solve() -> None:
         du[i] = (1.0 - (1.0 - cnpar) * (a + c)) * y0[i]
         du[i] += (1.0 - cnpar) * (a * y0[i - 1] + c * y0[i + 1])
         du[i] += dt * q_sour[i]
-    au[nlev] = 0.0; bu[nlev] = 1.0; du[nlev] = y_up
-    cu[1] = 0.0;  bu[1] = 1.0;  du[1] = y_down
+    au[nlev] = 0.0
+    bu[nlev] = 1.0
+    du[nlev] = y_up
+    cu[1] = 0.0
+    bu[1] = 1.0
+    du[1] = y_down
     if np.min(tau_r[1:]) < 1.0e10:
         for i in range(1, nlev + 1):
             bu[i] += dt / tau_r[i]
@@ -186,8 +260,21 @@ def test_no_nan_inf() -> None:
     y = np.array([0.0, 1.0, 0.8, 0.6, 0.4, 0.2], dtype=np.float64)
 
     result = _call_diff_center(
-        nlev, dt, cnpar, 0, h, NEUMANN, NEUMANN,
-        0.1, 1.2, nu_y, l_sour, q_sour, tau_r, y_obs, y,
+        nlev,
+        dt,
+        cnpar,
+        0,
+        h,
+        NEUMANN,
+        NEUMANN,
+        0.1,
+        1.2,
+        nu_y,
+        l_sour,
+        q_sour,
+        tau_r,
+        y_obs,
+        y,
     )
     assert np.isfinite(result[1:]).all()
 
@@ -217,8 +304,21 @@ def test_analytic_sinusoidal_diffusion() -> None:
 
     for _ in range(nsteps):
         y = _call_diff_center(
-            nlev, dt, cnpar, 0, h, DIRICHLET, DIRICHLET,
-            0.0, 0.0, nu_y, l_sour, q_sour, tau_r, y_obs, y,
+            nlev,
+            dt,
+            cnpar,
+            0,
+            h,
+            DIRICHLET,
+            DIRICHLET,
+            0.0,
+            0.0,
+            nu_y,
+            l_sour,
+            q_sour,
+            tau_r,
+            y_obs,
+            y,
         )
 
     t_final = nsteps * dt
@@ -246,8 +346,21 @@ def test_batch_parity() -> None:
 
     # single-column reference
     expected = _call_diff_center(
-        nlev, dt, cnpar, 0, h, NEUMANN, NEUMANN,
-        y_up, y_down, nu_y, l_sour, q_sour, tau_r, y_obs, y0,
+        nlev,
+        dt,
+        cnpar,
+        0,
+        h,
+        NEUMANN,
+        NEUMANN,
+        y_up,
+        y_down,
+        nu_y,
+        l_sour,
+        q_sour,
+        tau_r,
+        y_obs,
+        y0,
     )
 
     # batch with two identical columns
@@ -261,9 +374,28 @@ def test_batch_parity() -> None:
     y_b = np.tile(y0, (batch_size, 1))
 
     diff_center_batch(
-        batch_size, nlev, dt, cnpar, 0, h_b, NEUMANN, NEUMANN,
-        y_up, y_down, nu_b, ls_b, qs_b, tr_b, yo_b, y_b,
-        ws.au, ws.bu, ws.cu, ws.du, ws.ru, ws.qu,
+        batch_size,
+        nlev,
+        dt,
+        cnpar,
+        0,
+        h_b,
+        NEUMANN,
+        NEUMANN,
+        y_up,
+        y_down,
+        nu_b,
+        ls_b,
+        qs_b,
+        tr_b,
+        yo_b,
+        y_b,
+        ws.au,
+        ws.bu,
+        ws.cu,
+        ws.du,
+        ws.ru,
+        ws.qu,
     )
 
     for b in range(batch_size):

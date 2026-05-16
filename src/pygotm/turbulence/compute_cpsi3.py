@@ -125,19 +125,40 @@ def _cmue_d_scalar(
     nt_sq = nt_val * nt_val
 
     d0 = 36.0 * n_cube * nt_sq
-    d1 = 84.0 * state.a5 * state.at3 * n_sq * nt_val + 36.0 * state.at5 * n_cube * nt_val
-    d2 = 9.0 * (state.at2 * state.at2 - state.at1 * state.at1) * n_cube - 12.0 * (
-        state.a2 * state.a2 - 3.0 * state.a3 * state.a3
-    ) * n_val * nt_sq
-    d3 = (
-        12.0 * state.a5 * state.at3 * (state.a2 * state.at1 - 3.0 * state.a3 * state.at2) * n_val
-        + 12.0 * state.a5 * state.at3 * (state.a3 * state.a3 - state.a2 * state.a2) * nt_val
-        + 12.0 * state.at5 * (3.0 * state.a3 * state.a3 - state.a2 * state.a2) * n_val * nt_val
+    d1 = (
+        84.0 * state.a5 * state.at3 * n_sq * nt_val + 36.0 * state.at5 * n_cube * nt_val
     )
-    d4 = 48.0 * state.a5 * state.a5 * state.at3 * state.at3 * n_val + 36.0 * state.a5 * state.at3 * state.at5 * n_sq
-    d5 = 3.0 * (state.a2 * state.a2 - 3.0 * state.a3 * state.a3) * (
-        state.at1 * state.at1 - state.at2 * state.at2
-    ) * n_val
+    d2 = (
+        9.0 * (state.at2 * state.at2 - state.at1 * state.at1) * n_cube
+        - 12.0 * (state.a2 * state.a2 - 3.0 * state.a3 * state.a3) * n_val * nt_sq
+    )
+    d3 = (
+        12.0
+        * state.a5
+        * state.at3
+        * (state.a2 * state.at1 - 3.0 * state.a3 * state.at2)
+        * n_val
+        + 12.0
+        * state.a5
+        * state.at3
+        * (state.a3 * state.a3 - state.a2 * state.a2)
+        * nt_val
+        + 12.0
+        * state.at5
+        * (3.0 * state.a3 * state.a3 - state.a2 * state.a2)
+        * n_val
+        * nt_val
+    )
+    d4 = (
+        48.0 * state.a5 * state.a5 * state.at3 * state.at3 * n_val
+        + 36.0 * state.a5 * state.at3 * state.at5 * n_sq
+    )
+    d5 = (
+        3.0
+        * (state.a2 * state.a2 - 3.0 * state.a3 * state.a3)
+        * (state.at1 * state.at1 - state.at2 * state.at2)
+        * n_val
+    )
 
     n0 = 36.0 * state.a1 * n_sq * nt_sq
     n1 = (
@@ -154,10 +175,16 @@ def _cmue_d_scalar(
 
     nt0 = 12.0 * state.at3 * n_cube * nt_val
     nt1 = 12.0 * state.a5 * state.at3 * state.at3 * n_sq
-    nt2 = 9.0 * state.a1 * state.at3 * (state.at1 - state.at2) * n_sq + (
-        6.0 * state.a1 * (state.a2 - 3.0 * state.a3)
-        - 4.0 * (state.a2 * state.a2 - 3.0 * state.a3 * state.a3)
-    ) * state.at3 * n_val * nt_val
+    nt2 = (
+        9.0 * state.a1 * state.at3 * (state.at1 - state.at2) * n_sq
+        + (
+            6.0 * state.a1 * (state.a2 - 3.0 * state.a3)
+            - 4.0 * (state.a2 * state.a2 - 3.0 * state.a3 * state.a3)
+        )
+        * state.at3
+        * n_val
+        * nt_val
+    )
 
     an_discriminant = (d1 + nt0) * (d1 + nt0) - 4.0 * d0 * (d4 + nt1)
     if an_discriminant < 0.0:
@@ -236,7 +263,8 @@ def _evaluate_stability(
             prandtl = state.Prandtl0_fix
             if ri_value >= _RI_THRESHOLD:
                 prandtl = (
-                    state.Prandtl0_fix * exp(-ri_value / (state.Prandtl0_fix * _RI_INFINITY))
+                    state.Prandtl0_fix
+                    * exp(-ri_value / (state.Prandtl0_fix * _RI_INFINITY))
                     + ri_value / _RI_INFINITY
                 )
             cmue1_value = state.cm0_fix

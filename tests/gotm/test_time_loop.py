@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace as dc_replace
 from pathlib import Path
+from types import SimpleNamespace
 
+import gsw
 import numpy as np
 import pytest
 
@@ -52,7 +55,9 @@ _LANGMUIR_CONFIG = Path("gotm-model/cases-runs/langmuir/gotm.yaml")
 _LIVERPOOL_BAY_CONFIG = Path("gotm-model/cases-runs/liverpool_bay/gotm.yaml")
 _MEDSEA_WEST_CONFIG = Path("gotm-model/cases-runs/medsea_west/gotm.yaml")
 _NNS_SEASONAL_CONFIG = Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml")
+_PLUME_CONFIG = Path("gotm-model/cases-runs/plume/gotm.yaml")
 _REYNOLDS_CONFIG = Path("gotm-model/cases-runs/reynolds/gotm.yaml")
+_RESOLUTE_CONFIG = Path("gotm-model/cases-runs/resolute/gotm.yaml")
 _SEAGRASS_CONFIG = Path("gotm-model/cases-runs/seagrass/gotm.yaml")
 _WAVE_BREAKING_CONFIG = Path("gotm-model/cases-runs/wave_breaking/gotm.yaml")
 _AIRSEA_FIRST_SLOT_VARIABLES = (
@@ -73,6 +78,96 @@ _AIRSEA_FIRST_SLOT_VARIABLES = (
     "I_0",
     "albedo",
 )
+
+
+def test_chunked_time_loop_writes_global_output_steps_and_times() -> None:
+    """Chunked calls must keep output metadata on the full-run timeline."""
+
+    run = initialize_gotm(Path("gotm-model/cases-runs/blacksea/gotm.yaml"))
+    try:
+        runtime = build_runtime_from_run(run, max_steps=48, output=True)
+        chunk_params = dc_replace(runtime.params, nt=24)
+
+        first_written = run_compiled_time_loop(
+            chunk_params,
+            runtime.state,
+            runtime.work,
+            runtime.forcing,
+            runtime.output,
+            step_offset=0,
+            out_slot_base=0,
+            write_ic=1,
+        )
+        second_written = run_compiled_time_loop(
+            chunk_params,
+            runtime.state,
+            runtime.work,
+            runtime.forcing,
+            runtime.output,
+            step_offset=24,
+            out_slot_base=1,
+            write_ic=0,
+        )
+
+        assert first_written == 2
+        assert second_written == 2
+        np.testing.assert_array_equal(runtime.output.output_step, [0, 24, 48])
+        np.testing.assert_array_equal(runtime.output.time, [0.0, 86400.0, 172800.0])
+    finally:
+        finalize_gotm(run)
+
+
+def test_runtime_dataset_derives_teos10_temperature_and_salinity_outputs() -> None:
+    """TEOS-10 diagnostic outputs must follow saved T/S/z, not stale buffers."""
+
+    params = make_runtime_params(
+        nlev=2,
+        nt=1,
+        dt=3600.0,
+        calc_bottom_stress=1,
+        density_method=1,
+        turb_method=first_order,
+        tke_method=tke_keps,
+        len_scale_method=omega_eq,
+        stab_method=Constant,
+    )
+    runtime = build_runtime(params, output=True, output_every=1)
+    runtime.output.output_step[:] = [0, 1]
+    runtime.output.time[:] = [0.0, 3600.0]
+    runtime.output.T[:, 1:] = [[10.0, 12.0], [14.0, 16.0]]
+    runtime.output.S[:, 1:] = [[18.0, 19.0], [20.0, 21.0]]
+    runtime.output.z[:, 1:] = [[-5.0, -1.0], [-6.0, -2.0]]
+    runtime.output.Tp[:, 1:] = -999.0
+    runtime.output.Ti[:, 1:] = -999.0
+    runtime.output.Sp[:, 1:] = -999.0
+    run = SimpleNamespace(
+        time=SimpleNamespace(start="2000-01-01 00:00:00"),
+        output_schedule=SimpleNamespace(k_start=1, k1_start=1),
+        latitude=43.177,
+        longitude=32.625,
+        settings=SimpleNamespace(title="test"),
+        yaml_path=Path("gotm.yaml"),
+        observations=SimpleNamespace(epsprof_input=None),
+        document={},
+    )
+
+    dataset = runtime_output_to_dataset(run, runtime)
+
+    temp = dataset["temp"].values[:, :, 0, 0]
+    salt = dataset["salt"].values[:, :, 0, 0]
+    pressure = -dataset["z"].values[:, :, 0, 0]
+    np.testing.assert_allclose(
+        dataset["temp_p"].values[:, :, 0, 0],
+        gsw.pt_from_CT(salt, temp),
+    )
+    np.testing.assert_allclose(
+        dataset["temp_i"].values[:, :, 0, 0],
+        gsw.t_from_CT(salt, temp, pressure),
+    )
+    np.testing.assert_allclose(
+        dataset["salt_p"].values[:, :, 0, 0],
+        gsw.SP_from_SA(salt, pressure, run.longitude, run.latitude),
+    )
 
 
 def _seed_state(state: RuntimeState) -> None:
@@ -232,6 +327,36 @@ def test_compiled_initial_output_populates_simple_ice_tf_reference() -> None:
 
     assert written == 1
     assert runtime.output.reference_scalars["Tf"][0] == pytest.approx(-0.0575 * 32.8)
+
+
+def test_compiled_loop_steps_basal_melt_ice_model() -> None:
+    run = initialize_gotm(_PLUME_CONFIG)
+    try:
+        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
+    finally:
+        finalize_gotm(run)
+
+    assert runtime.params.ice_model == 2
+    assert runtime.output.nout == 2
+    assert runtime.state.ocean_ice_heat_flux[0] > 0.0
+    assert runtime.output.reference_scalars["Hice"][1] == pytest.approx(338.5714)
+    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] > 0.0
+
+
+def test_compiled_loop_steps_winton_ice_model() -> None:
+    run = initialize_gotm(_RESOLUTE_CONFIG)
+    try:
+        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
+    finally:
+        finalize_gotm(run)
+
+    assert runtime.params.ice_model == 5
+    assert runtime.output.nout == 2
+    assert runtime.output.reference_scalars["Hice"][1] > 0.0
+    assert runtime.output.reference_scalars["T1"][1] < 0.0
+    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] == pytest.approx(
+        10.0
+    )
 
 
 @pytest.mark.slow
@@ -490,7 +615,9 @@ def test_compiled_airsea_first_slot_matches_fortran(case_name: str) -> None:
     compiled_run = initialize_gotm(case.yaml_path)
     if compiled_run.fabm_config is not None and compiled_run.fabm_config.use:
         finalize_gotm(compiled_run)
-        pytest.skip("FABM cases need a separate IC-slot test; airsea-only comparison skipped")
+        pytest.skip(
+            "FABM cases need a separate IC-slot test; airsea-only comparison skipped"
+        )
 
     reference = open_reference_dataset(case)
     actual = None
@@ -596,7 +723,9 @@ def test_compiled_profile_cases_emit_parity_comparable_output(case_name: str) ->
     compiled_run = initialize_gotm(case.yaml_path)
     if compiled_run.fabm_config is not None and compiled_run.fabm_config.use:
         finalize_gotm(compiled_run)
-        pytest.skip("FABM cases run the full FABM loop; profile parity tested separately")
+        pytest.skip(
+            "FABM cases run the full FABM loop; profile parity tested separately"
+        )
 
     reference = open_reference_dataset(case)
     actual = None

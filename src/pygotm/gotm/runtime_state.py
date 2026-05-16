@@ -102,6 +102,25 @@ _SCALAR_FIELDS = (
     "taub",
     "tx",
     "ty",
+    "Hice",
+    "Hsnow",
+    "Hfrazil",
+    "T1",
+    "T2",
+    "Tice_surface",
+    "fdd",
+    "ice_cover",
+    "Tf",
+    "albedo_ice",
+    "transmissivity",
+    "ocean_ice_flux",
+    "ocean_ice_heat_flux",
+    "ocean_ice_salt_flux",
+    "surface_ice_energy",
+    "bottom_ice_energy",
+    "melt_rate",
+    "T_melt",
+    "S_melt",
 )
 
 
@@ -210,6 +229,25 @@ class RuntimeState:
     taub: FloatArray
     tx: FloatArray
     ty: FloatArray
+    Hice: FloatArray
+    Hsnow: FloatArray
+    Hfrazil: FloatArray
+    T1: FloatArray
+    T2: FloatArray
+    Tice_surface: FloatArray
+    fdd: FloatArray
+    ice_cover: FloatArray
+    Tf: FloatArray
+    albedo_ice: FloatArray
+    transmissivity: FloatArray
+    ocean_ice_flux: FloatArray
+    ocean_ice_heat_flux: FloatArray
+    ocean_ice_salt_flux: FloatArray
+    surface_ice_energy: FloatArray
+    bottom_ice_energy: FloatArray
+    melt_rate: FloatArray
+    T_melt: FloatArray
+    S_melt: FloatArray
 
     def iter_profile_arrays(self) -> Iterator[tuple[str, FloatArray]]:
         """Yield every physical profile array in stable declaration order."""
@@ -340,6 +378,25 @@ def allocate_runtime_state(nlev: int) -> RuntimeState:
         taub=np.zeros(1, dtype=np.float64),
         tx=np.zeros(1, dtype=np.float64),
         ty=np.zeros(1, dtype=np.float64),
+        Hice=np.zeros(1, dtype=np.float64),
+        Hsnow=np.zeros(1, dtype=np.float64),
+        Hfrazil=np.zeros(1, dtype=np.float64),
+        T1=np.zeros(1, dtype=np.float64),
+        T2=np.zeros(1, dtype=np.float64),
+        Tice_surface=np.zeros(1, dtype=np.float64),
+        fdd=np.zeros(1, dtype=np.float64),
+        ice_cover=np.zeros(1, dtype=np.float64),
+        Tf=np.zeros(1, dtype=np.float64),
+        albedo_ice=np.zeros(1, dtype=np.float64),
+        transmissivity=np.ones(1, dtype=np.float64),
+        ocean_ice_flux=np.zeros(1, dtype=np.float64),
+        ocean_ice_heat_flux=np.zeros(1, dtype=np.float64),
+        ocean_ice_salt_flux=np.zeros(1, dtype=np.float64),
+        surface_ice_energy=np.zeros(1, dtype=np.float64),
+        bottom_ice_energy=np.zeros(1, dtype=np.float64),
+        melt_rate=np.zeros(1, dtype=np.float64),
+        T_melt=np.zeros(1, dtype=np.float64),
+        S_melt=np.zeros(1, dtype=np.float64),
     )
     state.validate()
     return state

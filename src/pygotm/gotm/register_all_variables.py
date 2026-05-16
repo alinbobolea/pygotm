@@ -54,6 +54,15 @@ def _float_attr_provider(obj: object, attr: str) -> Provider:
     return provider
 
 
+def _float_array0_provider(obj: object, attr: str) -> Provider:
+    def provider() -> float:
+        values = getattr(obj, attr)
+        assert isinstance(values, np.ndarray)
+        return float(values[0])
+
+    return provider
+
+
 def _array_attr_provider(obj: object, attr: str) -> Provider:
     def provider() -> np.ndarray:
         values = getattr(obj, attr)
@@ -301,6 +310,39 @@ def _register_meanflow_variables(nlev: int, meanflow: Any | None) -> None:
                 state=True,
             )
     del nlev
+
+
+def _register_ice_variables(ice_state: Any | None) -> None:
+    if ice_state is None:
+        return
+    for name, units, long_name in (
+        ("Hfrazil", "m", "frazil ice thickness"),
+        ("Hice", "m", "ice thickness"),
+        ("Hsnow", "m", "snow thickness on ice"),
+        ("T1", "Celsius", "upper ice-layer temperature"),
+        ("T2", "Celsius", "lower ice-layer temperature"),
+        ("Tf", "Celsius", "freezing temperature"),
+        ("Tice_surface", "Celsius", "ice surface temperature"),
+        ("albedo_ice", "", "ice albedo"),
+        ("transmissivity", "", "ice shortwave transmissivity"),
+        ("ocean_ice_flux", "W/m2", "ocean-to-ice heat flux"),
+        ("ocean_ice_heat_flux", "W/m2", "diagnosed ocean-ice heat flux"),
+        ("ocean_ice_salt_flux", "g/kg m/s", "diagnosed ocean-ice salt flux"),
+        ("surface_ice_energy", "J/m2", "surface ice energy residual"),
+        ("bottom_ice_energy", "J/m2", "bottom ice energy residual"),
+        ("melt_rate", "m/s", "ice melt rate"),
+        ("T_melt", "Celsius", "ice-ocean interface temperature"),
+        ("S_melt", "g/kg", "ice-ocean interface salinity"),
+    ):
+        if hasattr(ice_state, name):
+            fm.register(
+                name,
+                units,
+                long_name,
+                provider=_float_array0_provider(ice_state, name),
+                category="ice",
+                state=True,
+            )
 
 
 def _register_density_variables(density: Any | None) -> None:
@@ -663,6 +705,7 @@ def do_register_all_variables(
     density: Any | None = None,
     turbulence: Any | None = None,
     stokes_drift: Any | None = None,
+    ice_state: Any | None = None,
     surface_inputs: Any | None = None,
     i0_provider: Callable[[], float] | None = None,
 ) -> FieldRegistry:
@@ -678,6 +721,7 @@ def do_register_all_variables(
     _register_coordinate_variables(lat, lon)
     _register_density_variables(density)
     _register_meanflow_variables(nlev, meanflow)
+    _register_ice_variables(ice_state)
     _register_airsea_variables(airsea, surface_inputs, i0_provider)
     _register_observation_variables(nlev, observations)
     _register_turbulence_variables(turbulence)

@@ -85,9 +85,7 @@ def test_formula_matches_fortran_and_preserves_boundaries() -> None:
         ri = an[i] / (as_[i] + 1.0e-8)
         if ri >= 1.0e-10:
             prandtl = (
-                state.Prandtl0_fix
-                * (1.0 + 3.33 * ri) ** 1.5
-                / np.sqrt(1.0 + 10.0 * ri)
+                state.Prandtl0_fix * (1.0 + 3.33 * ri) ** 1.5 / np.sqrt(1.0 + 10.0 * ri)
             )
         else:
             prandtl = state.Prandtl0_fix

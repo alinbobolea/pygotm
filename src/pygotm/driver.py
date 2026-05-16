@@ -213,8 +213,9 @@ class GotmDriver:
             document=self.config.resolved_document(),
         )
         try:
-            bundle = integrate_gotm_compiled(run, max_steps=max_steps, output=output,
-                                             chunk_size=chunk_size)
+            bundle = integrate_gotm_compiled(
+                run, max_steps=max_steps, output=output, chunk_size=chunk_size
+            )
             dataset = (
                 runtime_output_to_dataset(run, bundle)
                 if output

@@ -270,13 +270,13 @@ __all__ = [
 ]
 
 # int_press_type selector constants (mirror GOTM Fortran observations module)
-INT_PRESS_NONE: int = 0       # no internal pressure gradient
+INT_PRESS_NONE: int = 0  # no internal pressure gradient
 INT_PRESS_GRADIENTS: int = 1  # horizontal T/S gradient method
-INT_PRESS_PLUME: int = 2      # sloping-frame plume method
+INT_PRESS_PLUME: int = 2  # sloping-frame plume method
 
 # plume_type selector constants
 PLUME_SURFACE: int = 1  # buoyant surface plume (under shelf ice)
-PLUME_BOTTOM: int = 2   # dense bottom plume over sloping topography
+PLUME_BOTTOM: int = 2  # dense bottom plume over sloping topography
 
 
 def internal_pressure(
@@ -402,8 +402,8 @@ def _internal_pressure_gradients(
     rho0 = density.rho0
 
     # Reset output arrays (Fortran: idpdx = _ZERO_; idpdy = _ZERO_)
-    idpdx[1:nlev + 1] = 0.0
-    idpdy[1:nlev + 1] = 0.0
+    idpdx[1 : nlev + 1] = 0.0
+    idpdy[1 : nlev + 1] = 0.0
 
     # Finite-difference step for buoyancy gradient estimation (arbitrary but
     # "small enough" per the Fortran comment; cancels in the ratio dB/dx).

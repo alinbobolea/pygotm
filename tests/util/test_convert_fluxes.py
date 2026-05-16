@@ -49,21 +49,27 @@ def test_import() -> None:
 def test_smoke_teos10() -> None:
     state = _make_state(METHOD_TEOS10)
     rad = _flat_rad(NLEV)
-    result = convert_fluxes(state, NLEV, GRAVITY, shf=200.0, ssf=1e-5, rad=rad, T_srf=20.0, S_srf=35.0)
+    result = convert_fluxes(
+        state, NLEV, GRAVITY, shf=200.0, ssf=1e-5, rad=rad, T_srf=20.0, S_srf=35.0
+    )
     assert len(result) == 6
 
 
 def test_smoke_linear_teos10() -> None:
     state = _make_state(METHOD_LINEAR_TEOS10)
     rad = _flat_rad(NLEV)
-    result = convert_fluxes(state, NLEV, GRAVITY, shf=200.0, ssf=1e-5, rad=rad, T_srf=20.0, S_srf=35.0)
+    result = convert_fluxes(
+        state, NLEV, GRAVITY, shf=200.0, ssf=1e-5, rad=rad, T_srf=20.0, S_srf=35.0
+    )
     assert len(result) == 6
 
 
 def test_smoke_linear_user() -> None:
     state = _make_state(METHOD_LINEAR_USER)
     rad = _flat_rad(NLEV)
-    result = convert_fluxes(state, NLEV, GRAVITY, shf=200.0, ssf=1e-5, rad=rad, T_srf=20.0, S_srf=35.0)
+    result = convert_fluxes(
+        state, NLEV, GRAVITY, shf=200.0, ssf=1e-5, rad=rad, T_srf=20.0, S_srf=35.0
+    )
     assert len(result) == 6
 
 
@@ -288,7 +294,9 @@ def test_boundary_levels_rad_profile() -> None:
     assert np.isclose(t_rad[NLEV], rad[NLEV] / (state.rho0 * CP0), rtol=1e-12)
     assert state.alpha is not None
     assert np.isclose(b_rad[0], GRAVITY * state.alpha[0] * t_rad[0], rtol=1e-12)
-    assert np.isclose(b_rad[NLEV], GRAVITY * state.alpha[NLEV] * t_rad[NLEV], rtol=1e-12)
+    assert np.isclose(
+        b_rad[NLEV], GRAVITY * state.alpha[NLEV] * t_rad[NLEV], rtol=1e-12
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -319,4 +327,6 @@ def test_assert_before_init() -> None:
     state = DensityState()
     rad = _flat_rad(NLEV)
     with pytest.raises(AssertionError):
-        convert_fluxes(state, NLEV, GRAVITY, shf=100.0, ssf=0.0, rad=rad, T_srf=20.0, S_srf=35.0)
+        convert_fluxes(
+            state, NLEV, GRAVITY, shf=100.0, ssf=0.0, rad=rad, T_srf=20.0, S_srf=35.0
+        )

@@ -38,35 +38,32 @@ _H15_GVOFF: float = 0.006
 _H15_SXMAX: float = 2.12
 
 _H15_SHN0: float = _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1)
-_H15_SHNH: float = -9.0 * _MY_A1 * _MY_A2 * (
-    _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1)
-)
+_H15_SHNH: float = -9.0 * _MY_A1 * _MY_A2 * (_MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1))
 _H15_SHNS: float = (
+    9.0 * _MY_A1 * _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1) * (2.0 * _MY_A1 + _MY_A2)
+)
+_H15_SHNV: float = (
     9.0
     * _MY_A1
     * _MY_A2
-    * (1.0 - 6.0 * _MY_A1 / _MY_B1)
-    * (2.0 * _MY_A1 + _MY_A2)
-)
-_H15_SHNV: float = 9.0 * _MY_A1 * _MY_A2 * (
-    _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1 - 3.0 * _MY_C1)
-    - 2.0 * _MY_A1 * (1.0 - 6.0 * _MY_A1 / _MY_B1 + 3.0 * _MY_C1)
+    * (
+        _MY_A2 * (1.0 - 6.0 * _MY_A1 / _MY_B1 - 3.0 * _MY_C1)
+        - 2.0 * _MY_A1 * (1.0 - 6.0 * _MY_A1 / _MY_B1 + 3.0 * _MY_C1)
+    )
 )
 _H15_SHDAH: float = -9.0 * _MY_A1 * _MY_A2
 _H15_SHDAV: float = -36.0 * _MY_A1 * _MY_A1
 _H15_SHDBH: float = -3.0 * _MY_A2 * (6.0 * _MY_A1 + _MY_B2 * (1.0 - _MY_C3))
 _H15_SHDV: float = -9.0 * _MY_A2 * _MY_A2 * (1.0 - _MY_C2)
-_H15_SHDVH: float = -162.0 * _MY_A1 * _MY_A1 * _MY_A2 * (
-    2.0 * _MY_A1 + (2.0 - _MY_C2) * _MY_A2
+_H15_SHDVH: float = (
+    -162.0 * _MY_A1 * _MY_A1 * _MY_A2 * (2.0 * _MY_A1 + (2.0 - _MY_C2) * _MY_A2)
 )
 _H15_SHDVV: float = 324.0 * _MY_A1 * _MY_A1 * _MY_A2 * _MY_A2 * (1.0 - _MY_C2)
 _H15_SSN0: float = _MY_A1 * (1.0 - 6.0 * _MY_A1 / _MY_B1)
 _H15_SSDH: float = -9.0 * _MY_A1 * _MY_A2
 _H15_SSDV: float = -9.0 * _MY_A1 * _MY_A1
 _H15_SMN0: float = _MY_A1 * (1.0 - 6.0 * _MY_A1 / _MY_B1 - 3.0 * _MY_C1)
-_H15_SMNHSH: float = 9.0 * _MY_A1 * (
-    2.0 * _MY_A1 + _MY_A2 * (1.0 - _MY_C2)
-)
+_H15_SMNHSH: float = 9.0 * _MY_A1 * (2.0 * _MY_A1 + _MY_A2 * (1.0 - _MY_C2))
 _H15_SMNSSS: float = 27.0 * _MY_A1 * _MY_A1
 _H15_SMDH: float = -9.0 * _MY_A1 * _MY_A2
 _H15_SMDV: float = -36.0 * _MY_A1 * _MY_A1
@@ -144,8 +141,7 @@ def _step_cmue_d_h15(
         if gv > 0.0:
             tmp1 = (_H15_SHDAH + _H15_SHDBH) * gh + (_H15_SHDAV + _H15_SHDV) * gv
             tmp1 = tmp1 + (
-                (_H15_SHDAH * _H15_GHOFF + _H15_SHDAV * _H15_GVOFF)
-                * (_H15_SHDBH * gh)
+                (_H15_SHDAH * _H15_GHOFF + _H15_SHDAV * _H15_GVOFF) * (_H15_SHDBH * gh)
                 + (_H15_SHDVH * _H15_GHOFF + _H15_SHDVV * _H15_GVOFF) * gv
             )
             tmp1 = tmp1 + (
@@ -153,10 +149,9 @@ def _step_cmue_d_h15(
                 + (_H15_SHDVH * gh + _H15_SHDVV * gv) * _H15_GVOFF
             )
 
-            tmp2 = (
-                (_H15_SHDAH * gh + _H15_SHDAV * gv) * (_H15_SHDBH * gh)
-                + (_H15_SHDVH * gh + _H15_SHDVV * gv) * gv
-            )
+            tmp2 = (_H15_SHDAH * gh + _H15_SHDAV * gv) * (_H15_SHDBH * gh) + (
+                _H15_SHDVH * gh + _H15_SHDVV * gv
+            ) * gv
 
             tmp4 = (
                 1.0
@@ -164,8 +159,7 @@ def _step_cmue_d_h15(
                 + (_H15_SHDAV + _H15_SHDV) * _H15_GVOFF
                 + (_H15_SHDAH * _H15_GHOFF + _H15_SHDAV * _H15_GVOFF)
                 * (_H15_SHDBH * _H15_GHOFF)
-                + (_H15_SHDVH * _H15_GHOFF + _H15_SHDVV * _H15_GVOFF)
-                * _H15_GVOFF
+                + (_H15_SHDVH * _H15_GHOFF + _H15_SHDVV * _H15_GVOFF) * _H15_GVOFF
             )
 
             tmp3 = tmp1 * tmp1 - 4.0 * tmp2 * tmp4
@@ -184,15 +178,10 @@ def _step_cmue_d_h15(
         gs = gs * SPF[i] * SPF[i]
 
         if gh > 0.0:
-            tmp1 = (
-                2.0 * (_H15_SHDAH + _H15_SHDBH) * gh
-                + (_H15_SHDAV + _H15_SHDV) * gv
-            )
-            tmp2 = (
-                (2.0 * _H15_SHDAH * gh + _H15_SHDAV * gv)
-                * (2.0 * _H15_SHDBH * gh)
-                + (2.0 * _H15_SHDVH * gh + _H15_SHDVV * gv) * gv
-            )
+            tmp1 = 2.0 * (_H15_SHDAH + _H15_SHDBH) * gh + (_H15_SHDAV + _H15_SHDV) * gv
+            tmp2 = (2.0 * _H15_SHDAH * gh + _H15_SHDAV * gv) * (
+                2.0 * _H15_SHDBH * gh
+            ) + (2.0 * _H15_SHDVH * gh + _H15_SHDVV * gv) * gv
             tmp4 = 1.0
             tmp3 = tmp1 * tmp1 - 4.0 * tmp2 * tmp4
 
@@ -216,11 +205,9 @@ def _step_cmue_d_h15(
         if tmp1 < 0.0:
             sh = _SMALL
         else:
-            tmp2 = (
-                (1.0 + _H15_SHDAH * gh + _H15_SHDAV * gv)
-                * (1.0 + _H15_SHDBH * gh)
-                + (_H15_SHDV + _H15_SHDVH * gh + _H15_SHDVV * gv) * gv
-            )
+            tmp2 = (1.0 + _H15_SHDAH * gh + _H15_SHDAV * gv) * (
+                1.0 + _H15_SHDBH * gh
+            ) + (_H15_SHDV + _H15_SHDVH * gh + _H15_SHDVV * gv) * gv
             if tmp2 <= 0.0:
                 sh = _H15_SXMAX
             else:
@@ -282,7 +269,18 @@ def step_cmue_d_h15(
     r"""Update Harcourt (2015) quasi-equilibrium Langmuir stability functions (batch)."""
     for b in numba.prange(batch_size):
         _step_cmue_d_h15(
-            nlev, length_lim, sq, sl,
-            as_[b], an[b], av[b], aw[b], SPF[b],
-            cmue1[b], cmue2[b], cmue3[b], sq_var[b], sl_var[b],
+            nlev,
+            length_lim,
+            sq,
+            sl,
+            as_[b],
+            an[b],
+            av[b],
+            aw[b],
+            SPF[b],
+            cmue1[b],
+            cmue2[b],
+            cmue3[b],
+            sq_var[b],
+            sl_var[b],
         )

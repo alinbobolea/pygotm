@@ -54,11 +54,7 @@ def configure_second_order_state(state: TurbulenceState) -> None:
 
     n_val = state.cc1 / 2.0
     state.cm0 = (
-        (
-            state.a2 * state.a2
-            - 3.0 * state.a3 * state.a3
-            + 3.0 * state.a1 * n_val
-        )
+        (state.a2 * state.a2 - 3.0 * state.a3 * state.a3 + 3.0 * state.a1 * n_val)
         / (3.0 * n_val * n_val)
     ) ** 0.25
 
@@ -76,33 +72,24 @@ def _cmue_d_reference(
         84.0 * state.a5 * state.at3 * n_val**2 * nt_val
         + 36.0 * state.at5 * n_val**3 * nt_val
     )
-    d2 = 9.0 * (state.at2**2 - state.at1**2) * n_val**3 - 12.0 * (
-        state.a2**2 - 3.0 * state.a3**2
-    ) * n_val * nt_val**2
+    d2 = (
+        9.0 * (state.at2**2 - state.at1**2) * n_val**3
+        - 12.0 * (state.a2**2 - 3.0 * state.a3**2) * n_val * nt_val**2
+    )
     d3 = (
         12.0
         * state.a5
         * state.at3
         * (state.a2 * state.at1 - 3.0 * state.a3 * state.at2)
         * n_val
-        + 12.0
-        * state.a5
-        * state.at3
-        * (state.a3**2 - state.a2**2)
-        * nt_val
-        + 12.0
-        * state.at5
-        * (3.0 * state.a3**2 - state.a2**2)
-        * n_val
-        * nt_val
+        + 12.0 * state.a5 * state.at3 * (state.a3**2 - state.a2**2) * nt_val
+        + 12.0 * state.at5 * (3.0 * state.a3**2 - state.a2**2) * n_val * nt_val
     )
     d4 = (
         48.0 * state.a5**2 * state.at3**2 * n_val
         + 36.0 * state.a5 * state.at3 * state.at5 * n_val**2
     )
-    d5 = 3.0 * (state.a2**2 - 3.0 * state.a3**2) * (
-        state.at1**2 - state.at2**2
-    ) * n_val
+    d5 = 3.0 * (state.a2**2 - 3.0 * state.a3**2) * (state.at1**2 - state.at2**2) * n_val
 
     n0 = 36.0 * state.a1 * n_val**2 * nt_val**2
     n1 = (
@@ -118,14 +105,20 @@ def _cmue_d_reference(
     n2 = 9.0 * state.a1 * (state.at2**2 - state.at1**2) * n_val**2
     nt0 = 12.0 * state.at3 * n_val**3 * nt_val
     nt1 = 12.0 * state.a5 * state.at3**2 * n_val**2
-    nt2 = 9.0 * state.a1 * state.at3 * (state.at1 - state.at2) * n_val**2 + (
-        6.0 * state.a1 * (state.a2 - 3.0 * state.a3)
-        - 4.0 * (state.a2**2 - 3.0 * state.a3**2)
-    ) * state.at3 * n_val * nt_val
+    nt2 = (
+        9.0 * state.a1 * state.at3 * (state.at1 - state.at2) * n_val**2
+        + (
+            6.0 * state.a1 * (state.a2 - 3.0 * state.a3)
+            - 4.0 * (state.a2**2 - 3.0 * state.a3**2)
+        )
+        * state.at3
+        * n_val
+        * nt_val
+    )
 
-    an_min = (
-        -(d1 + nt0) + np.sqrt((d1 + nt0) ** 2 - 4.0 * d0 * (d4 + nt1))
-    ) / (2.0 * (d4 + nt1))
+    an_min = (-(d1 + nt0) + np.sqrt((d1 + nt0) ** 2 - 4.0 * d0 * (d4 + nt1))) / (
+        2.0 * (d4 + nt1)
+    )
     an_value = max(an_value, _AN_LIMIT_FACT * an_min)
 
     tmp0 = -d0 - (d1 + nt0) * an_value - (d4 + nt1) * an_value**2
@@ -134,9 +127,7 @@ def _cmue_d_reference(
         as_value = -tmp0 / tmp1
     else:
         tmp2 = n2 - d5
-        as_value = (-tmp1 + np.sqrt(tmp1 * tmp1 - 4.0 * tmp0 * tmp2)) / (
-            2.0 * tmp2
-        )
+        as_value = (-tmp1 + np.sqrt(tmp1 * tmp1 - 4.0 * tmp0 * tmp2)) / (2.0 * tmp2)
 
     d_cm = (
         d0
@@ -218,14 +209,14 @@ def reference_compute_cpsi3(
             ann=ann,
             ri=ri,
         )
-        fc = cmue1_value * an_value / ri - cmue2_value * an_value - state.cm0**(-3)
+        fc = cmue1_value * an_value / ri - cmue2_value * an_value - state.cm0 ** (-3)
 
         an_step, _, cmue1_step, cmue2_step = _evaluate_cmue_reference(
             state,
             ann=ann + _EPSILON,
             ri=ri,
         )
-        fp = cmue1_step * an_step / ri - cmue2_step * an_step - state.cm0**(-3)
+        fp = cmue1_step * an_step / ri - cmue2_step * an_step - state.cm0 ** (-3)
 
         step = -fc / ((fp - fc) / _EPSILON)
         ann = ann + 0.5 * step

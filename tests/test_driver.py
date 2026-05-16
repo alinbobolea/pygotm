@@ -103,7 +103,8 @@ def test_driver_run_returns_dataset_with_expected_axes_and_metadata(
     assert dataset["u"].dims == ("time", "z", "lat", "lon")
     assert dataset["u"].shape == (2, 8, 1, 1)
     assert dataset.attrs["runtime"] == "compiled"
-    assert np.issubdtype(dataset["time"].dtype, np.datetime64)
+    assert np.issubdtype(dataset["time"].dtype, np.floating)
+    assert dataset["time"].attrs["units"] == "seconds since 2005-01-01 00:00:00"
     assert Path(str(dataset.attrs["source_yaml"])) == config_path.resolve()
     assert np.isfinite(dataset["u"].values).all()
     assert np.isfinite(dataset["tke"].values).all()
@@ -272,4 +273,5 @@ def test_output_time_method_initial_snapshot_is_always_point() -> None:
     )
 
     assert dataset.sizes["time"] == 2
-    assert dataset["time"].values[0] == np.datetime64("2005-01-01T00:00:00")
+    assert dataset["time"].values[0] == pytest.approx(0.0)
+    assert dataset["time"].attrs["units"] == "seconds since 2005-01-01 00:00:00"

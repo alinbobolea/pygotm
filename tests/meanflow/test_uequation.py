@@ -172,8 +172,24 @@ def test_seagrass_inner_friction_decelerates_interior_layers():
     with_seagrass.v[:] = state.v
     with_seagrass.drag[:] = state.drag
 
-    _run_step(state, nlev, _DT, _CNPAR, num=_zeros(nlev), nucl=_zeros(nlev), seagrass_active=False)
-    _run_step(with_seagrass, nlev, _DT, _CNPAR, num=_zeros(nlev), nucl=_zeros(nlev), seagrass_active=True)
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        seagrass_active=False,
+    )
+    _run_step(
+        with_seagrass,
+        nlev,
+        _DT,
+        _CNPAR,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        seagrass_active=True,
+    )
 
     assert np.mean(with_seagrass.u[2:]) < np.mean(state.u[2:])
 
@@ -195,8 +211,12 @@ def test_plume_active_modifies_surface_layer():
     base_state.drag[:] = 1.0e-3
 
     num = np.full(nlev + 1, 1.0e-3, dtype=np.float64)
-    _run_step(plume_state, nlev, _DT, _CNPAR, num=num, nucl=_zeros(nlev), plume_active=True)
-    _run_step(base_state, nlev, _DT, _CNPAR, num=num, nucl=_zeros(nlev), plume_active=False)
+    _run_step(
+        plume_state, nlev, _DT, _CNPAR, num=num, nucl=_zeros(nlev), plume_active=True
+    )
+    _run_step(
+        base_state, nlev, _DT, _CNPAR, num=num, nucl=_zeros(nlev), plume_active=False
+    )
 
     assert plume_state.u[nlev] < base_state.u[nlev]
 
@@ -248,7 +268,16 @@ def test_external_pressure_gradient():
     assert state.drag is not None
     state.u[:] = 0.0
     state.drag[:] = 0.0
-    _run_step(state, nlev, _DT, _CNPAR, num=_zeros(nlev), nucl=_zeros(nlev), ext_method=0, dpdx=1.0e-5)
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        ext_method=0,
+        dpdx=1.0e-5,
+    )
     assert np.all(state.u[1 : nlev + 1] < 0.0)
 
 
@@ -263,8 +292,26 @@ def test_ext_method_nonzero_ignores_dzetadx():
     state_a.drag[:] = 0.0
     state_b.drag[:] = 0.0
 
-    _run_step(state_a, nlev, _DT, _CNPAR, num=_zeros(nlev), nucl=_zeros(nlev), ext_method=1, dpdx=1.0e-5)
-    _run_step(state_b, nlev, _DT, _CNPAR, num=_zeros(nlev), nucl=_zeros(nlev), ext_method=1, dpdx=0.0)
+    _run_step(
+        state_a,
+        nlev,
+        _DT,
+        _CNPAR,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        ext_method=1,
+        dpdx=1.0e-5,
+    )
+    _run_step(
+        state_b,
+        nlev,
+        _DT,
+        _CNPAR,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        ext_method=1,
+        dpdx=0.0,
+    )
     np.testing.assert_array_equal(state_a.u, state_b.u)
 
 
@@ -299,7 +346,17 @@ def test_large_relax_tau_equals_no_relax():
     tau_r = np.full(nlev + 1, _LONG, dtype=np.float64)
     uprof = np.zeros(nlev + 1, dtype=np.float64)
 
-    _run_step(state_a, nlev, _DT, _CNPAR, tx=1.0e-4, num=num, nucl=_zeros(nlev), tau_r=tau_r, uprof=uprof)
+    _run_step(
+        state_a,
+        nlev,
+        _DT,
+        _CNPAR,
+        tx=1.0e-4,
+        num=num,
+        nucl=_zeros(nlev),
+        tau_r=tau_r,
+        uprof=uprof,
+    )
     _run_step(state_b, nlev, _DT, _CNPAR, tx=1.0e-4, num=num, nucl=_zeros(nlev))
     np.testing.assert_allclose(state_a.u, state_b.u, rtol=1.0e-12)
 
@@ -316,7 +373,16 @@ def test_relax_pulls_toward_uprof():
     tau_r = np.full(nlev + 1, _DT, dtype=np.float64)
     uprof = np.ones(nlev + 1, dtype=np.float64)
 
-    _run_step(state_relax, nlev, _DT, _CNPAR, num=num, nucl=_zeros(nlev), tau_r=tau_r, uprof=uprof)
+    _run_step(
+        state_relax,
+        nlev,
+        _DT,
+        _CNPAR,
+        num=num,
+        nucl=_zeros(nlev),
+        tau_r=tau_r,
+        uprof=uprof,
+    )
     _run_step(state_free, nlev, _DT, _CNPAR, num=num, nucl=_zeros(nlev))
     assert np.mean(state_relax.u[1:]) > np.mean(state_free.u[1:])
 
@@ -326,7 +392,15 @@ def test_sentinel_level_unchanged():
     state = _make_state(nlev=nlev)
     assert state.u is not None
     state.u[0] = 99.0
-    _run_step(state, nlev, _DT, _CNPAR, tx=1.0e-4, num=np.full(nlev + 1, 1.0e-3, dtype=np.float64), nucl=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        tx=1.0e-4,
+        num=np.full(nlev + 1, 1.0e-3, dtype=np.float64),
+        nucl=_zeros(nlev),
+    )
     assert state.u[0] == 99.0
 
 
@@ -339,7 +413,10 @@ def test_no_nan_inf():
     state.drag[:] = 0.0
     state.drag[1] = 2.0e-3
     _run_step(
-        state, nlev, _DT, 0.6,
+        state,
+        nlev,
+        _DT,
+        0.6,
         tx=5.0e-5,
         num=np.linspace(1.0e-4, 1.0e-2, nlev + 1),
         nucl=_zeros(nlev),
@@ -368,7 +445,18 @@ def test_multi_column_parity():
     state_ref = _make_state(nlev=nlev)
     state_ref.u[:] = state.u.copy()
     state_ref.v[:] = state.v.copy()
-    _run_step(state_ref, nlev, _DT, _CNPAR, num=num, nucl=nucl, dusdz=dusdz, tau_r=tau_r, uprof=uprof, tx=tx_val)
+    _run_step(
+        state_ref,
+        nlev,
+        _DT,
+        _CNPAR,
+        num=num,
+        nucl=nucl,
+        dusdz=dusdz,
+        tau_r=tau_r,
+        uprof=uprof,
+        tx=tx_val,
+    )
     u_single = state_ref.u.copy()
 
     u_b = np.tile(state.u, (batch_size, 1)).astype(np.float64)
@@ -397,13 +485,41 @@ def test_multi_column_parity():
     adv_cu_b = np.zeros((batch_size, nlev + 1), dtype=np.float64)
 
     step_uequation(
-        batch_size, nlev, _DT, _CNPAR, state.avmolu, state.gravity,
-        0, 0, 4, 0, 0,
-        tx_b, dzetadx_b,
-        u_b, uo_b, v_b, h_b, w_b, drag_b,
-        num_b, nucl_b, dusdz_b, idpdx_b, uprof_b, tau_r_b,
-        avh_b, q_sour_b, l_sour_b,
-        au_b, bu_b, cu_b, du_b, ru_b, qu_b, adv_cu_b,
+        batch_size,
+        nlev,
+        _DT,
+        _CNPAR,
+        state.avmolu,
+        state.gravity,
+        0,
+        0,
+        4,
+        0,
+        0,
+        tx_b,
+        dzetadx_b,
+        u_b,
+        uo_b,
+        v_b,
+        h_b,
+        w_b,
+        drag_b,
+        num_b,
+        nucl_b,
+        dusdz_b,
+        idpdx_b,
+        uprof_b,
+        tau_r_b,
+        avh_b,
+        q_sour_b,
+        l_sour_b,
+        au_b,
+        bu_b,
+        cu_b,
+        du_b,
+        ru_b,
+        qu_b,
+        adv_cu_b,
     )
 
     np.testing.assert_allclose(u_b[0], u_single)

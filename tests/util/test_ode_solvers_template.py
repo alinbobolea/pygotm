@@ -29,9 +29,7 @@ NUMC = 2
 
 
 def _rhs_decay(k: float) -> RhsCallback:
-    def get_rhs(
-        first: bool, numc: int, nlev: int, cc: np.ndarray
-    ) -> np.ndarray:
+    def get_rhs(first: bool, numc: int, nlev: int, cc: np.ndarray) -> np.ndarray:
         return -k * cc
 
     return get_rhs

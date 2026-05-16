@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from pygotm.util.adv_center import (
     CENTRAL,
@@ -41,7 +42,9 @@ def _call_adv_center(
     """Call adv_center; return (y_out, cu_out)."""
     ws = AdvectionWorkspace(nlev)
     y_out = y.copy()
-    adv_center(nlev, dt, h, ho, ww, bc_up, bc_down, y_up, y_down, method, mode, y_out, ws.cu)
+    adv_center(
+        nlev, dt, h, ho, ww, bc_up, bc_down, y_up, y_down, method, mode, y_out, ws.cu
+    )
     return y_out, ws.cu.copy()
 
 
@@ -79,7 +82,9 @@ def _adv_center_reference(
                 y_upstream = updated[k + 2] if k < nlev - 1 else updated[k + 1]
                 y_central = updated[k + 1]
                 y_downstream = updated[k]
-            cu[k] = ww[k] * _adv_reconstruct_ref(method, courant, y_upstream, y_central, y_downstream)
+            cu[k] = ww[k] * _adv_reconstruct_ref(
+                method, courant, y_upstream, y_central, y_downstream
+            )
 
         if bc_up == FLUX:
             cu[nlev] = -y_up
@@ -111,7 +116,9 @@ def _adv_center_reference(
     return updated, cu
 
 
-def _adv_reconstruct_ref(scheme: int, cfl: float, fuu: float, fu: float, fd: float) -> float:
+def _adv_reconstruct_ref(
+    scheme: int, cfl: float, fuu: float, fu: float, fd: float
+) -> float:
     deltaf = fd - fu
     deltafu = fu - fuu
     if deltaf * deltafu > 0.0:
@@ -123,7 +130,9 @@ def _adv_reconstruct_ref(scheme: int, cfl: float, fuu: float, fu: float, fd: flo
             limiter = (0.5 + x) + (0.5 - x) * ratio
             limiter = min(2.0 * ratio / (cfl + 1.0e-10), limiter, 2.0 / (1.0 - cfl))
         elif scheme == SPLMAX13:
-            limiter = min(2.0 * ratio, (1.0 / 3.0) * max(1.0 + 2.0 * ratio, 2.0 + ratio), 2.0)
+            limiter = min(
+                2.0 * ratio, (1.0 / 3.0) * max(1.0 + 2.0 * ratio, 2.0 + ratio), 2.0
+            )
         elif scheme == MUSCL:
             limiter = min(2.0 * ratio, 0.5 * (1.0 + ratio), 2.0)
         elif scheme == P2:
@@ -159,9 +168,6 @@ def test_init_adv_center_and_clean() -> None:
     clean_adv_center(ws)  # must not raise
 
 
-import pytest
-
-
 @pytest.mark.parametrize(
     ("method", "fuu", "fu", "fd", "cfl"),
     [
@@ -178,7 +184,11 @@ import pytest
     ],
 )
 def test_matches_reference_across_limiters(
-    method: int, fuu: float, fu: float, fd: float, cfl: float,
+    method: int,
+    fuu: float,
+    fu: float,
+    fd: float,
+    cfl: float,
 ) -> None:
     nlev = 2
     dt = 0.2
@@ -188,14 +198,31 @@ def test_matches_reference_across_limiters(
     y = np.array([fuu, fu, fd], dtype=np.float64)
 
     result, _ = _call_adv_center(
-        nlev, dt, h, ho, speed,
-        ZERO_DIVERGENCE, VALUE, 0.0, fuu,
-        method, CONSERVATIVE, y,
+        nlev,
+        dt,
+        h,
+        ho,
+        speed,
+        ZERO_DIVERGENCE,
+        VALUE,
+        0.0,
+        fuu,
+        method,
+        CONSERVATIVE,
+        y,
     )
     expected, _ = _adv_center_reference(
-        nlev, dt, h, speed,
-        ZERO_DIVERGENCE, VALUE, 0.0, fuu,
-        method, CONSERVATIVE, y,
+        nlev,
+        dt,
+        h,
+        speed,
+        ZERO_DIVERGENCE,
+        VALUE,
+        0.0,
+        fuu,
+        method,
+        CONSERVATIVE,
+        y,
     )
     np.testing.assert_allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
 
@@ -210,10 +237,31 @@ def test_conservative_split_iterations_match_reference() -> None:
     y_up, y_down = 0.15, -0.1
 
     result, cu_result = _call_adv_center(
-        nlev, dt, h, ho, ww, FLUX, ONE_SIDED, y_up, y_down, P2_PDM, CONSERVATIVE, y,
+        nlev,
+        dt,
+        h,
+        ho,
+        ww,
+        FLUX,
+        ONE_SIDED,
+        y_up,
+        y_down,
+        P2_PDM,
+        CONSERVATIVE,
+        y,
     )
     expected, expected_flux = _adv_center_reference(
-        nlev, dt, h, ww, FLUX, ONE_SIDED, y_up, y_down, P2_PDM, CONSERVATIVE, y,
+        nlev,
+        dt,
+        h,
+        ww,
+        FLUX,
+        ONE_SIDED,
+        y_up,
+        y_down,
+        P2_PDM,
+        CONSERVATIVE,
+        y,
     )
     np.testing.assert_allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(cu_result, expected_flux, rtol=1e-12, atol=1e-12)
@@ -229,10 +277,31 @@ def test_nonconservative_matches_reference() -> None:
     y_up, y_down = 1.1, -0.3
 
     result, _ = _call_adv_center(
-        nlev, dt, h, ho, ww, VALUE, ZERO_DIVERGENCE, y_up, y_down, MUSCL, NON_CONSERVATIVE, y,
+        nlev,
+        dt,
+        h,
+        ho,
+        ww,
+        VALUE,
+        ZERO_DIVERGENCE,
+        y_up,
+        y_down,
+        MUSCL,
+        NON_CONSERVATIVE,
+        y,
     )
     expected, _ = _adv_center_reference(
-        nlev, dt, h, ww, VALUE, ZERO_DIVERGENCE, y_up, y_down, MUSCL, NON_CONSERVATIVE, y,
+        nlev,
+        dt,
+        h,
+        ww,
+        VALUE,
+        ZERO_DIVERGENCE,
+        y_up,
+        y_down,
+        MUSCL,
+        NON_CONSERVATIVE,
+        y,
     )
     np.testing.assert_allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
     assert np.isfinite(result[1:]).all()
@@ -246,7 +315,18 @@ def test_no_nan_inf() -> None:
     y = np.array([0.0, 1.0, 0.5, 0.8, 0.2], dtype=np.float64)
 
     result, _ = _call_adv_center(
-        nlev, 1.0, h, ho, ww, FLUX, FLUX, 0.0, 0.0, UPSTREAM, CONSERVATIVE, y,
+        nlev,
+        1.0,
+        h,
+        ho,
+        ww,
+        FLUX,
+        FLUX,
+        0.0,
+        0.0,
+        UPSTREAM,
+        CONSERVATIVE,
+        y,
     )
     assert np.isfinite(result[1:]).all(), "adv_center produced NaN or Inf"
 
@@ -263,7 +343,18 @@ def test_batch_parity() -> None:
     y_up, y_down = 0.2, -0.05
 
     expected, _ = _call_adv_center(
-        nlev, dt, h, ho, ww, FLUX, VALUE, y_up, y_down, UPSTREAM, CONSERVATIVE, y,
+        nlev,
+        dt,
+        h,
+        ho,
+        ww,
+        FLUX,
+        VALUE,
+        y_up,
+        y_down,
+        UPSTREAM,
+        CONSERVATIVE,
+        y,
     )
 
     ws = AdvectionBatchWorkspace(nlev, batch_size)
@@ -273,9 +364,20 @@ def test_batch_parity() -> None:
     y_b = np.tile(y, (batch_size, 1))
 
     adv_center_batch(
-        batch_size, nlev, dt, h_b, ho_b, ww_b,
-        FLUX, VALUE, y_up, y_down,
-        UPSTREAM, CONSERVATIVE, y_b, ws.cu,
+        batch_size,
+        nlev,
+        dt,
+        h_b,
+        ho_b,
+        ww_b,
+        FLUX,
+        VALUE,
+        y_up,
+        y_down,
+        UPSTREAM,
+        CONSERVATIVE,
+        y_b,
+        ws.cu,
     )
 
     for b in range(batch_size):

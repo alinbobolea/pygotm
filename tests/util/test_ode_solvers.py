@@ -673,9 +673,7 @@ def test_euler_forward_zero_rhs_no_change() -> None:
     cc[:, 1:] = 3.0
     cc_before = cc.copy()
 
-    def zero_rhs(
-        first: bool, numc: int, nlev: int, cc: np.ndarray
-    ) -> np.ndarray:
+    def zero_rhs(first: bool, numc: int, nlev: int, cc: np.ndarray) -> np.ndarray:
         return np.zeros_like(cc)
 
     euler_forward(0.5, NUMC, NLEV, cc, zero_rhs)

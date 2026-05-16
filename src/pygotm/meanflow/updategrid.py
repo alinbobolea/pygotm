@@ -172,10 +172,9 @@ def updategrid(
             else:
                 # Zooming routine from Antoine Garapon, ICCH, DK
                 for i in range(1, nlev + 1):
-                    ga[i] = (
-                        math.tanh((state.ddl + state.ddu) * i / nlev - state.ddl)
-                        + math.tanh(state.ddl)
-                    )
+                    ga[i] = math.tanh(
+                        (state.ddl + state.ddu) * i / nlev - state.ddl
+                    ) + math.tanh(state.ddl)
                     ga[i] /= math.tanh(state.ddl) + math.tanh(state.ddu)
 
             state.depth = state.depth0 + zeta
@@ -199,10 +198,9 @@ def updategrid(
             else:
                 # Zooming from Antoine Garapon, ICCH, DK
                 for i in range(1, nlev + 1):
-                    ga[i] = (
-                        math.tanh((state.ddl + state.ddu) * i / nlev - state.ddl)
-                        + math.tanh(state.ddl)
-                    )
+                    ga[i] = math.tanh(
+                        (state.ddl + state.ddu) * i / nlev - state.ddl
+                    ) + math.tanh(state.ddl)
                     ga[i] = ga[i] / (math.tanh(state.ddl) + math.tanh(state.ddu)) - 1.0
 
             state.depth = state.depth0 + zeta

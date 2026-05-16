@@ -214,7 +214,9 @@ def register_horizontal_observation(
     )
 
 
-def register_observation(state: FabmState, variable_id: Any, data: Any, relax_tau: Any = None) -> None:
+def register_observation(
+    state: FabmState, variable_id: Any, data: Any, relax_tau: Any = None
+) -> None:
     """Dispatch observation registration by data shape."""
 
     if isinstance(data, np.ndarray):
@@ -224,7 +226,9 @@ def register_observation(state: FabmState, variable_id: Any, data: Any, relax_ta
     elif relax_tau is None:
         register_scalar_observation(state, variable_id, float(data))
     else:
-        register_horizontal_observation(state, variable_id, float(data), float(relax_tau))
+        register_horizontal_observation(
+            state, variable_id, float(data), float(relax_tau)
+        )
 
 
 def init_gotm_fabm_state(state: FabmState, nlev: int) -> None:
@@ -250,7 +254,9 @@ def start_gotm_fabm(
     if field_manager is not None:
         for name, record in state.registered_fields.items():
             if hasattr(field_manager, "register"):
-                field_manager.register(name, provider=lambda r=record: r.get("data1d", r.get("data0d")))
+                field_manager.register(
+                    name, provider=lambda r=record: r.get("data1d", r.get("data0d"))
+                )
 
 
 def set_env_gotm_fabm(state: FabmState, **environment: Any) -> None:

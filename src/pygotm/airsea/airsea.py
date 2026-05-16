@@ -243,13 +243,16 @@ def do_airsea(
                 yearday, secs / 3600.0, state.dlon, state.dlat
             )
             have_zenith_angle = True
-            state.shortwave = shortwave_radiation(
-                zenith_angle,
-                yearday,
-                state.dlon,
-                state.dlat,
-                cloud,
-            ) * state.shortwave_scale_factor
+            state.shortwave = (
+                shortwave_radiation(
+                    zenith_angle,
+                    yearday,
+                    state.dlon,
+                    state.dlat,
+                    cloud,
+                )
+                * state.shortwave_scale_factor
+            )
         state.heat = state.heat * state.heat_scale_factor
     else:
         state.qe = 0.0

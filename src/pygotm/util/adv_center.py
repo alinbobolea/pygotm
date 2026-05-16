@@ -335,7 +335,17 @@ def adv_center_batch(
     """Batch variant: process batch_size columns in parallel with numba.prange."""
     for b in numba.prange(batch_size):
         adv_center(
-            nlev, dt, h[b], ho[b], ww[b],
-            bc_up, bc_down, y_up, y_down,
-            method, mode, y[b], cu[b],
+            nlev,
+            dt,
+            h[b],
+            ho[b],
+            ww[b],
+            bc_up,
+            bc_down,
+            y_up,
+            y_down,
+            method,
+            mode,
+            y[b],
+            cu[b],
         )

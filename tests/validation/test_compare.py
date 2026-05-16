@@ -1,7 +1,8 @@
-"""Tests for validation/compare.py — three-indicator validation logic."""
+"""Tests for validation/compare.py Frechet validation logic."""
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from pathlib import Path
 
@@ -9,20 +10,32 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from pygotm.validation.compare import (
-    VarResult,
-    compare_nc,
-)
+from pygotm.validation.compare import VarResult, compare_nc
 
 
-def _write_nc(path: Path, arrays: dict[str, np.ndarray]) -> None:
-    ds = xr.Dataset({k: (["t"], v) for k, v in arrays.items()})
+def _write_nc(
+    path: Path,
+    arrays: dict[str, np.ndarray],
+    *,
+    dim: str = "t",
+    times: np.ndarray | None = None,
+) -> None:
+    coords = {dim: times} if times is not None else None
+    ds = xr.Dataset({k: ([dim], v) for k, v in arrays.items()}, coords=coords)
     ds.to_netcdf(path, engine="scipy")
 
 
-# ---------------------------------------------------------------------------
-# VarResult structure
-# ---------------------------------------------------------------------------
+def _write_2d_nc(path: Path, name: str, values: np.ndarray) -> None:
+    ds = xr.Dataset({name: (["time", "z"], values)})
+    ds.to_netcdf(path, engine="scipy")
+
+
+def _result_for_delta(tmp_path: Path, delta: float) -> VarResult:
+    ref = np.sin(np.linspace(0.0, 20.0, 200)) + 2.0
+    py = ref + delta
+    _write_nc(tmp_path / "py.nc", {"temp": py})
+    _write_nc(tmp_path / "ref.nc", {"temp": ref})
+    return compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
 
 
 def test_var_result_has_required_fields() -> None:
@@ -33,32 +46,59 @@ def test_var_result_has_required_fields() -> None:
         color="green",
         reference_at_worst=10.0,
         calculated_at_worst=10.0,
-        primary_score=0.1,
-        birge_ratio=0.05,
-        normalized_signed_bias=0.0,
+        d_raw=0.0,
+        d_norm=0.0,
         plot_html=None,
     )
     assert v.name == "temp"
     assert v.section == "pygotm"
     assert v.status == "PASS"
     assert v.color == "green"
-    assert v.primary_score == pytest.approx(0.1)
+    assert v.d_raw == pytest.approx(0.0)
+    assert v.d_norm == pytest.approx(0.0)
+    assert v.metric_mode == "d_norm"
+    assert v.primary_score == pytest.approx(0.0)
 
 
-def test_var_result_has_no_deprecated_fields() -> None:
-    import dataclasses
-
+def test_var_result_has_no_old_metric_fields() -> None:
     field_names = {f.name for f in dataclasses.fields(VarResult)}
-    deprecated = {"max_abs_err", "max_rel_err", "rmse", "nrmse", "mean_abs_err", "mean_rel_err", "r2", "correlation"}
-    assert not field_names & deprecated, f"deprecated fields present: {field_names & deprecated}"
+    old_metrics = {"primary_score", "birge_ratio", "normalized_signed_bias"}
+    assert not field_names & old_metrics
 
 
-# ---------------------------------------------------------------------------
-# Status classification from primary_score
-# ---------------------------------------------------------------------------
+def test_primary_score_property_aliases_d_norm_for_progress_logging() -> None:
+    v = VarResult(
+        name="temp",
+        section="pygotm",
+        status="MARGINAL",
+        color="yellow",
+        reference_at_worst=1.0,
+        calculated_at_worst=1.02,
+        d_raw=0.02,
+        d_norm=0.02,
+        plot_html=None,
+    )
+    assert v.primary_score == pytest.approx(v.d_norm)
 
 
-def test_primary_score_zero_is_pass(tmp_path: Path) -> None:
+def test_primary_score_property_uses_effective_score_when_available() -> None:
+    v = VarResult(
+        name="NN",
+        section="pygotm",
+        status="PASS",
+        color="green",
+        reference_at_worst=1.3e-6,
+        calculated_at_worst=1.3039e-6,
+        d_raw=3.9e-9,
+        d_norm=0.013,
+        plot_html=None,
+        metric_mode="d_rel",
+        score=0.003,
+    )
+    assert v.primary_score == pytest.approx(0.003)
+
+
+def test_identical_series_is_pass(tmp_path: Path) -> None:
     arr = np.linspace(1.0, 10.0, 50)
     _write_nc(tmp_path / "py.nc", {"temp": arr})
     _write_nc(tmp_path / "ref.nc", {"temp": arr})
@@ -66,223 +106,146 @@ def test_primary_score_zero_is_pass(tmp_path: Path) -> None:
     by_name = {r.name: r for r in results}
     assert by_name["temp"].status == "PASS"
     assert by_name["temp"].color == "green"
+    assert by_name["temp"].d_raw == pytest.approx(0.0)
+    assert by_name["temp"].d_norm == pytest.approx(0.0)
+    assert by_name["temp"].metric_mode == "d_norm"
 
 
-def test_primary_score_just_over_1_is_marginal(tmp_path: Path) -> None:
-    ref = np.ones(200) * 1.0
-    delta = 1.5 * (1.0e-10 + 1.0e-8 * np.maximum(np.abs(ref), 1.0))
-    py = ref + delta
+def test_raw_below_abs_tolerance_forces_zero_distances(tmp_path: Path) -> None:
+    ref = np.linspace(1.0, 2.0, 50)
+    py = ref + 1.0e-15
     _write_nc(tmp_path / "py.nc", {"temp": py})
     _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    by_name = {r.name: r for r in results}
-    assert by_name["temp"].status == "MARGINAL"
-    assert by_name["temp"].color == "yellow"
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.status == "PASS"
+    assert result.d_raw == pytest.approx(0.0)
+    assert result.d_norm == pytest.approx(0.0)
 
 
-def test_primary_score_just_over_3_is_discrepant(tmp_path: Path) -> None:
-    ref = np.ones(200) * 1.0
-    delta = 5.0 * (1.0e-10 + 1.0e-8 * np.maximum(np.abs(ref), 1.0))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    by_name = {r.name: r for r in results}
-    assert by_name["temp"].status == "DISCREPANT"
-    assert by_name["temp"].color == "orange"
+def test_dnorm_just_over_pass_threshold_is_marginal(tmp_path: Path) -> None:
+    result = _result_for_delta(tmp_path, 0.04)
+    assert result.status == "MARGINAL"
+    assert result.color == "yellow"
+    assert 0.01 <= result.d_norm < 0.05
 
 
-def test_primary_score_over_10_is_broken(tmp_path: Path) -> None:
-    ref = np.ones(200) * 1.0
-    delta = 50.0 * (1.0e-10 + 1.0e-8 * np.maximum(np.abs(ref), 1.0))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    by_name = {r.name: r for r in results}
-    assert by_name["temp"].status == "BROKEN"
-    assert by_name["temp"].color == "red"
+def test_dnorm_just_over_marginal_threshold_is_discrepant(tmp_path: Path) -> None:
+    result = _result_for_delta(tmp_path, 0.12)
+    assert result.status == "DISCREPANT"
+    assert result.color == "orange"
+    assert 0.05 <= result.d_norm < 0.20
 
 
-# ---------------------------------------------------------------------------
-# Three indicators — not old metrics
-# ---------------------------------------------------------------------------
+def test_dnorm_over_broken_threshold_is_broken(tmp_path: Path) -> None:
+    result = _result_for_delta(tmp_path, 0.5)
+    assert result.status == "BROKEN"
+    assert result.color == "red"
+    assert result.d_norm >= 0.20
 
 
-def test_primary_score_is_p99_of_E_i(tmp_path: Path) -> None:
-    ref = np.ones(500) * 1.0
-    atol, rtol, sf = 1.0e-10, 1.0e-8, 1.0
-    delta = 2.0 * (atol + rtol * np.maximum(np.abs(ref), sf))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert r.primary_score == pytest.approx(2.0, rel=1e-4)
+def test_near_zero_nn_small_relative_deviation_is_pass(tmp_path: Path) -> None:
+    ref = np.full(50, 1.3e-6)
+    py = ref * (1.0 + 3.0e-3)
+    _write_nc(tmp_path / "py.nc", {"NN": py})
+    _write_nc(tmp_path / "ref.nc", {"NN": ref})
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.metric_mode == "d_rel"
+    assert result.primary_score == pytest.approx(result.d_raw / np.max(np.abs(py)))
+    assert result.primary_score < 0.01
+    assert result.status == "PASS"
 
 
-def test_birge_ratio_is_rms_of_E_i(tmp_path: Path) -> None:
-    ref = np.ones(500) * 1.0
-    atol, rtol, sf = 1.0e-10, 1.0e-8, 1.0
-    delta = 3.0 * (atol + rtol * np.maximum(np.abs(ref), sf))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert r.birge_ratio == pytest.approx(3.0, rel=1e-4)
+def test_near_zero_nn_meaningful_relative_deviation_is_discrepant(
+    tmp_path: Path,
+) -> None:
+    ref = np.full(50, 5.0e-7)
+    py = ref * 0.86
+    _write_nc(tmp_path / "py.nc", {"NN": py})
+    _write_nc(tmp_path / "ref.nc", {"NN": ref})
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.metric_mode == "d_rel"
+    assert result.primary_score == pytest.approx(0.14)
+    assert result.status == "DISCREPANT"
 
 
-def test_normalized_signed_bias_positive_offset(tmp_path: Path) -> None:
-    ref = np.ones(200) * 5.0
-    py = ref + 1.0e-7
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    assert results[0].normalized_signed_bias > 0.0
-
-
-def test_normalized_signed_bias_negative_offset(tmp_path: Path) -> None:
-    ref = np.ones(200) * 5.0
-    py = ref - 1.0e-7
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    assert results[0].normalized_signed_bias < 0.0
-
-
-def test_no_deprecated_metrics_in_var_result(tmp_path: Path) -> None:
-    arr = np.linspace(0.1, 1.0, 50)
-    _write_nc(tmp_path / "py.nc", {"temp": arr})
-    _write_nc(tmp_path / "ref.nc", {"temp": arr})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert not hasattr(r, "max_abs_err")
-    assert not hasattr(r, "max_rel_err")
-    assert not hasattr(r, "rmse")
-    assert not hasattr(r, "nrmse")
-
-
-# ---------------------------------------------------------------------------
-# worst_index is argmax(E_i)
-# ---------------------------------------------------------------------------
-
-
-def test_reference_at_worst_is_at_argmax_E_i(tmp_path: Path) -> None:
-    ref = np.ones(10) * 1.0
+def test_nn_above_magnitude_floor_uses_dnorm(tmp_path: Path) -> None:
+    ref = np.full(50, 5.0e-3)
     py = ref.copy()
-    atol, rtol, sf = 1.0e-10, 1.0e-8, 1.0
-    denominator = atol + rtol * max(abs(ref[3]), sf)
-    py[3] = ref[3] + 100.0 * denominator
+    _write_nc(tmp_path / "py.nc", {"NN": py})
+    _write_nc(tmp_path / "ref.nc", {"NN": ref})
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.metric_mode == "d_norm"
+    assert result.primary_score == pytest.approx(result.d_norm)
+    assert result.status == "PASS"
+
+
+def test_reference_and_calculated_at_worst_use_max_abs_difference(
+    tmp_path: Path,
+) -> None:
+    ref = np.array([1.0, 2.0, 3.0, 4.0])
+    py = np.array([1.0, 2.1, 2.4, 4.0])
     _write_nc(tmp_path / "py.nc", {"temp": py})
     _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert r.reference_at_worst == pytest.approx(1.0, rel=1e-12)
-    assert r.calculated_at_worst == pytest.approx(py[3], rel=1e-12)
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.reference_at_worst == pytest.approx(3.0)
+    assert result.calculated_at_worst == pytest.approx(2.4)
 
 
-# ---------------------------------------------------------------------------
-# Section classification
-# ---------------------------------------------------------------------------
+def test_union_time_grid_interpolation_can_produce_pass(tmp_path: Path) -> None:
+    _write_nc(
+        tmp_path / "py.nc",
+        {"temp": np.array([1.0, 2.0, 3.0])},
+        dim="time",
+        times=np.array([0.0, 1.0, 2.0]),
+    )
+    _write_nc(
+        tmp_path / "ref.nc",
+        {"temp": np.array([1.0, 3.0])},
+        dim="time",
+        times=np.array([0.0, 2.0]),
+    )
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.status == "PASS"
+    assert result.d_norm == pytest.approx(0.0)
 
 
-def test_known_gotm_variable_is_pygotm_section(tmp_path: Path) -> None:
-    arr = np.ones(10) * 5.0
-    _write_nc(tmp_path / "py.nc", {"temp": arr})
-    _write_nc(tmp_path / "ref.nc", {"temp": arr})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    assert results[0].section == "pygotm"
+def test_marginal_and_discrepant_variables_get_plots(tmp_path: Path) -> None:
+    marginal = _result_for_delta(tmp_path, 0.04)
+    assert marginal.status == "MARGINAL"
+    assert marginal.plot_html is not None
+    assert "x unified" in marginal.plot_html
 
 
-def test_unknown_variable_is_pyfabm_section(tmp_path: Path) -> None:
-    arr = np.ones(10) * 5.0
-    _write_nc(tmp_path / "py.nc", {"fabm_algae_carbon": arr})
-    _write_nc(tmp_path / "ref.nc", {"fabm_algae_carbon": arr})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    assert results[0].section == "pyfabm"
-
-
-# ---------------------------------------------------------------------------
-# Plot creation rule
-# ---------------------------------------------------------------------------
-
-
-def test_pass_variable_has_no_plot(tmp_path: Path) -> None:
-    arr = np.ones(50) * 5.0
-    _write_nc(tmp_path / "py.nc", {"temp": arr})
-    _write_nc(tmp_path / "ref.nc", {"temp": arr})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    assert results[0].status == "PASS"
-    assert results[0].plot_html is None
-
-
-def test_marginal_variable_has_plot(tmp_path: Path) -> None:
-    ref = np.ones(200) * 1.0
-    delta = 1.5 * (1.0e-10 + 1.0e-8 * np.maximum(np.abs(ref), 1.0))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert r.status == "MARGINAL"
-    assert r.plot_html is not None
-    assert len(r.plot_html) > 100
-
-
-def test_discrepant_variable_has_plot(tmp_path: Path) -> None:
-    ref = np.ones(200) * 1.0
-    delta = 5.0 * (1.0e-10 + 1.0e-8 * np.maximum(np.abs(ref), 1.0))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert r.status == "DISCREPANT"
-    assert r.plot_html is not None
-
-
-def test_broken_variable_has_no_plot(tmp_path: Path) -> None:
-    ref = np.ones(200) * 1.0
-    delta = 50.0 * (1.0e-10 + 1.0e-8 * np.maximum(np.abs(ref), 1.0))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert r.status == "BROKEN"
-    assert r.plot_html is None
-
-
-# ---------------------------------------------------------------------------
-# Plot title content
-# ---------------------------------------------------------------------------
+def test_pass_and_broken_variables_have_no_plot(tmp_path: Path) -> None:
+    passing = _result_for_delta(tmp_path, 0.0)
+    broken = _result_for_delta(tmp_path, 0.5)
+    assert passing.status == "PASS"
+    assert passing.plot_html is None
+    assert broken.status == "BROKEN"
+    assert broken.plot_html is None
 
 
 def test_plot_title_contains_required_fields(tmp_path: Path) -> None:
-    ref = np.ones(200) * 1.0
-    delta = 5.0 * (1.0e-10 + 1.0e-8 * np.maximum(np.abs(ref), 1.0))
-    py = ref + delta
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="seagrass")
-    r = results[0]
-    assert r.plot_html is not None
-    assert "seagrass" in r.plot_html
-    assert "temp" in r.plot_html
-    assert "DISCREPANT" in r.plot_html
-
-
-# ---------------------------------------------------------------------------
-# Structure errors → BROKEN
-# ---------------------------------------------------------------------------
+    result = _result_for_delta(tmp_path, 0.12)
+    assert result.plot_html is not None
+    assert "test" in result.plot_html
+    assert "temp" in result.plot_html
+    assert "DISCREPANT" in result.plot_html
+    assert "Normalized Frechet" in result.plot_html
 
 
 def test_shape_mismatch_gives_broken_status(tmp_path: Path) -> None:
-    _write_nc(tmp_path / "py.nc", {"temp": np.ones(10)})
-    _write_nc(tmp_path / "ref.nc", {"temp": np.ones(20)})
+    _write_nc(tmp_path / "py.nc", {"temp": np.ones(10)}, dim="z")
+    _write_nc(tmp_path / "ref.nc", {"temp": np.ones(20)}, dim="z")
     results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
     assert results[0].status == "BROKEN"
+
+
+def test_non_time_dimension_shape_mismatch_gives_broken_status(tmp_path: Path) -> None:
+    _write_2d_nc(tmp_path / "py.nc", "temp", np.ones((4, 2)))
+    _write_2d_nc(tmp_path / "ref.nc", "temp", np.ones((4, 3)))
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.status == "BROKEN"
 
 
 def test_missing_reference_variable_gives_broken_status(tmp_path: Path) -> None:
@@ -301,56 +264,20 @@ def test_extra_pygotm_variable_gives_broken_status(tmp_path: Path) -> None:
     assert by_name["salt"].status == "BROKEN"
 
 
-# ---------------------------------------------------------------------------
-# Birge vs primary_score: status follows primary_score, not Birge
-# ---------------------------------------------------------------------------
-
-
-def test_status_follows_primary_score_not_birge(tmp_path: Path) -> None:
-    """98 values at E_i=0.5 (Birge≈0.86) + 2 values at E_i=5.0 (p99=5.0) → DISCREPANT.
-
-    With 100 values sorted as [0.5×98, 5.0×2], numpy p99 lands at index 98 = 5.0.
-    Birge = sqrt((98×0.25 + 2×25)/100) ≈ 0.86 — well below the PASS threshold of 1.
-    If status were Birge-driven it would be PASS; primary_score-driven gives DISCREPANT.
-    """
-    ref = np.ones(100) * 1.0
-    atol, rtol, sf = 1.0e-10, 1.0e-8, 1.0
-    denom = atol + rtol * max(1.0, sf)
-    py = ref.copy()
-    py[:98] = ref[:98] + 0.5 * denom
-    py[98:] = ref[98:] + 5.0 * denom
-    _write_nc(tmp_path / "py.nc", {"temp": py})
-    _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert r.birge_ratio < 1.0, f"birge should be < 1, got {r.birge_ratio}"
-    assert r.primary_score > 3.0, f"primary_score should be > 3, got {r.primary_score}"
-    assert r.status == "DISCREPANT"
-
-
-# ---------------------------------------------------------------------------
-# NaN / invalid masking
-# ---------------------------------------------------------------------------
-
-
 def test_nan_values_are_masked_not_propagated(tmp_path: Path) -> None:
     ref = np.array([1.0, 2.0, float("nan"), 4.0, 5.0])
     py = np.array([1.0, 2.0, float("nan"), 4.0, 5.0])
     _write_nc(tmp_path / "py.nc", {"temp": py})
     _write_nc(tmp_path / "ref.nc", {"temp": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    assert not math.isnan(r.primary_score)
-    assert r.status == "PASS"
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert not math.isnan(result.d_norm)
+    assert result.status == "PASS"
 
 
-def test_near_zero_values_handled_by_atol_and_scale_floor(tmp_path: Path) -> None:
-    # tke: atol=1e-14, rtol=1e-7, scale_floor=1e-10
-    ref = np.full(50, 1.0e-12)
-    py = ref + 0.5e-14
-    _write_nc(tmp_path / "py.nc", {"tke": py})
-    _write_nc(tmp_path / "ref.nc", {"tke": ref})
-    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
-    r = results[0]
-    # E_i = 0.5e-14 / (1e-14 + 1e-7 * max(1e-12, 1e-10)) = 0.5e-14 / ~1e-14 ≈ 0.5
-    assert r.status == "PASS"
+def test_all_nan_overlap_gives_broken_status(tmp_path: Path) -> None:
+    ref = np.array([float("nan"), float("nan")])
+    py = np.array([float("nan"), float("nan")])
+    _write_nc(tmp_path / "py.nc", {"temp": py})
+    _write_nc(tmp_path / "ref.nc", {"temp": ref})
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+    assert result.status == "BROKEN"

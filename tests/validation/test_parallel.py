@@ -83,7 +83,9 @@ def test_run_cases_parallel_calls_on_result_for_each_case(tmp_path: Path) -> Non
 
     mock_lc: MagicMock
     with (
-        patch("pygotm.validation.parallel.LocalCluster", return_value=mock_cluster) as mock_lc,
+        patch(
+            "pygotm.validation.parallel.LocalCluster", return_value=mock_cluster
+        ) as mock_lc,
         patch("pygotm.validation.parallel.Client", return_value=mock_client),
         patch(
             "pygotm.validation.parallel.resolve_reference_case",

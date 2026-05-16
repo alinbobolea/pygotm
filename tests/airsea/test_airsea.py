@@ -197,7 +197,9 @@ def test_ssuv_absolute_ignores_surface_current() -> None:
         u10=5.0,
         v10=0.0,
     )
-    assert state.w == pytest.approx(5.0)  # hypot(5-0, 0-0): ssu/ssv unchanged by set_ssuv
+    assert state.w == pytest.approx(
+        5.0
+    )  # hypot(5-0, 0-0): ssu/ssv unchanged by set_ssuv
 
 
 def test_ssuv_relative_subtracts_surface_current_from_wind() -> None:

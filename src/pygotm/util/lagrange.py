@@ -166,9 +166,7 @@ def lagrange(
             visc = VISC_BACK
 
         zp_old = zp[n]
-        step = dt * (
-            math.sqrt(2.0 * rnd_var_inv * dt_inv * visc) * rnd[n] + w + dzn[i]
-        )
+        step = dt * (math.sqrt(2.0 * rnd_var_inv * dt_inv * visc) * rnd[n] + w + dzn[i])
         zp[n] = zp[n] + step
 
         # Reflective boundary conditions at surface (0) and bottom (-depth)

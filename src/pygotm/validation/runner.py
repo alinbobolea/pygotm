@@ -83,6 +83,7 @@ def validate_case(
                 py_nc_path=str(py_path),
                 ref_nc_path=str(ref_path),
                 wall_time_s=0.0,
+                task_name=case.task_name,
             )
     else:
         try:
@@ -95,6 +96,7 @@ def validate_case(
                 py_nc_path="",
                 ref_nc_path=str(ref_path),
                 wall_time_s=0.0,
+                task_name=case.task_name,
             )
 
     var_results = compare_nc(py_path, ref_path, case_name=case.run_name)
@@ -117,6 +119,7 @@ def validate_case(
         py_nc_path=str(py_path),
         ref_nc_path=str(ref_path),
         wall_time_s=elapsed,
+        task_name=case.task_name,
         variables=var_results,
         n_pass=n_pass,
         n_marginal=n_marginal,

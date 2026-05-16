@@ -79,6 +79,7 @@ class RuntimeParams:
     airsea_shortwave_scale_factor: float
     airsea_heat_scale_factor: float
     airsea_const_albedo: float
+    ice_model: int
 
     turb_method: int
     tke_method: int
@@ -247,6 +248,7 @@ def make_runtime_params(
     airsea_shortwave_scale_factor: float = 1.0,
     airsea_heat_scale_factor: float = 1.0,
     airsea_const_albedo: float = 0.0,
+    ice_model: int = 1,
     turb_method: int = 0,
     tke_method: int = 0,
     len_scale_method: int = 0,
@@ -392,6 +394,7 @@ def make_runtime_params(
         airsea_shortwave_scale_factor=airsea_shortwave_scale_factor,
         airsea_heat_scale_factor=airsea_heat_scale_factor,
         airsea_const_albedo=airsea_const_albedo,
+        ice_model=ice_model,
         turb_method=turb_method,
         tke_method=tke_method,
         len_scale_method=len_scale_method,

@@ -71,7 +71,7 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
 
     arr = np.linspace(0.0, 1.0, 10)
     # u: present in both, identical → PASS
-    # v: present in both, large error → BROKEN (primary_score >> 10)
+    # v: present in both, large error -> BROKEN (d_norm >= 0.20)
     # w: only in ref → BROKEN; pyGOTM must emit every Fortran reference variable.
     py_ds = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr + 1000.0)})
     ref_ds = xr.Dataset({"u": (["t"], arr), "v": (["t"], arr), "w": (["t"], arr)})

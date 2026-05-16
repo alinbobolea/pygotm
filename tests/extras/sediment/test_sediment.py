@@ -22,8 +22,11 @@ from pygotm.extras.sediment.sediment import (
 def test_settling_velocity_uses_zanke_formula_and_is_downward() -> None:
     wc, gs = settling_velocity_zanke(62.5e-6, 9.81, 2650.0, 1027.0)
     expected_gs = 9.81 * (2650.0 - 1027.0) / 1027.0
-    expected_wc = -10.0 * 1.3e-6 / 62.5e-6 * (
-        np.sqrt(1.0 + (0.01 * expected_gs * 62.5e-6**3) / 1.3e-6 / 1.3e-6) - 1.0
+    expected_wc = (
+        -10.0
+        * 1.3e-6
+        / 62.5e-6
+        * (np.sqrt(1.0 + (0.01 * expected_gs * 62.5e-6**3) / 1.3e-6 / 1.3e-6) - 1.0)
     )
     assert gs == pytest.approx(expected_gs)
     assert wc == pytest.approx(expected_wc)

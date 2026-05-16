@@ -166,6 +166,27 @@ class FABMEngine:
         np.copyto(self._rates, array)
         return self._rates
 
+    def get_vertical_movement(self) -> np.ndarray | None:
+        """Return vertical movement velocities for all interior state variables.
+
+        Returns an array of shape ``(n_state_vars, nlev)`` in m s⁻¹ (positive
+        upward), or ``None`` if the underlying model does not expose this API.
+        Must be called after ``get_rates()`` has updated the model's internal
+        diagnostics.
+        """
+        model = self._require_model()
+        fn = getattr(model, "get_vertical_movement", None)
+        if not callable(fn):
+            return None
+        try:
+            result = fn()
+            if result is None:
+                return None
+            arr = np.ascontiguousarray(result, dtype=np.float64)
+            return arr if arr.ndim == 2 else None
+        except Exception:
+            return None
+
     def diagnostics(self) -> dict[str, np.ndarray | float]:
         """Return current FABM diagnostic values as NumPy arrays or floats."""
 

@@ -107,12 +107,15 @@ def compute_rist(state: TurbulenceState, c1: float, c2: float, c3: float) -> flo
     for _ in range(_IMAX + 1):
         try:
             ffc = _compute_c3_for_ri(state, c1=c1, c2=c2, ri=ri) - c3
-            ffp = _compute_c3_for_ri(
-                state,
-                c1=c1,
-                c2=c2,
-                ri=ri + _RI_EPSILON_OUTER,
-            ) - c3
+            ffp = (
+                _compute_c3_for_ri(
+                    state,
+                    c1=c1,
+                    c2=c2,
+                    ri=ri + _RI_EPSILON_OUTER,
+                )
+                - c3
+            )
         except _StabilityConvergenceError:
             converged = False
             break

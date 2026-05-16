@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-import yaml
+yaml: Any = import_module("yaml")
 
 __all__ = ["FABMConf", "PyGotmConf", "load_pygotm_conf"]
 

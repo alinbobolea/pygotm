@@ -52,7 +52,16 @@ def test_import():
 def test_smoke():
     nlev = _NLEV
     state = _make_state(nlev=nlev)
-    vequation(state, nlev, _DT, _CNPAR, ty=0.0, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
 
 
 def test_vo_saves_old_v():
@@ -62,7 +71,16 @@ def test_vo_saves_old_v():
     assert state.vo is not None
     state.v[:] = np.linspace(0.0, 0.5, nlev + 1)
     v_before = state.v.copy()
-    vequation(state, nlev, _DT, _CNPAR, ty=0.0, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     np.testing.assert_array_equal(state.vo, v_before)
 
 
@@ -72,7 +90,9 @@ def test_avh_equals_num_plus_avmolu():
     state = _make_state(nlev=nlev, avmolu=avmolu)
     rng = np.random.default_rng(0)
     num = np.abs(rng.uniform(1e-5, 1e-3, nlev + 1))
-    vequation(state, nlev, _DT, _CNPAR, ty=0.0, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state, nlev, _DT, _CNPAR, ty=0.0, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev)
+    )
     assert state.avh is not None
     np.testing.assert_allclose(state.avh, num + avmolu, rtol=1e-12)
 
@@ -85,7 +105,16 @@ def test_quiescent_no_forcing():
     assert state.drag is not None
     state.v[:] = 0.0
     state.drag[:] = 0.0
-    vequation(state, nlev, _DT, _CNPAR, ty=0.0, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     np.testing.assert_allclose(state.v[1 : nlev + 1], 0.0, atol=1e-15)
 
 
@@ -97,7 +126,16 @@ def test_surface_stress_accelerates_v():
     assert state.drag is not None
     state.v[:] = 0.0
     state.drag[:] = 0.0
-    vequation(state, nlev, _DT, _CNPAR, ty=1e-4, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=1e-4,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     assert state.v is not None
     assert np.mean(state.v[1 : nlev + 1]) > 0.0
 
@@ -113,7 +151,16 @@ def test_momentum_budget_surface_only():
     state.v[:] = 0.0
     state.drag[:] = 0.0
     ty = 1e-4
-    vequation(state, nlev, _DT, _CNPAR, ty=ty, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=ty,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     h = state.h
     v_mean = np.sum(state.v[1 : nlev + 1] * h[1 : nlev + 1]) / depth
     expected = ty * _DT / depth
@@ -178,9 +225,16 @@ def test_external_pressure_gradient():
     state.v[:] = 0.0
     state.drag[:] = 0.0
     vequation(
-        state, nlev, _DT, _CNPAR,
-        ty=0.0, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev),
-        ext_method=0, dpdy=1e-5,
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+        ext_method=0,
+        dpdy=1e-5,
     )
     assert state.v is not None
     assert np.all(state.v[1 : nlev + 1] < 0.0)
@@ -198,8 +252,30 @@ def test_ext_method_nonzero_ignores_dpdy():
     state_0.drag[:] = 0.0
     state_1.drag[:] = 0.0
 
-    vequation(state_0, nlev, _DT, _CNPAR, ty=0.0, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev), ext_method=1, dpdy=1e-5)
-    vequation(state_1, nlev, _DT, _CNPAR, ty=0.0, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev), ext_method=1, dpdy=0.0)
+    vequation(
+        state_0,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+        ext_method=1,
+        dpdy=1e-5,
+    )
+    vequation(
+        state_1,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+        ext_method=1,
+        dpdy=0.0,
+    )
     assert state_0.v is not None and state_1.v is not None
     np.testing.assert_array_equal(state_0.v, state_1.v)
 
@@ -219,8 +295,27 @@ def test_stokes_gradient_effect():
     nucl = np.full(nlev + 1, 1e-3)
     dvsdz = np.linspace(0.0, 1e-2, nlev + 1)
 
-    vequation(state_stokes, nlev, _DT, _CNPAR, ty=0.0, num=_zeros(nlev), nucl=nucl, gamv=_zeros(nlev), dvsdz=dvsdz)
-    vequation(state_none, nlev, _DT, _CNPAR, ty=0.0, num=_zeros(nlev), nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state_stokes,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=nucl,
+        gamv=_zeros(nlev),
+        dvsdz=dvsdz,
+    )
+    vequation(
+        state_none,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=_zeros(nlev),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     assert state_stokes.v is not None and state_none.v is not None
     assert not np.allclose(state_stokes.v, state_none.v)
 
@@ -238,8 +333,28 @@ def test_large_relax_tau_equals_no_relax():
     tau_r = np.full(nlev + 1, 1e15)
     vprof = np.zeros(nlev + 1)
 
-    vequation(state_a, nlev, _DT, _CNPAR, ty=1e-4, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev), vel_relax_tau=tau_r, vprof=vprof)
-    vequation(state_b, nlev, _DT, _CNPAR, ty=1e-4, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state_a,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=1e-4,
+        num=num,
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+        vel_relax_tau=tau_r,
+        vprof=vprof,
+    )
+    vequation(
+        state_b,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=1e-4,
+        num=num,
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     assert state_a.v is not None and state_b.v is not None
     np.testing.assert_allclose(state_a.v, state_b.v, rtol=1e-12)
 
@@ -257,8 +372,28 @@ def test_relax_pulls_toward_vprof():
     tau_r = np.full(nlev + 1, _DT)
     vprof = np.ones(nlev + 1)
 
-    vequation(state_relax, nlev, _DT, _CNPAR, ty=0.0, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev), vel_relax_tau=tau_r, vprof=vprof)
-    vequation(state_free, nlev, _DT, _CNPAR, ty=0.0, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state_relax,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=num,
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+        vel_relax_tau=tau_r,
+        vprof=vprof,
+    )
+    vequation(
+        state_free,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=num,
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     assert state_relax.v is not None and state_free.v is not None
     assert np.mean(state_relax.v[1:]) > np.mean(state_free.v[1:])
 
@@ -269,7 +404,16 @@ def test_sentinel_level_unchanged():
     state = _make_state(nlev=nlev)
     assert state.v is not None
     state.v[0] = 99.0
-    vequation(state, nlev, _DT, _CNPAR, ty=1e-4, num=np.full(nlev + 1, 1e-3), nucl=_zeros(nlev), gamv=_zeros(nlev))
+    vequation(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=1e-4,
+        num=np.full(nlev + 1, 1e-3),
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+    )
     assert state.v is not None
     assert state.v[0] == 99.0
 
@@ -285,9 +429,16 @@ def test_no_nan_inf():
 
     num = np.linspace(1e-4, 1e-2, nlev + 1)
     vequation(
-        state, nlev, _DT, 0.6,
-        ty=5e-5, num=num, nucl=np.zeros(nlev + 1), gamv=np.zeros(nlev + 1),
-        ext_method=0, dpdy=1e-6,
+        state,
+        nlev,
+        _DT,
+        0.6,
+        ty=5e-5,
+        num=num,
+        nucl=np.zeros(nlev + 1),
+        gamv=np.zeros(nlev + 1),
+        ext_method=0,
+        dpdy=1e-6,
     )
     assert state.v is not None
     assert np.all(np.isfinite(state.v))
@@ -310,8 +461,28 @@ def test_plume_active_modifies_surface_layer():
     state_nopl.u[:] = 0.1
 
     num = np.full(nlev + 1, 1e-3)
-    vequation(state_plume, nlev, _DT, _CNPAR, ty=0.0, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev), plume_active=True)
-    vequation(state_nopl, nlev, _DT, _CNPAR, ty=0.0, num=num, nucl=_zeros(nlev), gamv=_zeros(nlev), plume_active=False)
+    vequation(
+        state_plume,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=num,
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+        plume_active=True,
+    )
+    vequation(
+        state_nopl,
+        nlev,
+        _DT,
+        _CNPAR,
+        ty=0.0,
+        num=num,
+        nucl=_zeros(nlev),
+        gamv=_zeros(nlev),
+        plume_active=False,
+    )
 
     assert state_plume.v is not None and state_nopl.v is not None
     assert state_plume.v[nlev] != state_nopl.v[nlev]
@@ -358,12 +529,45 @@ def test_multi_column_parity():
     adv_cv_b = np.zeros((batch_size, nlev + 1), dtype=np.float64)
 
     step_vequation(
-        batch_size, nlev, _DT, _CNPAR, avmolu, gravity, 0, 0, 4, 0,
-        ty_b, dzetady_b,
-        v_b, vo_b, u_b, h_b, w_b, drag_b,
-        num_b, nucl_b, dvsdz_b, idpdy_b, vprof_b, tau_r_b,
-        avh_b, q_sour_b, l_sour_b,
-        av_b, bv_b, cv_b, dv_b, rv_b, qv_b, adv_cv_b,
+        batch_size,
+        nlev,
+        _DT,
+        _CNPAR,
+        avmolu,
+        gravity,
+        0,
+        0,
+        4,
+        0,
+        ty_b,
+        dzetady_b,
+        v_b,
+        vo_b,
+        u_b,
+        h_b,
+        w_b,
+        drag_b,
+        num_b,
+        nucl_b,
+        dvsdz_b,
+        idpdy_b,
+        vprof_b,
+        tau_r_b,
+        avh_b,
+        q_sour_b,
+        l_sour_b,
+        av_b,
+        bv_b,
+        cv_b,
+        dv_b,
+        rv_b,
+        qv_b,
+        adv_cv_b,
     )
 
-    np.testing.assert_allclose(v_b[0], v_b[1], rtol=1e-12, err_msg="Identical columns must give identical results")
+    np.testing.assert_allclose(
+        v_b[0],
+        v_b[1],
+        rtol=1e-12,
+        err_msg="Identical columns must give identical results",
+    )

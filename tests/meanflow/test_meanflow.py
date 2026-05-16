@@ -65,11 +65,40 @@ def test_default_config_values() -> None:
 
 def test_default_arrays_none_before_post_init() -> None:
     state = MeanflowState()
-    for name in ("ga", "z", "zi", "h", "ho", "u", "v", "w", "uo", "vo",
-                 "T", "S", "Tp", "Sp", "Ti", "Tobs", "Sobs",
-                 "NN", "NNT", "NNS", "SS", "SSU", "SSV",
-                 "SSCSTK", "SSSTK", "buoy", "rad", "xP", "avh",
-                 "fric", "drag", "bioshade"):
+    for name in (
+        "ga",
+        "z",
+        "zi",
+        "h",
+        "ho",
+        "u",
+        "v",
+        "w",
+        "uo",
+        "vo",
+        "T",
+        "S",
+        "Tp",
+        "Sp",
+        "Ti",
+        "Tobs",
+        "Sobs",
+        "NN",
+        "NNT",
+        "NNS",
+        "SS",
+        "SSU",
+        "SSV",
+        "SSCSTK",
+        "SSSTK",
+        "buoy",
+        "rad",
+        "xP",
+        "avh",
+        "fric",
+        "drag",
+        "bioshade",
+    ):
         assert getattr(state, name) is None, f"{name} should be None before post_init"
 
 
@@ -122,27 +151,82 @@ def test_init_meanflow_custom() -> None:
 def test_array_shapes() -> None:
     state = _make_state(nlev=_NLEV)
     expected_shape = (_NLEV + 1,)
-    for name in ("ga", "z", "zi", "h", "ho", "u", "v", "w", "uo", "vo",
-                 "T", "S", "Tp", "Sp", "Ti", "Tobs", "Sobs",
-                 "NN", "NNT", "NNS", "SS", "SSU", "SSV",
-                 "SSCSTK", "SSSTK", "buoy", "rad", "xP", "avh",
-                 "fric", "drag", "bioshade"):
+    for name in (
+        "ga",
+        "z",
+        "zi",
+        "h",
+        "ho",
+        "u",
+        "v",
+        "w",
+        "uo",
+        "vo",
+        "T",
+        "S",
+        "Tp",
+        "Sp",
+        "Ti",
+        "Tobs",
+        "Sobs",
+        "NN",
+        "NNT",
+        "NNS",
+        "SS",
+        "SSU",
+        "SSV",
+        "SSCSTK",
+        "SSSTK",
+        "buoy",
+        "rad",
+        "xP",
+        "avh",
+        "fric",
+        "drag",
+        "bioshade",
+    ):
         arr = getattr(state, name)
         assert arr is not None, f"{name} must not be None after post_init"
-        assert arr.shape == expected_shape, (
-            f"{name}: expected shape {expected_shape}, got {arr.shape}"
-        )
+        assert (
+            arr.shape == expected_shape
+        ), f"{name}: expected shape {expected_shape}, got {arr.shape}"
 
 
 def test_arrays_zero_initialized() -> None:
     """All arrays except bioshade must be zero on post_init."""
     state = _make_state()
     zero_arrays = (
-        "ga", "z", "zi", "h", "ho", "u", "v", "w", "uo", "vo",
-        "T", "S", "Tp", "Sp", "Ti", "Tobs", "Sobs",
-        "NN", "NNT", "NNS", "SS", "SSU", "SSV",
-        "SSCSTK", "SSSTK", "buoy", "rad", "xP", "avh",
-        "fric", "drag",
+        "ga",
+        "z",
+        "zi",
+        "h",
+        "ho",
+        "u",
+        "v",
+        "w",
+        "uo",
+        "vo",
+        "T",
+        "S",
+        "Tp",
+        "Sp",
+        "Ti",
+        "Tobs",
+        "Sobs",
+        "NN",
+        "NNT",
+        "NNS",
+        "SS",
+        "SSU",
+        "SSV",
+        "SSCSTK",
+        "SSSTK",
+        "buoy",
+        "rad",
+        "xP",
+        "avh",
+        "fric",
+        "drag",
     )
     for name in zero_arrays:
         arr = getattr(state, name)
@@ -162,19 +246,24 @@ def test_bioshade_initialized_to_one() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _expected_cori(latitude_deg: float, rotation_period: float = _SIDEREAL_DAY) -> float:
+def _expected_cori(
+    latitude_deg: float, rotation_period: float = _SIDEREAL_DAY
+) -> float:
     """f = 2*Omega*sin(lat), Omega = 2*pi/T."""
     return 4.0 * _PI / rotation_period * math.sin(_PI * latitude_deg / 180.0)
 
 
-@pytest.mark.parametrize("lat,expected", [
-    (0.0, 0.0),
-    (90.0, 4.0 * _PI / _SIDEREAL_DAY),
-    (-90.0, -4.0 * _PI / _SIDEREAL_DAY),
-    (45.0, _expected_cori(45.0)),
-    (30.0, _expected_cori(30.0)),
-    (-30.0, _expected_cori(-30.0)),
-])
+@pytest.mark.parametrize(
+    "lat,expected",
+    [
+        (0.0, 0.0),
+        (90.0, 4.0 * _PI / _SIDEREAL_DAY),
+        (-90.0, -4.0 * _PI / _SIDEREAL_DAY),
+        (45.0, _expected_cori(45.0)),
+        (30.0, _expected_cori(30.0)),
+        (-30.0, _expected_cori(-30.0)),
+    ],
+)
 def test_coriolis_parameter(lat: float, expected: float) -> None:
     state = MeanflowState()
     init_meanflow(state)
@@ -275,11 +364,40 @@ def test_runtimeu_runtimev_zero() -> None:
 def test_clean_meanflow_sets_arrays_none() -> None:
     state = _make_state()
     clean_meanflow(state)
-    for name in ("ga", "z", "zi", "h", "ho", "u", "v", "w", "uo", "vo",
-                 "T", "S", "Tp", "Sp", "Ti", "Tobs", "Sobs",
-                 "NN", "NNT", "NNS", "SS", "SSU", "SSV",
-                 "SSCSTK", "SSSTK", "buoy", "rad", "xP", "avh",
-                 "fric", "drag", "bioshade"):
+    for name in (
+        "ga",
+        "z",
+        "zi",
+        "h",
+        "ho",
+        "u",
+        "v",
+        "w",
+        "uo",
+        "vo",
+        "T",
+        "S",
+        "Tp",
+        "Sp",
+        "Ti",
+        "Tobs",
+        "Sobs",
+        "NN",
+        "NNT",
+        "NNS",
+        "SS",
+        "SSU",
+        "SSV",
+        "SSCSTK",
+        "SSSTK",
+        "buoy",
+        "rad",
+        "xP",
+        "avh",
+        "fric",
+        "drag",
+        "bioshade",
+    ):
         assert getattr(state, name) is None, f"{name} should be None after clean"
 
 
@@ -298,11 +416,40 @@ def test_clean_meanflow_scalars_unchanged() -> None:
 
 def test_no_nan_or_inf_in_arrays() -> None:
     state = _make_state(nlev=100)
-    for name in ("ga", "z", "zi", "h", "ho", "u", "v", "w", "uo", "vo",
-                 "T", "S", "Tp", "Sp", "Ti", "Tobs", "Sobs",
-                 "NN", "NNT", "NNS", "SS", "SSU", "SSV",
-                 "SSCSTK", "SSSTK", "buoy", "rad", "xP", "avh",
-                 "fric", "drag", "bioshade"):
+    for name in (
+        "ga",
+        "z",
+        "zi",
+        "h",
+        "ho",
+        "u",
+        "v",
+        "w",
+        "uo",
+        "vo",
+        "T",
+        "S",
+        "Tp",
+        "Sp",
+        "Ti",
+        "Tobs",
+        "Sobs",
+        "NN",
+        "NNT",
+        "NNS",
+        "SS",
+        "SSU",
+        "SSV",
+        "SSCSTK",
+        "SSSTK",
+        "buoy",
+        "rad",
+        "xP",
+        "avh",
+        "fric",
+        "drag",
+        "bioshade",
+    ):
         arr = getattr(state, name)
         assert arr is not None
         assert not np.any(np.isnan(arr)), f"{name} contains NaN"
@@ -350,8 +497,8 @@ def test_boundary_indices_accessible() -> None:
     nlev = 10
     state = _make_state(nlev=nlev)
     assert state.u is not None
-    _ = state.u[0]       # seabed
-    _ = state.u[nlev]    # surface
+    _ = state.u[0]  # seabed
+    _ = state.u[nlev]  # surface
 
 
 # ---------------------------------------------------------------------------

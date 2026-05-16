@@ -58,36 +58,24 @@ conda env create -f pygotm-conda-env.yml
 conda env update -f pygotm-conda-env.yml --prune
 ```
 
-## Shell Command Isolation Policy
+## Shell Command Policy
 
-All shell commands must be executed through the dedicated `shell-runner` subagent.
-This applies to both Claude Code and Codex.
+Claude Code and Codex may execute shell commands directly. Keep command usage
+targeted and keep output in the main conversation concise.
 
-Do not execute shell commands directly from the main conversation unless the user
-explicitly instructs otherwise.
+Use `rg`, `sed`, `nl`, `head`, `tail`, `git status`, `git diff`, and other
+focused commands for repository inspection. Avoid broad directory dumps, full
+logs, full test output, full diffs, long benchmark tables, repeated warning
+blocks, and irrelevant stdout/stderr noise unless the user explicitly asks for
+full output.
 
-Use `shell-runner` for tests, builds, linting, formatting checks, type checking,
-git inspection, filesystem inspection, package/environment checks, benchmark
-execution, generated report inspection, and any command that may produce logs or
-large output.
-
-The main agent should receive only the subagent's concise result summary:
-
-- command executed
-- working directory, when relevant
-- exit code
-- concise stdout/stderr summary
-- exact error excerpts needed for the next action
-- files changed, only if applicable
-
-The `shell-runner` must not return full logs, full directory trees, full test
-output, full diffs, long benchmark tables, repeated warning blocks, or irrelevant
-stdout/stderr noise unless the user explicitly asks for full output.
+When reporting command results, include only the details needed for the next
+action: command intent, exit status, concise stdout/stderr summary, exact error
+excerpts, and files changed when applicable.
 
 ## Destructive Command Safety
 
-The `shell-runner` must not run destructive commands unless explicitly approved
-by the user.
+Do not run destructive commands unless explicitly approved by the user.
 
 Do not run without explicit approval:
 

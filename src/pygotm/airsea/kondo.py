@@ -142,8 +142,8 @@ def kondo(
         x2 = 0.02411 * (1.0 + ta * (3.309e-3 - 1.44e-6 * ta)) / (state.rhoa * cpa)
         x3 = state.qa * latent_heat / (rgas * ta_k * ta_k)
         cd_rain = 1.0 / (1.0 + const06 * (x3 * latent_heat * x1) / (cpa * x2))
-        cd_rain = cd_rain * cpw * (
-            (tw - ta) + (state.qs - state.qa) * latent_heat / cpa
+        cd_rain = (
+            cd_rain * cpw * ((tw - ta) + (state.qs - state.qa) * latent_heat / cpa)
         )
         qh = qh - rainfall * cd_rain
 

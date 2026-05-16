@@ -102,8 +102,11 @@ def settling_velocity_zanke(
     """Return Zanke fall velocity and reduced gravity."""
 
     gs = gravity * (rho_sed - rho0) / rho0
-    wc = -10.0 * avmolu / size * (
-        np.sqrt(1.0 + (0.01 * gs * size**3) / avmolu / avmolu) - 1.0
+    wc = (
+        -10.0
+        * avmolu
+        / size
+        * (np.sqrt(1.0 + (0.01 * gs * size**3) / avmolu / avmolu) - 1.0)
     )
     return float(wc), float(gs)
 
@@ -315,7 +318,18 @@ def sediment_lagrangian(
     assert state.zp is not None
     assert state.zi is not None
     active = np.ones(state.sedi_npar, dtype=bool)
-    lagrange(nlev, dt, zlev, nuh, state.wc[1], state.sedi_npar, active, state.zi, state.zp, rng=rng)
+    lagrange(
+        nlev,
+        dt,
+        zlev,
+        nuh,
+        state.wc[1],
+        state.sedi_npar,
+        active,
+        state.zi,
+        state.zp,
+        rng=rng,
+    )
     active[:] = True
     if write_results or state.take_mean:
         if state._lagrange_set_c_zero:

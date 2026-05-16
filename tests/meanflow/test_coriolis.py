@@ -60,8 +60,8 @@ def _set_uniform_velocity(state: MeanflowState, u: float, v: float) -> None:
     assert state.u is not None
     assert state.v is not None
     nlev = len(state.u) - 1
-    state.u[1:nlev + 1] = u
-    state.v[1:nlev + 1] = v
+    state.u[1 : nlev + 1] = u
+    state.v[1 : nlev + 1] = v
 
 
 # ---------------------------------------------------------------------------
@@ -102,12 +102,12 @@ def test_speed_preserved_uniform() -> None:
     assert state.u is not None
     assert state.v is not None
     rng = np.random.default_rng(42)
-    state.u[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
-    state.v[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
+    state.u[1 : nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
+    state.v[1 : nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
 
-    speed_before = np.sqrt(state.u[1:nlev + 1] ** 2 + state.v[1:nlev + 1] ** 2)
+    speed_before = np.sqrt(state.u[1 : nlev + 1] ** 2 + state.v[1 : nlev + 1] ** 2)
     coriolis(state, nlev, _DT)
-    speed_after = np.sqrt(state.u[1:nlev + 1] ** 2 + state.v[1:nlev + 1] ** 2)
+    speed_after = np.sqrt(state.u[1 : nlev + 1] ** 2 + state.v[1 : nlev + 1] ** 2)
 
     np.testing.assert_allclose(speed_after, speed_before, rtol=1e-14)
 
@@ -124,7 +124,7 @@ def test_speed_preserved_multiple_steps() -> None:
 
     assert state.u is not None
     assert state.v is not None
-    speed_final = np.sqrt(state.u[1:nlev + 1] ** 2 + state.v[1:nlev + 1] ** 2)
+    speed_final = np.sqrt(state.u[1 : nlev + 1] ** 2 + state.v[1 : nlev + 1] ** 2)
     np.testing.assert_allclose(speed_final, speed_0, rtol=1e-12)
 
 
@@ -143,8 +143,8 @@ def test_zero_coriolis_no_change() -> None:
 
     assert state.u is not None
     assert state.v is not None
-    np.testing.assert_allclose(state.u[1:nlev + 1], u0, rtol=1e-15)
-    np.testing.assert_allclose(state.v[1:nlev + 1], v0, rtol=1e-15)
+    np.testing.assert_allclose(state.u[1 : nlev + 1], u0, rtol=1e-15)
+    np.testing.assert_allclose(state.v[1 : nlev + 1], v0, rtol=1e-15)
 
 
 def test_quarter_period_rotation() -> None:
@@ -164,8 +164,8 @@ def test_quarter_period_rotation() -> None:
 
     assert state.u is not None
     assert state.v is not None
-    np.testing.assert_allclose(state.u[1:nlev + 1], 0.0, atol=1e-15)
-    np.testing.assert_allclose(state.v[1:nlev + 1], -1.0, rtol=1e-15)
+    np.testing.assert_allclose(state.u[1 : nlev + 1], 0.0, atol=1e-15)
+    np.testing.assert_allclose(state.v[1 : nlev + 1], -1.0, rtol=1e-15)
 
 
 def test_half_period_rotation() -> None:
@@ -179,8 +179,8 @@ def test_half_period_rotation() -> None:
 
     assert state.u is not None
     assert state.v is not None
-    np.testing.assert_allclose(state.u[1:nlev + 1], -1.0, rtol=1e-15)
-    np.testing.assert_allclose(state.v[1:nlev + 1], 0.0, atol=1e-15)
+    np.testing.assert_allclose(state.u[1 : nlev + 1], -1.0, rtol=1e-15)
+    np.testing.assert_allclose(state.v[1 : nlev + 1], 0.0, atol=1e-15)
 
 
 def test_full_period_rotation() -> None:
@@ -195,8 +195,8 @@ def test_full_period_rotation() -> None:
 
     assert state.u is not None
     assert state.v is not None
-    np.testing.assert_allclose(state.u[1:nlev + 1], u0, rtol=1e-14)
-    np.testing.assert_allclose(state.v[1:nlev + 1], v0, rtol=1e-14)
+    np.testing.assert_allclose(state.u[1 : nlev + 1], u0, rtol=1e-14)
+    np.testing.assert_allclose(state.v[1 : nlev + 1], v0, rtol=1e-14)
 
 
 def test_rotation_general_angle() -> None:
@@ -218,8 +218,8 @@ def test_rotation_general_angle() -> None:
 
     assert state.u is not None
     assert state.v is not None
-    np.testing.assert_allclose(state.u[1:nlev + 1], expected_u, rtol=1e-15)
-    np.testing.assert_allclose(state.v[1:nlev + 1], expected_v, rtol=1e-15)
+    np.testing.assert_allclose(state.u[1 : nlev + 1], expected_u, rtol=1e-15)
+    np.testing.assert_allclose(state.v[1 : nlev + 1], expected_v, rtol=1e-15)
 
 
 def test_inertial_oscillation_period() -> None:
@@ -242,8 +242,8 @@ def test_inertial_oscillation_period() -> None:
     assert state.u is not None
     assert state.v is not None
     # Accumulated floating-point error over 360 steps is small but not 1e-15
-    np.testing.assert_allclose(state.u[1:nlev + 1], u0, atol=1e-10)
-    np.testing.assert_allclose(state.v[1:nlev + 1], v0, atol=1e-10)
+    np.testing.assert_allclose(state.u[1 : nlev + 1], u0, atol=1e-10)
+    np.testing.assert_allclose(state.v[1 : nlev + 1], v0, atol=1e-10)
 
 
 # ---------------------------------------------------------------------------
@@ -310,8 +310,8 @@ def test_stokes_drift_removed_from_output() -> None:
     # Lagrangian (2, 0) -> (2*cos, -2*sin) -> Eulerian = (2*cos-1, -2*sin)
     expected_u = 2.0 * cos_w - 1.0
     expected_v = -2.0 * sin_w
-    np.testing.assert_allclose(state2.u[1:nlev + 1], expected_u, rtol=1e-14)
-    np.testing.assert_allclose(state2.v[1:nlev + 1], expected_v, rtol=1e-14)
+    np.testing.assert_allclose(state2.u[1 : nlev + 1], expected_u, rtol=1e-14)
+    np.testing.assert_allclose(state2.v[1 : nlev + 1], expected_v, rtol=1e-14)
 
 
 def test_stokes_drift_zero_equals_no_stokes() -> None:
@@ -379,11 +379,11 @@ def test_no_nan_inf_typical() -> None:
     rng = np.random.default_rng(7)
     assert state.u is not None
     assert state.v is not None
-    state.u[1:nlev + 1] = rng.uniform(-2.0, 2.0, nlev)
-    state.v[1:nlev + 1] = rng.uniform(-2.0, 2.0, nlev)
+    state.u[1 : nlev + 1] = rng.uniform(-2.0, 2.0, nlev)
+    state.v[1 : nlev + 1] = rng.uniform(-2.0, 2.0, nlev)
     coriolis(state, nlev, _DT)
-    assert np.all(np.isfinite(state.u[1:nlev + 1]))
-    assert np.all(np.isfinite(state.v[1:nlev + 1]))
+    assert np.all(np.isfinite(state.u[1 : nlev + 1]))
+    assert np.all(np.isfinite(state.v[1 : nlev + 1]))
 
 
 def test_no_nan_inf_large_coriolis() -> None:
@@ -413,8 +413,8 @@ def test_batch_single_col_matches_numpy() -> None:
     rng = np.random.default_rng(99)
     u_init = np.zeros(nlev + 1)
     v_init = np.zeros(nlev + 1)
-    u_init[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
-    v_init[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
+    u_init[1 : nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
+    v_init[1 : nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
     assert state_np.u is not None
     assert state_np.v is not None
     state_np.u[:] = u_init
@@ -428,14 +428,24 @@ def test_batch_single_col_matches_numpy() -> None:
     vsprof_b = np.zeros((n_cols, nlev + 1))
 
     step_coriolis_batch(
-        n_cols, nlev, math.cos(omega), math.sin(omega),
-        u_b, v_b, usprof_b, vsprof_b,
+        n_cols,
+        nlev,
+        math.cos(omega),
+        math.sin(omega),
+        u_b,
+        v_b,
+        usprof_b,
+        vsprof_b,
     )
 
     assert state_np.u is not None
     assert state_np.v is not None
-    np.testing.assert_allclose(u_b[0, 1:nlev + 1], state_np.u[1:nlev + 1], rtol=1e-14)
-    np.testing.assert_allclose(v_b[0, 1:nlev + 1], state_np.v[1:nlev + 1], rtol=1e-14)
+    np.testing.assert_allclose(
+        u_b[0, 1 : nlev + 1], state_np.u[1 : nlev + 1], rtol=1e-14
+    )
+    np.testing.assert_allclose(
+        v_b[0, 1 : nlev + 1], state_np.v[1 : nlev + 1], rtol=1e-14
+    )
 
 
 def test_batch_multi_col_uniform() -> None:
@@ -448,8 +458,8 @@ def test_batch_multi_col_uniform() -> None:
     rng = np.random.default_rng(17)
     u_init = np.zeros(nlev + 1)
     v_init = np.zeros(nlev + 1)
-    u_init[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
-    v_init[1:nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
+    u_init[1 : nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
+    v_init[1 : nlev + 1] = rng.uniform(-1.0, 1.0, nlev)
 
     omega = cori_val * dt
     u_b = np.tile(u_init, (n_cols, 1))
@@ -458,8 +468,14 @@ def test_batch_multi_col_uniform() -> None:
     vsprof_b = np.zeros((n_cols, nlev + 1))
 
     step_coriolis_batch(
-        n_cols, nlev, math.cos(omega), math.sin(omega),
-        u_b, v_b, usprof_b, vsprof_b,
+        n_cols,
+        nlev,
+        math.cos(omega),
+        math.sin(omega),
+        u_b,
+        v_b,
+        usprof_b,
+        vsprof_b,
     )
 
     for col in range(1, n_cols):

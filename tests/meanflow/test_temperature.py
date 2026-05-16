@@ -105,7 +105,16 @@ def test_physical_bounds_temperature():
     nlev = _NLEV
     nuh = np.full(nlev + 1, 1.0e-3, dtype=np.float64)
     for _ in range(100):
-        _run_step(state, nlev, _DT, _CNPAR, I_0=200.0, hflux=-100.0, nuh=nuh, gamh=_zeros(nlev))
+        _run_step(
+            state,
+            nlev,
+            _DT,
+            _CNPAR,
+            I_0=200.0,
+            hflux=-100.0,
+            nuh=nuh,
+            gamh=_zeros(nlev),
+        )
     assert float(np.min(state.T[1:])) > -5.0
     assert float(np.max(state.T[1:])) < 50.0
 
@@ -132,7 +141,9 @@ def test_sinusoidal_decay_analytic():
 
     nuh = np.full(nlev + 1, nu, dtype=np.float64)
     for _ in range(n_steps):
-        _run_step(state, nlev, dt, cnpar, I_0=0.0, hflux=0.0, nuh=nuh, gamh=_zeros(nlev))
+        _run_step(
+            state, nlev, dt, cnpar, I_0=0.0, hflux=0.0, nuh=nuh, gamh=_zeros(nlev)
+        )
 
     expected = background + amplitude * np.cos(np.pi * z_k / depth) * np.exp(
         -decay_rate * t_total
@@ -152,7 +163,9 @@ def test_radiation_energy_conservation():
     assert state.h is not None
     T_before = state.T.copy()
 
-    _run_step(state, nlev, dt, cnpar, I_0=I_0, hflux=0.0, nuh=_zeros(nlev), gamh=_zeros(nlev))
+    _run_step(
+        state, nlev, dt, cnpar, I_0=I_0, hflux=0.0, nuh=_zeros(nlev), gamh=_zeros(nlev)
+    )
 
     dT = state.T[1:] - T_before[1:]
     heat_added = float(np.sum(dT * state.h[1:]))
@@ -165,7 +178,16 @@ def test_upper_neumann_bc_surface_heating():
     nlev = _NLEV
     assert state.T is not None
     top_before = float(state.T[nlev])
-    _run_step(state, nlev, _DT, _CNPAR, I_0=0.0, hflux=-500.0, nuh=_zeros(nlev), gamh=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=0.0,
+        hflux=-500.0,
+        nuh=_zeros(nlev),
+        gamh=_zeros(nlev),
+    )
     assert float(state.T[nlev]) > top_before
 
 
@@ -174,7 +196,16 @@ def test_lower_neumann_bc_no_bottom_flux():
     nlev = _NLEV
     assert state.T is not None
     bottom_before = float(state.T[1])
-    _run_step(state, nlev, _DT, _CNPAR, I_0=0.0, hflux=0.0, nuh=_zeros(nlev), gamh=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=0.0,
+        hflux=0.0,
+        nuh=_zeros(nlev),
+        gamh=_zeros(nlev),
+    )
     assert abs(float(state.T[1]) - bottom_before) < 1.0e-14
 
 
@@ -183,7 +214,16 @@ def test_zero_index_unchanged():
     nlev = _NLEV
     assert state.T is not None
     state.T[0] = -999.0
-    _run_step(state, nlev, _DT, _CNPAR, I_0=100.0, hflux=-50.0, nuh=np.full(nlev + 1, 1.0e-4), gamh=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=100.0,
+        hflux=-50.0,
+        nuh=np.full(nlev + 1, 1.0e-4),
+        gamh=_zeros(nlev),
+    )
     assert float(state.T[0]) == -999.0
 
 
@@ -192,7 +232,16 @@ def test_zero_surface_flux_zero_radiation():
     nlev = _NLEV
     assert state.T is not None
     T_before = state.T.copy()
-    _run_step(state, nlev, _DT, _CNPAR, I_0=0.0, hflux=0.0, nuh=_zeros(nlev), gamh=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=0.0,
+        hflux=0.0,
+        nuh=_zeros(nlev),
+        gamh=_zeros(nlev),
+    )
     np.testing.assert_allclose(state.T[1:], T_before[1:], atol=1.0e-14)
 
 
@@ -201,7 +250,16 @@ def test_ice_correction_suppresses_warming_flux():
     nlev = _NLEV
     assert state.T is not None
     T_before = state.T.copy()
-    _run_step(state, nlev, _DT, _CNPAR, I_0=0.0, hflux=-200.0, nuh=_zeros(nlev), gamh=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=0.0,
+        hflux=-200.0,
+        nuh=_zeros(nlev),
+        gamh=_zeros(nlev),
+    )
     np.testing.assert_allclose(state.T[1:], T_before[1:], atol=1.0e-14)
 
 
@@ -273,14 +331,45 @@ def test_multicol_parity():
     adv_cu_b = np.zeros((batch_size, nlev + 1), dtype=np.float64)
 
     step_temperature(
-        batch_size, nlev, _DT, _CNPAR, state.avmolT, _RHO0, _CP,
-        _A_DEFAULT, _G1_DEFAULT, _G2_DEFAULT, 0, 4, 0,
-        T_b, S_b, h_b, w_b, u_b, v_b,
-        nuh_b, gamh_b, bioshade_b, rad_b, Tobs_b, tau_r_b,
-        i_0_b, diff_t_up_b,
-        dtdx_b, dtdy_b,
-        avh_b, q_sour_b, l_sour_b,
-        au_b, bu_b, cu_b, du_b, ru_b, qu_b, adv_cu_b,
+        batch_size,
+        nlev,
+        _DT,
+        _CNPAR,
+        state.avmolT,
+        _RHO0,
+        _CP,
+        _A_DEFAULT,
+        _G1_DEFAULT,
+        _G2_DEFAULT,
+        0,
+        4,
+        0,
+        T_b,
+        S_b,
+        h_b,
+        w_b,
+        u_b,
+        v_b,
+        nuh_b,
+        gamh_b,
+        bioshade_b,
+        rad_b,
+        Tobs_b,
+        tau_r_b,
+        i_0_b,
+        diff_t_up_b,
+        dtdx_b,
+        dtdy_b,
+        avh_b,
+        q_sour_b,
+        l_sour_b,
+        au_b,
+        bu_b,
+        cu_b,
+        du_b,
+        ru_b,
+        qu_b,
+        adv_cu_b,
     )
 
     np.testing.assert_allclose(T_b[0], T_single)
@@ -291,8 +380,12 @@ def test_no_nan_inf_typical_forcing():
     nlev = _NLEV
     state = _make_state(T_init=12.0)
     _run_step(
-        state, nlev, _DT, _CNPAR,
-        I_0=300.0, hflux=-200.0,
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=300.0,
+        hflux=-200.0,
         nuh=np.full(nlev + 1, 1.0e-3, dtype=np.float64),
         gamh=_zeros(nlev),
     )
@@ -306,8 +399,12 @@ def test_no_nan_inf_extreme_radiation():
     nlev = 5
     state = _make_state(nlev=nlev, depth=5.0, T_init=5.0)
     _run_step(
-        state, nlev, _DT, _CNPAR,
-        I_0=1000.0, hflux=0.0,
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=1000.0,
+        hflux=0.0,
         nuh=np.full(nlev + 1, 1.0e-4, dtype=np.float64),
         gamh=_zeros(nlev),
     )
@@ -318,6 +415,15 @@ def test_no_nan_inf_extreme_radiation():
 def test_no_nan_inf_zero_diffusivity():
     nlev = _NLEV
     state = _make_state(T_init=15.0)
-    _run_step(state, nlev, _DT, _CNPAR, I_0=200.0, hflux=0.0, nuh=_zeros(nlev), gamh=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        I_0=200.0,
+        hflux=0.0,
+        nuh=_zeros(nlev),
+        gamh=_zeros(nlev),
+    )
     assert state.T is not None
     assert np.all(np.isfinite(state.T[1:]))

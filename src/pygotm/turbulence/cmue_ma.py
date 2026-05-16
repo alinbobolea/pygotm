@@ -58,9 +58,7 @@ def _step_cmue_ma(
         prandtl = prandtl0_fix
         if ri >= _RI_THRESHOLD:
             prandtl = (
-                prandtl0_fix
-                * (1.0 + 3.33 * ri) ** 1.5
-                / math.sqrt(1.0 + 10.0 * ri)
+                prandtl0_fix * (1.0 + 3.33 * ri) ** 1.5 / math.sqrt(1.0 + 10.0 * ri)
             )
         cmue1[i] = cm0_fix
         cmue2[i] = cm0_fix / prandtl
@@ -80,6 +78,11 @@ def step_cmue_ma(
     r"""Update Munk-Anderson stability functions (batch)."""
     for b in numba.prange(batch_size):
         _step_cmue_ma(
-            nlev, cm0_fix, prandtl0_fix,
-            as_[b], an[b], cmue1[b], cmue2[b],
+            nlev,
+            cm0_fix,
+            prandtl0_fix,
+            as_[b],
+            an[b],
+            cmue1[b],
+            cmue2[b],
         )

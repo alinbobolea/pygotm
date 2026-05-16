@@ -196,6 +196,7 @@ def test_full_case_matches_reference(case_name: str) -> None:
 # Chunked interleaving tests
 # ---------------------------------------------------------------------------
 
+
 def test_non_fabm_case_unaffected_by_chunk_size() -> None:
     """Non-FABM cases must produce identical output regardless of chunk_size."""
     case = resolve_reference_case("couette")
@@ -217,7 +218,8 @@ def test_non_fabm_case_unaffected_by_chunk_size() -> None:
         for var in ("temp", "salt", "u", "v", "tke"):
             if var in ds_default.data_vars and var in ds_24.data_vars:
                 np.testing.assert_array_equal(
-                    ds_default[var].values, ds_24[var].values,
+                    ds_default[var].values,
+                    ds_24[var].values,
                     err_msg=f"chunk_size=24 changed non-FABM variable {var!r}",
                 )
     finally:
@@ -244,10 +246,13 @@ def test_fabm_physics_identical_across_chunk_sizes() -> None:
         bundle = integrate_gotm_compiled(run, max_steps=48, chunk_size=chunk_size)
         return runtime_output_to_dataset(run, bundle)
 
-    ds_1chunk = _run(chunk_size=48)   # one chunk = single-pass FABM loop
-    ds_2chunk = _run(chunk_size=24)   # two chunks
+    ds_1chunk = _run(chunk_size=48)  # one chunk = single-pass FABM loop
+    ds_2chunk = _run(chunk_size=24)  # two chunks
 
     try:
+        np.testing.assert_array_equal(
+            ds_1chunk["time"].values, ds_2chunk["time"].values
+        )
         for var in ("temp", "salt", "u", "v"):
             if var in ds_1chunk.data_vars and var in ds_2chunk.data_vars:
                 np.testing.assert_array_almost_equal(

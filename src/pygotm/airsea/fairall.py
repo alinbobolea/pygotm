@@ -175,9 +175,7 @@ def fairall(
                         tstar = delt * cff / (math.log(_ZT / zot) - tpsi)
                         qstar = delq * cff / (math.log(_ZQ / zoq) - qpsi)
 
-                        tvstar = (
-                            tstar * (1.0 + 0.61 * state.qa) + 0.61 * ta_k * qstar
-                        )
+                        tvstar = tstar * (1.0 + 0.61 * state.qa) + 0.61 * ta_k * qstar
                         bf = -g / ta_k * wstar * tvstar
                         if bf > 0.0:
                             wgus = _BETA * (bf * _ZABL) ** _R3
@@ -195,15 +193,19 @@ def fairall(
                 if state.rain_impact:
                     rainfall = precip * 1000.0
                     x1 = 2.11e-5 * (ta_k / kelvin) ** 1.94
-                    x2 = 0.02411 * (
-                        1.0 + ta * (3.309e-3 - 1.44e-6 * ta)
-                    ) / (state.rhoa * cpa)
+                    x2 = (
+                        0.02411
+                        * (1.0 + ta * (3.309e-3 - 1.44e-6 * ta))
+                        / (state.rhoa * cpa)
+                    )
                     x3 = state.qa * latent_heat / (rgas * ta_k * ta_k)
                     cd_rain = 1.0 / (
                         1.0 + const06 * (x3 * latent_heat * x1) / (cpa * x2)
                     )
-                    cd_rain = cd_rain * cpw * (
-                        (tw - ta) + (state.qs - state.qa) * latent_heat / cpa
+                    cd_rain = (
+                        cd_rain
+                        * cpw
+                        * ((tw - ta) + (state.qs - state.qa) * latent_heat / cpa)
                     )
                     qh = qh - rainfall * cd_rain
 

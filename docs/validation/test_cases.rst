@@ -2,113 +2,217 @@ Test Cases
 ==========
 
 pyGOTM is validated against the 22 official GOTM 6.0.7 test cases.  The table
-below summarises the current validation status.  **PASS** means all output
-fields satisfy the combined tolerance criterion.  **FAIL** means one or more
-fields exceed the tolerance.  **UNSUPPORTED** means the compiled runtime does
-not yet implement the physics required by that case; an
-``UnsupportedConfigurationError`` is raised at setup.
+below summarizes the latest checked-in ``validation/results.json`` snapshot,
+generated at ``2026-05-14T01:16:40Z``.
+
+Case status is aggregated from Frechet variable statuses:
+
+* ``PASS`` means every compared numeric variable has status ``PASS``.
+* ``FAIL`` means at least one compared variable is ``MARGINAL``,
+  ``DISCREPANT``, or ``BROKEN``.
+* ``ERROR`` means the case failed during setup, execution, or comparison before
+  a complete variable table could be produced.
+
+The snapshot verdict is ``PARTIAL PARITY``: 3 cases pass and 19 cases fail.
+Across all cases, the variable totals are 1702 ``PASS``, 81 ``MARGINAL``, 120
+``DISCREPANT``, and 511 ``BROKEN``.
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 15 65
+   :widths: 20 15 15 15 15 15 20
 
    * - Case
-     - Status
+     - Case status
+     - PASS
+     - MARGINAL
+     - DISCREPANT
+     - BROKEN
      - Notes
    * - ``couette``
-     - FAIL (29/30)
-     - Simple Couette flow.  29 of 30 fields pass; ``avh`` diffusivity
-       field fails the tolerance by a small margin.
-   * - ``channel``
-     - FAIL (26/30)
-     - Open-channel flow.  26 of 30 fields pass; stability-function
-       fields (``avh``, ``cmue1``, ``as``) exceed tolerance.
+     - PASS
+     - 100
+     - 0
+     - 0
+     - 0
+     - Simple Couette flow.
    * - ``blacksea``
-     - FAIL (7/30)
-     - Black Sea seasonal cycle.  Core fields (temp, salt, u) fail;
-       internal pressure gradient implementation under investigation.
-   * - ``medsea_west``
-     - FAIL (8/30)
-     - Western Mediterranean.  Similar failure pattern to ``blacksea``.
-   * - ``medsea_east``
-     - UNSUPPORTED
-     - Eastern Mediterranean — requires features not yet compiled.
+     - FAIL
+     - 106
+     - 8
+     - 3
+     - 4
+     - Black Sea seasonal cycle.
+   * - ``channel``
+     - PASS
+     - 100
+     - 0
+     - 0
+     - 0
+     - Open-channel flow.
    * - ``entrainment``
-     - FAIL (19/30)
-     - Convective entrainment.  Turbulence fields (num, tke, eps) fail.
-   * - ``flex``
-     - FAIL (7/30)
-     - FLEX experiment.  Core fields fail.
-   * - ``gotland``
-     - FAIL (8/30)
-     - Baltic Sea (Gotland Deep).  Core fields fail.
-   * - ``lago_maggiore``
-     - FAIL (8/30)
-     - Alpine lake.  Core fields fail.
-   * - ``asics_med``
-     - UNSUPPORTED
-     - Mediterranean deep convection.
+     - PASS
+     - 100
+     - 0
+     - 0
+     - 0
+     - Convective entrainment.
    * - ``estuary``
-     - UNSUPPORTED
+     - FAIL
+     - 99
+     - 1
+     - 0
+     - 0
      - Estuarine circulation.
+   * - ``flex``
+     - FAIL
+     - 62
+     - 2
+     - 14
+     - 26
+     - FLEX experiment.
+   * - ``gotland``
+     - FAIL
+     - 67
+     - 5
+     - 17
+     - 15
+     - Baltic Sea Gotland Deep.
+   * - ``lago_maggiore``
+     - FAIL
+     - 95
+     - 3
+     - 2
+     - 5
+     - Alpine lake.
    * - ``langmuir``
-     - UNSUPPORTED
+     - FAIL
+     - 68
+     - 5
+     - 9
+     - 31
      - Langmuir turbulence with Stokes drift.
    * - ``liverpool_bay``
-     - UNSUPPORTED
+     - FAIL
+     - 57
+     - 0
+     - 10
+     - 38
      - Tidal mixing in Liverpool Bay.
+   * - ``medsea_east``
+     - FAIL
+     - 105
+     - 9
+     - 12
+     - 14
+     - Eastern Mediterranean.
+   * - ``medsea_west``
+     - FAIL
+     - 93
+     - 22
+     - 12
+     - 13
+     - Western Mediterranean.
    * - ``nns_annual``
-     - UNSUPPORTED
+     - FAIL
+     - 35
+     - 0
+     - 2
+     - 78
      - North Sea annual cycle.
    * - ``nns_seasonal``
-     - UNSUPPORTED
+     - FAIL
+     - 51
+     - 1
+     - 4
+     - 49
      - North Sea seasonal cycle.
    * - ``ows_papa``
-     - UNSUPPORTED
+     - FAIL
+     - 57
+     - 4
+     - 16
+     - 36
      - Ocean Weather Station Papa.
    * - ``plume``
-     - UNSUPPORTED
+     - FAIL
+     - 60
+     - 0
+     - 0
+     - 53
      - Freshwater plume.
    * - ``resolute``
-     - UNSUPPORTED
+     - FAIL
+     - 43
+     - 1
+     - 6
+     - 65
      - Arctic mixing.
    * - ``reynolds``
-     - UNSUPPORTED
+     - FAIL
+     - 57
+     - 6
+     - 1
+     - 41
      - Reynolds number scaling.
    * - ``rouse``
-     - UNSUPPORTED
+     - FAIL
+     - 102
+     - 1
+     - 2
+     - 3
      - Rouse sediment profile.
    * - ``seagrass``
-     - UNSUPPORTED
+     - FAIL
+     - 75
+     - 0
+     - 0
+     - 29
      - Seagrass canopy dynamics.
    * - ``wave_breaking``
-     - UNSUPPORTED
+     - FAIL
+     - 82
+     - 6
+     - 5
+     - 7
      - Wave-breaking enhanced mixing.
+   * - ``asics_med``
+     - FAIL
+     - 88
+     - 7
+     - 5
+     - 4
+     - Mediterranean deep convection.
 
-.. note::
-   Validation status is updated with each development milestone.  The
-   results above correspond to the ``validation/results.json`` generated on
-   2026-04-30.
+Indicator Summary
+-----------------
 
-Tolerance Parameters
---------------------
+The current validation suite uses Frechet-distance indicators from
+``src/pygotm/validation``:
 
-Tolerances are defined per variable in ``src/pygotm/validation/tolerances.py``.
-Each variable has three parameters:
+``d_raw``
+   Discrete Frechet distance on aligned original values.
 
-* **atol** — absolute tolerance floor
-* **rtol** — relative tolerance
-* **scale_floor** — physical scale floor applied when the reference field is
-  near zero
+``d_norm``
+   Discrete Frechet distance after robust dynamic linear/log normalization.
 
-Example entries::
+``d_rel``
+   ``d_raw / signal_scale`` for variables whose signal magnitude is below the
+   configured variable floor.
 
-   "temp": VariableTolerance(atol=1e-10, rtol=1e-8, scale_floor=1.0, section="pygotm")
-   "tke":  VariableTolerance(atol=1e-14, rtol=1e-7, scale_floor=1e-10, section="pygotm")
+``score``
+   The status-driving value.  This is normally ``d_norm`` and switches to
+   ``d_rel`` for below-floor signals.  The selected indicator is recorded in
+   ``metric_mode``.
 
-Variables not in the registry are treated as FABM biogeochemical variables
-using the project-approved ``DEFAULT_PYFABM_TOLERANCE``.
+Variable status bands are:
 
-Deprecated tolerance parameters ``rtol=5e-6`` (global relative) and
-``atol=1e-12`` (global absolute floor) from the previous range-aware criterion
-are no longer used.
+* ``PASS`` - ``score < 0.01``
+* ``MARGINAL`` - ``0.01 <= score < 0.05``
+* ``DISCREPANT`` - ``0.05 <= score < 0.20``
+* ``BROKEN`` - ``score >= 0.20`` or a structural comparison failure
+
+Variables listed in ``PYGOTM_VARIABLES`` are reported in the PyGOTM section.
+Other numeric variables are treated as FABM biogeochemical variables.
+
+The previous per-variable tolerance parameters ``atol``, ``rtol``, and
+``scale_floor`` are not used by the current Frechet suite.

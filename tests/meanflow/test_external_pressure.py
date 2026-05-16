@@ -63,9 +63,7 @@ def _depth_mean(state: MeanflowState, nlev: int, field: np.ndarray) -> float:
     """Compute depth-weighted mean of field[1..nlev]."""
     assert state.h is not None
     hint = float(sum(float(state.h[k]) for k in range(1, nlev + 1)))
-    weighted = float(
-        sum(float(state.h[k] * field[k]) for k in range(1, nlev + 1))
-    )
+    weighted = float(sum(float(state.h[k] * field[k]) for k in range(1, nlev + 1)))
     return weighted / hint
 
 
@@ -93,9 +91,7 @@ def test_method0_noop_u() -> None:
     state.u[:] = np.linspace(0.1, 1.0, nlev + 1)
     sentinel = state.u.copy()
 
-    external_pressure(
-        state, nlev, EXT_PRESS_SLOPE, dpdx=0.5, dpdy=0.3, h_press=3.0
-    )
+    external_pressure(state, nlev, EXT_PRESS_SLOPE, dpdx=0.5, dpdy=0.3, h_press=3.0)
 
     np.testing.assert_array_equal(
         state.u,
@@ -112,9 +108,7 @@ def test_method0_noop_v() -> None:
     state.v[:] = np.linspace(-0.5, 0.5, nlev + 1)
     sentinel = state.v.copy()
 
-    external_pressure(
-        state, nlev, EXT_PRESS_SLOPE, dpdx=0.5, dpdy=0.3, h_press=3.0
-    )
+    external_pressure(state, nlev, EXT_PRESS_SLOPE, dpdx=0.5, dpdy=0.3, h_press=3.0)
 
     np.testing.assert_array_equal(
         state.v,
@@ -228,7 +222,7 @@ def test_method1_shift_is_depth_uniform() -> None:
         h_press=_DEPTH * 0.5,
     )
 
-    shifts = state.u[1:nlev + 1] - u_before[1:nlev + 1]
+    shifts = state.u[1 : nlev + 1] - u_before[1 : nlev + 1]
     # All shifts must be equal (depth-uniform)
     np.testing.assert_allclose(
         shifts, shifts[0], atol=1e-14, err_msg="Method 1 shift must be depth-uniform"
@@ -284,7 +278,7 @@ def test_method2_shift_is_depth_uniform() -> None:
 
     external_pressure(state, nlev, EXT_PRESS_MEAN, dpdx=0.5, dpdy=0.0)
 
-    shifts = state.u[1:nlev + 1] - u_before[1:nlev + 1]
+    shifts = state.u[1 : nlev + 1] - u_before[1 : nlev + 1]
     np.testing.assert_allclose(
         shifts, shifts[0], atol=1e-14, err_msg="Method 2 shift must be depth-uniform"
     )
@@ -298,15 +292,13 @@ def test_method2_uniform_profile_unchanged_shape() -> None:
 
     # Uniform u profile
     u_const = 0.3
-    state.u[1:nlev + 1] = u_const
+    state.u[1 : nlev + 1] = u_const
 
     dpdx = 0.7
     external_pressure(state, nlev, EXT_PRESS_MEAN, dpdx=dpdx, dpdy=0.0)
 
     # All layers should be exactly dpdx now
-    np.testing.assert_allclose(
-        state.u[1:nlev + 1], dpdx, atol=1e-14
-    )
+    np.testing.assert_allclose(state.u[1 : nlev + 1], dpdx, atol=1e-14)
 
 
 # ---------------------------------------------------------------------------
@@ -323,15 +315,13 @@ def test_method2_analytic_known_mean() -> None:
 
     c = 0.25
     d = 0.75
-    state.u[1:nlev + 1] = c
+    state.u[1 : nlev + 1] = c
 
     external_pressure(state, nlev, EXT_PRESS_MEAN, dpdx=d, dpdy=0.0)
 
     # Expected: every layer shifted to d (since mean was c and shift = d - c)
     expected_shift = d - c
-    np.testing.assert_allclose(
-        state.u[1:nlev + 1], c + expected_shift, rtol=1e-14
-    )
+    np.testing.assert_allclose(state.u[1 : nlev + 1], c + expected_shift, rtol=1e-14)
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +336,7 @@ def test_method1_h_press_near_bottom() -> None:
     assert state.u is not None
     assert state.h is not None
 
-    state.u[1:nlev + 1] = np.linspace(0.1, 1.0, nlev)
+    state.u[1 : nlev + 1] = np.linspace(0.1, 1.0, nlev)
 
     # h_press very close to bottom: should be at or just above z[1]
     h_press = 0.01 * _DEPTH  # 1 % depth — well below z[1] for most grids
@@ -363,7 +353,7 @@ def test_method1_h_press_near_bottom() -> None:
 
     # The shift is depth-uniform, so the profile shape must be preserved.
     # Just verify no NaN/Inf.
-    assert np.all(np.isfinite(state.u[1:nlev + 1]))
+    assert np.all(np.isfinite(state.u[1 : nlev + 1]))
 
 
 # ---------------------------------------------------------------------------
@@ -378,8 +368,8 @@ def test_method2_both_components_shifted() -> None:
     assert state.u is not None
     assert state.v is not None
 
-    state.u[1:nlev + 1] = 0.0
-    state.v[1:nlev + 1] = 0.0
+    state.u[1 : nlev + 1] = 0.0
+    state.v[1 : nlev + 1] = 0.0
 
     dpdx = 0.6
     dpdy = -0.3
@@ -408,9 +398,7 @@ def test_method2_both_components_shifted() -> None:
         (EXT_PRESS_MEAN, 0.0, 0.0, 0.5),
     ],
 )
-def test_no_nan_inf(
-    method: int, dpdx: float, dpdy: float, h_press_frac: float
-) -> None:
+def test_no_nan_inf(method: int, dpdx: float, dpdy: float, h_press_frac: float) -> None:
     """No NaN or Inf in u or v for any valid input combination."""
     nlev = _NLEV
     state = _make_state(nlev=nlev)
@@ -418,14 +406,14 @@ def test_no_nan_inf(
     assert state.v is not None
 
     _set_linear_profile(state, nlev, 0.1, 0.9)
-    state.v[1:nlev + 1] = np.linspace(-0.3, 0.3, nlev)
+    state.v[1 : nlev + 1] = np.linspace(-0.3, 0.3, nlev)
 
     h_press = h_press_frac * _DEPTH
 
     external_pressure(state, nlev, method, dpdx=dpdx, dpdy=dpdy, h_press=h_press)
 
-    assert np.all(np.isfinite(state.u[1:nlev + 1])), "NaN/Inf in u"
-    assert np.all(np.isfinite(state.v[1:nlev + 1])), "NaN/Inf in v"
+    assert np.all(np.isfinite(state.u[1 : nlev + 1])), "NaN/Inf in u"
+    assert np.all(np.isfinite(state.v[1 : nlev + 1])), "NaN/Inf in v"
 
 
 # ---------------------------------------------------------------------------

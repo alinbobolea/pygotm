@@ -17,6 +17,7 @@ from pygotm.gotm.gotm import (
     integrate_gotm,
 )
 from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
+from pygotm.icethm import IceModelEnum
 
 _COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
 _NNS_SEASONAL_CONFIG = Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml")
@@ -175,12 +176,16 @@ def test_initialize_gotm_accepts_teos10_equation_of_state_variants(
 def test_airsea_configuration_accepts_validation_ice_models(ice_model: str) -> None:
     state = AirSeaDriverState()
 
-    _inputs, configured_model = _configure_airsea_from_document(
+    _inputs, ice_params = _configure_airsea_from_document(
         state,
         {"surface": {"ice": {"model": ice_model}}},
     )
 
-    assert configured_model == ice_model
+    expected = {
+        "basal_melt": IceModelEnum.BASAL_MELT,
+        "winton": IceModelEnum.WINTON,
+    }
+    assert ice_params.model == expected[ice_model]
 
 
 def test_output_schedule_tracks_active_vertical_slice() -> None:

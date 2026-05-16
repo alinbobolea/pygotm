@@ -75,9 +75,9 @@ __all__ = [
 ]
 
 # Method constants mirroring GOTM w_adv_input%method values.
-W_ADV_NONE: int = 0       # no vertical advection
-W_ADV_PROFILE: int = 1    # tent-shaped profile, method 1
-W_ADV_PROFILE2: int = 2   # tent-shaped profile, method 2 (same shape)
+W_ADV_NONE: int = 0  # no vertical advection
+W_ADV_PROFILE: int = 1  # tent-shaped profile, method 1
+W_ADV_PROFILE2: int = 2  # tent-shaped profile, method 2 (same shape)
 
 
 def wequation(

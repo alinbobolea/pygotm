@@ -18,12 +18,10 @@ def test_missing_file_returns_defaults(tmp_path: Path) -> None:
 
 def test_chunk_size_present(tmp_path: Path) -> None:
     yaml_path = tmp_path / "gotm.yaml"
-    (tmp_path / "pygotm-conf.yaml").write_text(
-        textwrap.dedent("""\
+    (tmp_path / "pygotm-conf.yaml").write_text(textwrap.dedent("""\
         fabm:
           chunk_size: 24
-        """)
-    )
+        """))
     conf = load_pygotm_conf(yaml_path)
     assert conf.fabm.chunk_size == 24
 

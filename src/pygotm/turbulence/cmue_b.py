@@ -73,29 +73,39 @@ def _step_cmue_b(
 
     d0 = 36.0 * n_cube * nt_sq
     d1 = 84.0 * a5 * at3 * n_sq * nt_val
-    d2 = 9.0 * (at2 * at2 - at1 * at1) * n_cube - 12.0 * (
-        a2 * a2 - 3.0 * a3 * a3
-    ) * n_val * nt_sq
-    d3 = 12.0 * a5 * at3 * (a2 * at1 - 3.0 * a3 * at2) * n_val + 12.0 * a5 * at3 * (
-        a3 * a3 - a2 * a2
-    ) * nt_val
+    d2 = (
+        9.0 * (at2 * at2 - at1 * at1) * n_cube
+        - 12.0 * (a2 * a2 - 3.0 * a3 * a3) * n_val * nt_sq
+    )
+    d3 = (
+        12.0 * a5 * at3 * (a2 * at1 - 3.0 * a3 * at2) * n_val
+        + 12.0 * a5 * at3 * (a3 * a3 - a2 * a2) * nt_val
+    )
     d4 = 48.0 * a5 * a5 * at3 * at3 * n_val
     d5 = 3.0 * (a2 * a2 - 3.0 * a3 * a3) * (at1 * at1 - at2 * at2) * n_val
 
     n0 = 36.0 * a1 * n_sq * nt_sq
-    n1 = -12.0 * a5 * at3 * (at1 + at2) * n_sq + 8.0 * a5 * at3 * (
-        6.0 * a1 - a2 - 3.0 * a3
-    ) * n_val * nt_val
+    n1 = (
+        -12.0 * a5 * at3 * (at1 + at2) * n_sq
+        + 8.0 * a5 * at3 * (6.0 * a1 - a2 - 3.0 * a3) * n_val * nt_val
+    )
     n2 = 9.0 * a1 * (at2 * at2 - at1 * at1) * n_sq
-    n3 = 12.0 * a5 * at4 * (
-        3.0 * (at1 + at2) * n_sq + 2.0 * (a2 + 3.0 * a3) * n_val * nt_val
+    n3 = (
+        12.0
+        * a5
+        * at4
+        * (3.0 * (at1 + at2) * n_sq + 2.0 * (a2 + 3.0 * a3) * n_val * nt_val)
     )
 
     nt0 = 12.0 * at3 * n_cube * nt_val
     nt1 = 12.0 * a5 * at3 * at3 * n_sq
-    nt2 = 9.0 * a1 * at3 * (at1 - at2) * n_sq + (
-        6.0 * a1 * (a2 - 3.0 * a3) - 4.0 * (a2 * a2 - 3.0 * a3 * a3)
-    ) * at3 * n_val * nt_val
+    nt2 = (
+        9.0 * a1 * at3 * (at1 - at2) * n_sq
+        + (6.0 * a1 * (a2 - 3.0 * a3) - 4.0 * (a2 * a2 - 3.0 * a3 * a3))
+        * at3
+        * n_val
+        * nt_val
+    )
 
     gam0 = 36.0 * at4 * n_cube * nt_val
     gam1 = 36.0 * a5 * at3 * at4 * n_sq
@@ -146,6 +156,22 @@ def step_cmue_b(
     r"""Update the approximate weak-equilibrium stability functions (batch)."""
     for b in numba.prange(batch_size):
         _step_cmue_b(
-            nlev, cm0, cc1, ct1, a1, a2, a3, a5, at1, at2, at3, at4,
-            as_[b], an[b], at[b], cmue1[b], cmue2[b], gam[b],
+            nlev,
+            cm0,
+            cc1,
+            ct1,
+            a1,
+            a2,
+            a3,
+            a5,
+            at1,
+            at2,
+            at3,
+            at4,
+            as_[b],
+            an[b],
+            at[b],
+            cmue1[b],
+            cmue2[b],
+            gam[b],
         )

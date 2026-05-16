@@ -41,11 +41,7 @@ def _configure_second_order_state(state: TurbulenceState) -> None:
 
     n_val = state.cc1 / 2.0
     state.cm0 = (
-        (
-            state.a2 * state.a2
-            - 3.0 * state.a3 * state.a3
-            + 3.0 * state.a1 * n_val
-        )
+        (state.a2 * state.a2 - 3.0 * state.a3 * state.a3 + 3.0 * state.a1 * n_val)
         / (3.0 * n_val * n_val)
     ) ** 0.25
 
@@ -78,42 +74,52 @@ def _reference_cmue_b(
 
     d0 = 36.0 * n_val**3 * nt_val**2
     d1 = 84.0 * state.a5 * state.at3 * n_val**2 * nt_val
-    d2 = 9.0 * (state.at2**2 - state.at1**2) * n_val**3 - 12.0 * (
-        state.a2**2 - 3.0 * state.a3**2
-    ) * n_val * nt_val**2
+    d2 = (
+        9.0 * (state.at2**2 - state.at1**2) * n_val**3
+        - 12.0 * (state.a2**2 - 3.0 * state.a3**2) * n_val * nt_val**2
+    )
     d3 = (
         12.0
         * state.a5
         * state.at3
         * (state.a2 * state.at1 - 3.0 * state.a3 * state.at2)
         * n_val
-        + 12.0
-        * state.a5
-        * state.at3
-        * (state.a3**2 - state.a2**2)
-        * nt_val
+        + 12.0 * state.a5 * state.at3 * (state.a3**2 - state.a2**2) * nt_val
     )
     d4 = 48.0 * state.a5**2 * state.at3**2 * n_val
-    d5 = 3.0 * (state.a2**2 - 3.0 * state.a3**2) * (
-        state.at1**2 - state.at2**2
-    ) * n_val
+    d5 = 3.0 * (state.a2**2 - 3.0 * state.a3**2) * (state.at1**2 - state.at2**2) * n_val
 
     n0 = 36.0 * state.a1 * n_val**2 * nt_val**2
-    n1 = -12.0 * state.a5 * state.at3 * (state.at1 + state.at2) * n_val**2 + 8.0 * (
-        state.a5 * state.at3 * (6.0 * state.a1 - state.a2 - 3.0 * state.a3)
-    ) * n_val * nt_val
+    n1 = (
+        -12.0 * state.a5 * state.at3 * (state.at1 + state.at2) * n_val**2
+        + 8.0
+        * (state.a5 * state.at3 * (6.0 * state.a1 - state.a2 - 3.0 * state.a3))
+        * n_val
+        * nt_val
+    )
     n2 = 9.0 * state.a1 * (state.at2**2 - state.at1**2) * n_val**2
-    n3 = 12.0 * state.a5 * state.at4 * (
-        3.0 * (state.at1 + state.at2) * n_val**2
-        + 2.0 * (state.a2 + 3.0 * state.a3) * n_val * nt_val
+    n3 = (
+        12.0
+        * state.a5
+        * state.at4
+        * (
+            3.0 * (state.at1 + state.at2) * n_val**2
+            + 2.0 * (state.a2 + 3.0 * state.a3) * n_val * nt_val
+        )
     )
 
     nt0 = 12.0 * state.at3 * n_val**3 * nt_val
     nt1 = 12.0 * state.a5 * state.at3**2 * n_val**2
-    nt2 = 9.0 * state.a1 * state.at3 * (state.at1 - state.at2) * n_val**2 + (
-        6.0 * state.a1 * (state.a2 - 3.0 * state.a3)
-        - 4.0 * (state.a2**2 - 3.0 * state.a3**2)
-    ) * state.at3 * n_val * nt_val
+    nt2 = (
+        9.0 * state.a1 * state.at3 * (state.at1 - state.at2) * n_val**2
+        + (
+            6.0 * state.a1 * (state.a2 - 3.0 * state.a3)
+            - 4.0 * (state.a2**2 - 3.0 * state.a3**2)
+        )
+        * state.at3
+        * n_val
+        * nt_val
+    )
 
     gam0 = 36.0 * state.at4 * n_val**3 * nt_val
     gam1 = 36.0 * state.a5 * state.at3 * state.at4 * n_val**2

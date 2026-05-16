@@ -33,6 +33,7 @@ def test_cogley_returns_exact_table_value_at_grid_point() -> None:
     # grid point.
     assert albedo_cogley(50.0, 1) == pytest.approx(0.220)
 
+
 @pytest.mark.parametrize(
     ("zen", "yday"),
     [(10.0, 1), (35.0, 90), (70.0, 200), (85.0, 365)],

@@ -1,67 +1,127 @@
-"""Tests for validation/tolerances.py — per-variable tolerance configuration."""
+"""Tests for validation/tolerances.py Frechet configuration."""
 
 from __future__ import annotations
 
 import pytest
 
 from pygotm.validation.tolerances import (
-    DEFAULT_PYFABM_TOLERANCE,
-    VARIABLE_TOLERANCES,
-    VariableTolerance,
+    DEFAULT_FRECHET_CONFIG,
+    PYGOTM_VARIABLES,
+    VARIABLE_MAGNITUDE_FLOORS,
+    FrechetConfig,
     classify_section,
-    get_tolerance,
 )
 
 
-def test_variable_tolerance_is_frozen() -> None:
-    tol = VariableTolerance(atol=1e-10, rtol=1e-8, scale_floor=1.0, section="pygotm")
+def test_frechet_config_defaults_match_validation_policy() -> None:
+    cfg = DEFAULT_FRECHET_CONFIG
+    assert cfg.pass_tol == pytest.approx(0.01)
+    assert cfg.marginal_tol == pytest.approx(0.05)
+    assert cfg.discrepant_tol == pytest.approx(0.20)
+    assert cfg.frechet_abs_tol == pytest.approx(1.0e-12)
+    assert cfg.frechet_k == 400
+    assert cfg.robust is True
+    assert cfg.q_low == pytest.approx(1.0)
+    assert cfg.q_high == pytest.approx(99.0)
+    assert cfg.switch_oom == pytest.approx(2.0)
+    assert cfg.eps_floor == pytest.approx(1.0e-12)
+    assert cfg.default_magnitude_floor == pytest.approx(1.0e-6)
+
+
+def test_frechet_config_is_frozen() -> None:
+    cfg = FrechetConfig()
     with pytest.raises((AttributeError, TypeError)):
-        tol.atol = 1.0  # type: ignore[misc]
+        cfg.pass_tol = 1.0  # type: ignore[misc]
+
+
+def test_frechet_config_validates_threshold_order() -> None:
+    with pytest.raises(ValueError, match="pass < marginal < discrepant"):
+        FrechetConfig(pass_tol=0.05, marginal_tol=0.01)
 
 
 def test_known_gotm_variable_returns_pygotm_section() -> None:
     for name in ("temp", "salt", "u", "v", "tke", "eps", "num", "nuh"):
-        assert get_tolerance(name).section == "pygotm", f"expected pygotm for {name!r}"
+        assert classify_section(name) == "pygotm", f"expected pygotm for {name!r}"
 
 
-def test_unknown_variable_returns_pyfabm_default() -> None:
-    tol = get_tolerance("oxygen_some_fabm_model")
-    assert tol.section == "pyfabm"
-    assert tol is DEFAULT_PYFABM_TOLERANCE
+def test_unknown_variable_returns_pyfabm_section() -> None:
+    assert classify_section("oxygen_some_fabm_model") == "pyfabm"
 
 
-def test_classify_section_known_gotm_variable() -> None:
-    assert classify_section("temp") == "pygotm"
-    assert classify_section("salt") == "pygotm"
-    assert classify_section("tke") == "pygotm"
+def test_pygotm_variable_set_contains_registered_physics_names() -> None:
+    assert {"temp", "salt", "tke", "eps", "u", "v"} <= PYGOTM_VARIABLES
 
 
-def test_classify_section_unknown_variable_is_pyfabm() -> None:
-    assert classify_section("some_fabm_tracer_xyz") == "pyfabm"
+def test_no_per_variable_tolerance_fields_on_config() -> None:
+    cfg = FrechetConfig()
+    assert not hasattr(cfg, "atol")
+    assert not hasattr(cfg, "rtol")
+    assert not hasattr(cfg, "scale_floor")
 
 
-def test_all_registered_variables_have_positive_tolerances() -> None:
-    for name, tol in VARIABLE_TOLERANCES.items():
-        assert tol.atol > 0, f"{name}: atol must be positive"
-        assert tol.rtol > 0, f"{name}: rtol must be positive"
-        assert tol.scale_floor > 0, f"{name}: scale_floor must be positive"
+def test_frechet_rel_tol_default() -> None:
+    cfg = FrechetConfig()
+    assert cfg.frechet_rel_tol == pytest.approx(1.0e-6)
 
 
-def test_all_registered_variables_are_pygotm_section() -> None:
-    for name, tol in VARIABLE_TOLERANCES.items():
-        assert tol.section == "pygotm", f"{name}: should be pygotm section"
+def test_frechet_rel_tol_negative_raises() -> None:
+    with pytest.raises(ValueError, match="frechet_rel_tol must be non-negative"):
+        FrechetConfig(frechet_rel_tol=-1.0e-7)
 
 
-def test_default_pyfabm_tolerance_is_pyfabm_section() -> None:
-    assert DEFAULT_PYFABM_TOLERANCE.section == "pyfabm"
-    assert DEFAULT_PYFABM_TOLERANCE.atol > 0
-    assert DEFAULT_PYFABM_TOLERANCE.rtol > 0
-    assert DEFAULT_PYFABM_TOLERANCE.scale_floor > 0
+def test_variable_magnitude_floors_cover_pygotm_variables() -> None:
+    assert PYGOTM_VARIABLES <= set(VARIABLE_MAGNITUDE_FLOORS)
+    assert all(floor > 0.0 for floor in VARIABLE_MAGNITUDE_FLOORS.values())
 
 
-def test_tke_atol_is_tighter_than_temperature() -> None:
-    assert get_tolerance("tke").atol < get_tolerance("temp").atol
+def test_effective_score_uses_dnorm_above_variable_floor() -> None:
+    cfg = FrechetConfig()
+    score, metric_mode = cfg.effective_score(
+        "NN",
+        d_raw=3.0e-7,
+        d_norm=0.02,
+        signal_scale=1.0e-3,
+    )
+    assert score == pytest.approx(0.02)
+    assert metric_mode == "d_norm"
 
 
-def test_get_tolerance_returns_same_object_as_registry() -> None:
-    assert get_tolerance("temp") is VARIABLE_TOLERANCES["temp"]
+def test_effective_score_uses_drel_below_variable_floor() -> None:
+    cfg = FrechetConfig()
+    score, metric_mode = cfg.effective_score(
+        "NN",
+        d_raw=3.0e-9,
+        d_norm=0.02,
+        signal_scale=1.0e-6,
+    )
+    assert score == pytest.approx(0.003)
+    assert metric_mode == "d_rel"
+
+
+def test_effective_score_zero_signal_uses_dnorm() -> None:
+    cfg = FrechetConfig()
+    score, metric_mode = cfg.effective_score(
+        "NN",
+        d_raw=0.0,
+        d_norm=0.0,
+        signal_scale=0.0,
+    )
+    assert score == pytest.approx(0.0)
+    assert metric_mode == "d_norm"
+
+
+def test_effective_score_uses_default_floor_for_missing_variable() -> None:
+    cfg = FrechetConfig(default_magnitude_floor=1.0e-5)
+    score, metric_mode = cfg.effective_score(
+        "oxygen_some_fabm_model",
+        d_raw=2.0e-9,
+        d_norm=0.02,
+        signal_scale=1.0e-6,
+    )
+    assert score == pytest.approx(0.002)
+    assert metric_mode == "d_rel"
+
+
+def test_default_magnitude_floor_validation() -> None:
+    with pytest.raises(ValueError, match="default_magnitude_floor must be positive"):
+        FrechetConfig(default_magnitude_floor=0.0)

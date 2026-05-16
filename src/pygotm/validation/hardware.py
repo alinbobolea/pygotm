@@ -72,10 +72,16 @@ def _probe_nvidia() -> tuple[bool, int, str]:
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
-            names = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
+            names = [
+                line.strip()
+                for line in result.stdout.strip().splitlines()
+                if line.strip()
+            ]
             if names:
                 return True, len(names), "; ".join(names)
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
@@ -88,11 +94,21 @@ def _probe_amd() -> tuple[bool, int, str]:
     try:
         result = subprocess.run(
             ["rocm-smi", "--showproductname"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
-            lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
-            gpu_lines = [l for l in lines if any(k in l for k in ("GPU", "Radeon", "Instinct"))]
+            lines = [
+                line.strip()
+                for line in result.stdout.strip().splitlines()
+                if line.strip()
+            ]
+            gpu_lines = [
+                line
+                for line in lines
+                if any(k in line for k in ("GPU", "Radeon", "Instinct"))
+            ]
             count = max(1, len(gpu_lines))
             return True, count, lines[0]
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
@@ -105,7 +121,9 @@ def _probe_vulkan() -> bool:
     try:
         result = subprocess.run(
             ["vulkaninfo", "--summary"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
@@ -113,7 +131,7 @@ def _probe_vulkan() -> bool:
 
 
 def detect_platform() -> PlatformInfo:
-    """Probe hardware and return a :class:`PlatformInfo` describing what is available."""
+    """Probe hardware and return a :class:`PlatformInfo` describing availability."""
     cpu_count = os.cpu_count() or 1
     lscpu = _lscpu_info()
     if "cpu_count" in lscpu:

@@ -56,4 +56,6 @@ gotm-model/
 # Other
 todo.md
 .claude/
+.codex/
+.agents/
 .planning/

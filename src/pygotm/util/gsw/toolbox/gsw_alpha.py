@@ -93,32 +93,37 @@ def gsw_alpha(sa: float, ct: float, p: float) -> float:
     z = p * 1.0e-4
 
     v_ct_part = (
-        a000 + xs * (a100 + xs * (a200 + xs * (a300 + xs * (a400 + a500 * xs))))
-        + ys * (
-            a010 + xs * (a110 + xs * (a210 + xs * (a310 + a410 * xs)))
-            + ys * (
-                a020 + xs * (a120 + xs * (a220 + a320 * xs))
-                + ys * (
-                    a030 + xs * (a130 + a230 * xs)
-                    + ys * (a040 + a140 * xs + a050 * ys)
-                )
+        a000
+        + xs * (a100 + xs * (a200 + xs * (a300 + xs * (a400 + a500 * xs))))
+        + ys
+        * (
+            a010
+            + xs * (a110 + xs * (a210 + xs * (a310 + a410 * xs)))
+            + ys
+            * (
+                a020
+                + xs * (a120 + xs * (a220 + a320 * xs))
+                + ys
+                * (a030 + xs * (a130 + a230 * xs) + ys * (a040 + a140 * xs + a050 * ys))
             )
         )
-        + z * (
-            a001 + xs * (a101 + xs * (a201 + xs * (a301 + a401 * xs)))
-            + ys * (
-                a011 + xs * (a111 + xs * (a211 + a311 * xs))
-                + ys * (
-                    a021 + xs * (a121 + a221 * xs)
-                    + ys * (a031 + a131 * xs + a041 * ys)
-                )
+        + z
+        * (
+            a001
+            + xs * (a101 + xs * (a201 + xs * (a301 + a401 * xs)))
+            + ys
+            * (
+                a011
+                + xs * (a111 + xs * (a211 + a311 * xs))
+                + ys
+                * (a021 + xs * (a121 + a221 * xs) + ys * (a031 + a131 * xs + a041 * ys))
             )
-            + z * (
-                a002 + xs * (a102 + xs * (a202 + a302 * xs))
-                + ys * (
-                    a012 + xs * (a112 + a212 * xs)
-                    + ys * (a022 + a122 * xs + a032 * ys)
-                )
+            + z
+            * (
+                a002
+                + xs * (a102 + xs * (a202 + a302 * xs))
+                + ys
+                * (a012 + xs * (a112 + a212 * xs) + ys * (a022 + a122 * xs + a032 * ys))
                 + z * (a003 + a103 * xs + a013 * ys + a004 * z)
             )
         )

@@ -66,16 +66,12 @@ def const_NNT(
     profile[nlev] = T_top
     for i in range(nlev - 1, 0, -1):
         lalpha = get_alpha(density_state, S_const, profile[i + 1], -zi[i])
-        profile[i] = profile[i + 1] - (NN * (z[i + 1] - z[i])) / (
-            gravity * lalpha
-        )
+        profile[i] = profile[i + 1] - (NN * (z[i + 1] - z[i])) / (gravity * lalpha)
         lalpha = get_alpha(
             density_state,
             S_const,
             0.5 * (profile[i + 1] + profile[i]),
             -zi[i],
         )
-        profile[i] = profile[i + 1] - (NN * (z[i + 1] - z[i])) / (
-            gravity * lalpha
-        )
+        profile[i] = profile[i + 1] - (NN * (z[i + 1] - z[i])) / (gravity * lalpha)
     return profile

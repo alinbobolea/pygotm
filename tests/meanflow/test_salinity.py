@@ -74,7 +74,9 @@ def test_import():
 
 def test_smoke():
     state = _make_state()
-    _run_step(state, _NLEV, _DT, _CNPAR, nus=np.full(_NLEV + 1, 1.0e-4), gams=_zeros(_NLEV))
+    _run_step(
+        state, _NLEV, _DT, _CNPAR, nus=np.full(_NLEV + 1, 1.0e-4), gams=_zeros(_NLEV)
+    )
 
 
 def test_wflux_is_carried_through_api_without_affecting_gotm_solution():
@@ -82,7 +84,9 @@ def test_wflux_is_carried_through_api_without_affecting_gotm_solution():
     nus = np.full(nlev + 1, 1.0e-4, dtype=np.float64)
     wet = _make_state(nlev=nlev)
     dry = _make_state(nlev=nlev)
-    _run_step(wet, nlev, _DT, _CNPAR, wflux=1.0e-6, sflux=0.0, nus=nus, gams=_zeros(nlev))
+    _run_step(
+        wet, nlev, _DT, _CNPAR, wflux=1.0e-6, sflux=0.0, nus=nus, gams=_zeros(nlev)
+    )
     _run_step(dry, nlev, _DT, _CNPAR, wflux=0.0, sflux=0.0, nus=nus, gams=_zeros(nlev))
     np.testing.assert_allclose(wet.S, dry.S, rtol=1.0e-12, atol=1.0e-12)
 
@@ -132,7 +136,16 @@ def test_upper_neumann_bc_salt_input():
     nlev = _NLEV
     assert state.S is not None
     top_before = float(state.S[nlev])
-    _run_step(state, nlev, _DT, _CNPAR, wflux=0.0, sflux=-1.0, nus=_zeros(nlev), gams=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        wflux=0.0,
+        sflux=-1.0,
+        nus=_zeros(nlev),
+        gams=_zeros(nlev),
+    )
     assert float(state.S[nlev]) > top_before
 
 
@@ -141,7 +154,16 @@ def test_lower_neumann_bc_no_bottom_flux():
     nlev = _NLEV
     assert state.S is not None
     bottom_before = float(state.S[1])
-    _run_step(state, nlev, _DT, _CNPAR, wflux=0.0, sflux=0.0, nus=_zeros(nlev), gams=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        wflux=0.0,
+        sflux=0.0,
+        nus=_zeros(nlev),
+        gams=_zeros(nlev),
+    )
     assert abs(float(state.S[1]) - bottom_before) < 1.0e-14
 
 
@@ -150,7 +172,9 @@ def test_zero_index_unchanged():
     nlev = _NLEV
     assert state.S is not None
     state.S[0] = -999.0
-    _run_step(state, nlev, _DT, _CNPAR, nus=np.full(nlev + 1, 1.0e-4), gams=_zeros(nlev))
+    _run_step(
+        state, nlev, _DT, _CNPAR, nus=np.full(nlev + 1, 1.0e-4), gams=_zeros(nlev)
+    )
     assert float(state.S[0]) == -999.0
 
 
@@ -168,7 +192,16 @@ def test_patankar_no_negative_salinity():
     state = _make_state(S_init=1.0e-2)
     nlev = _NLEV
     for _ in range(25):
-        _run_step(state, nlev, _DT, _CNPAR, wflux=0.0, sflux=1.0, nus=_zeros(nlev), gams=_zeros(nlev))
+        _run_step(
+            state,
+            nlev,
+            _DT,
+            _CNPAR,
+            wflux=0.0,
+            sflux=1.0,
+            nus=_zeros(nlev),
+            gams=_zeros(nlev),
+        )
     assert float(np.min(state.S[1:])) >= 0.0
 
 
@@ -226,12 +259,36 @@ def test_multicol_parity():
     adv_cu_b = np.zeros((batch_size, nlev + 1), dtype=np.float64)
 
     step_salinity(
-        batch_size, nlev, _DT, _CNPAR, state.avmolS, 0, 4, 0,
-        S_b, h_b, w_b, u_b, v_b,
-        nus_b, gams_b, Sobs_b, tau_r_b, diff_s_up_b,
-        dsdx_b, dsdy_b,
-        avh_b, q_sour_b, l_sour_b,
-        au_b, bu_b, cu_b, du_b, ru_b, qu_b, adv_cu_b,
+        batch_size,
+        nlev,
+        _DT,
+        _CNPAR,
+        state.avmolS,
+        0,
+        4,
+        0,
+        S_b,
+        h_b,
+        w_b,
+        u_b,
+        v_b,
+        nus_b,
+        gams_b,
+        Sobs_b,
+        tau_r_b,
+        diff_s_up_b,
+        dsdx_b,
+        dsdy_b,
+        avh_b,
+        q_sour_b,
+        l_sour_b,
+        au_b,
+        bu_b,
+        cu_b,
+        du_b,
+        ru_b,
+        qu_b,
+        adv_cu_b,
     )
 
     np.testing.assert_allclose(S_b[0], s_single)
@@ -241,7 +298,15 @@ def test_multicol_parity():
 def test_no_nan_inf_typical_forcing():
     nlev = _NLEV
     state = _make_state(S_init=35.0)
-    _run_step(state, nlev, _DT, _CNPAR, sflux=0.1, nus=np.full(nlev + 1, 1.0e-3, dtype=np.float64), gams=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        sflux=0.1,
+        nus=np.full(nlev + 1, 1.0e-3, dtype=np.float64),
+        gams=_zeros(nlev),
+    )
     assert np.all(np.isfinite(state.S[1:]))
 
 
@@ -255,5 +320,13 @@ def test_no_nan_inf_zero_diffusivity():
 def test_no_nan_inf_patankar_path():
     nlev = _NLEV
     state = _make_state(S_init=35.0)
-    _run_step(state, nlev, _DT, _CNPAR, sflux=0.5, nus=np.full(nlev + 1, 1.0e-4, dtype=np.float64), gams=_zeros(nlev))
+    _run_step(
+        state,
+        nlev,
+        _DT,
+        _CNPAR,
+        sflux=0.5,
+        nus=np.full(nlev + 1, 1.0e-4, dtype=np.float64),
+        gams=_zeros(nlev),
+    )
     assert np.all(np.isfinite(state.S[1:]))

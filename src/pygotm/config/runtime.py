@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
-
 from pygotm.config.settings import GotmSettings, _normalize_settings_document
+
+yaml: Any = import_module("yaml")
 
 __all__ = [
     "ConfigLike",

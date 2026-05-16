@@ -5,7 +5,7 @@ Workflow:
   2. Warm up Numba kernels once before timed runs
   4. Run validation cases in parallel via Dask (dashboard at --dashboard-port)
   5. Compare each run against Fortran reference NetCDF
-  6. Write validation/results.json + validation/report.html
+  6. Write validation/results.json + validation/report.html + per-case reports
 
 Usage
 -----
@@ -34,7 +34,7 @@ import numpy as np
 from pygotm.validate import REFERENCE_CASE_NAMES
 from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
-from pygotm.validation.report import CaseResult, Report, render_html, save_json
+from pygotm.validation.report import CaseResult, Report, save_json, write_html_reports
 from pygotm.validation.runner import validate_case
 from pygotm.validation.warmup import trigger_numba_jit
 
@@ -402,7 +402,7 @@ def cli(
     json_path = output_dir / "results.json"
     html_path = output_dir / "report.html"
     save_json(report, json_path)
-    html_path.write_text(render_html(report), encoding="utf-8")
+    write_html_reports(report, output_dir)
 
     total_wall = sum(r.wall_time_s for r in results)
     print()

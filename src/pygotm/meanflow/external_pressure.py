@@ -110,9 +110,9 @@ __all__ = [
 ]
 
 # Method constants mirroring GOTM external_pressure method parameter.
-EXT_PRESS_SLOPE: int = 0   # pressure gradient inserted directly in uequation/vequation
+EXT_PRESS_SLOPE: int = 0  # pressure gradient inserted directly in uequation/vequation
 EXT_PRESS_HEIGHT: int = 1  # shift profile to match prescribed velocity at h_press
-EXT_PRESS_MEAN: int = 2    # shift profile to match prescribed depth-mean velocity
+EXT_PRESS_MEAN: int = 2  # shift profile to match prescribed depth-mean velocity
 
 
 def external_pressure(
@@ -148,7 +148,8 @@ def external_pressure(
     nlev:
         Number of vertical model layers.
     method:
-        Selector: 0 = no-op, 1 = point-velocity constraint, 2 = mean-velocity constraint.
+        Selector: 0 = no-op, 1 = point-velocity constraint,
+        2 = mean-velocity constraint.
     dpdx:
         Prescribed x-velocity [m/s] at ``h_press`` (method 1) or depth-mean (method 2).
     dpdy:

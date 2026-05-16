@@ -90,9 +90,7 @@ def _profile_method(name: str, *, analytical_constant: bool) -> int:
     if name == "off":
         return NOTHING
     if name == "constant":
-        return (
-            ANALYTICAL_OFFSET + CONST_PROF if analytical_constant else CONSTANT
-        )
+        return ANALYTICAL_OFFSET + CONST_PROF if analytical_constant else CONSTANT
     if name == "file":
         return FROMFILE
     if analytical_constant and name == "two_layer":

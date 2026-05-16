@@ -97,10 +97,9 @@ def solar_zenith_angle(yday: int, hh: float, dlon: float, dlat: float) -> float:
     )
     thsun = (hh - 12.0) * 15.0 * DEG_TO_RAD + rlon
 
-    coszen = (
-        math.sin(rlat) * math.sin(sundec)
-        + math.cos(rlat) * math.cos(sundec) * math.cos(thsun)
-    )
+    coszen = math.sin(rlat) * math.sin(sundec) + math.cos(rlat) * math.cos(
+        sundec
+    ) * math.cos(thsun)
     if coszen < 0.0:
         coszen = 0.0
 

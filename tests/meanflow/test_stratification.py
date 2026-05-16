@@ -49,6 +49,7 @@ def _call(state: MeanflowState, density_state: DensityState, nlev: int = _NLEV) 
 
 def test_import() -> None:
     from pygotm.meanflow.stratification import stratification as _s  # noqa: F401
+
     assert callable(_s)
 
 
@@ -326,5 +327,7 @@ def test_matches_analytic_decomposition() -> None:
     np.testing.assert_allclose(state.NNT[1:nlev], expected_NNT, rtol=1e-10)
     np.testing.assert_allclose(state.NNS[1:nlev], expected_NNS, rtol=1e-10)
     np.testing.assert_allclose(
-        state.NN[1:nlev], expected_NNT + expected_NNS, rtol=1e-10,
+        state.NN[1:nlev],
+        expected_NNT + expected_NNS,
+        rtol=1e-10,
     )

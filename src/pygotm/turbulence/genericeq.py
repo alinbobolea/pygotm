@@ -289,12 +289,7 @@ def _psi_bc_value(
 
     if type_ == _LOGARITHMIC:
         if bc == _DIRICHLET:
-            value = (
-                cm0**gen_p
-                * kappa**gen_n
-                * ki**gen_m
-                * (zi + z0) ** gen_n
-            )
+            value = cm0**gen_p * kappa**gen_n * ki**gen_m * (zi + z0) ** gen_n
         else:
             value = (
                 -gen_n
@@ -423,9 +418,23 @@ def _step_genericeq(
     if psi_ubc == _NEUMANN:
         pos_bc = 0.5 * h[nlev]
     diff_psi_up = _psi_bc_value(
-        psi_ubc, ubc_type, pos_bc, ki, z0s, u_taus,
-        cm0, kappa, sig_k, cmsf, cw,
-        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+        psi_ubc,
+        ubc_type,
+        pos_bc,
+        ki,
+        z0s,
+        u_taus,
+        cm0,
+        kappa,
+        sig_k,
+        cmsf,
+        cw,
+        gen_m,
+        gen_n,
+        gen_p,
+        sig_psi,
+        gen_alpha,
+        gen_l,
     )
 
     ki = tke[1]
@@ -433,9 +442,23 @@ def _step_genericeq(
     if psi_lbc == _NEUMANN:
         pos_bc = 0.5 * h[1]
     diff_psi_down = _psi_bc_value(
-        psi_lbc, lbc_type, pos_bc, ki, z0b, u_taub,
-        cm0, kappa, sig_k, cmsf, cw,
-        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+        psi_lbc,
+        lbc_type,
+        pos_bc,
+        ki,
+        z0b,
+        u_taub,
+        cm0,
+        kappa,
+        sig_k,
+        cmsf,
+        cw,
+        gen_m,
+        gen_n,
+        gen_p,
+        sig_psi,
+        gen_alpha,
+        gen_l,
     )
 
     diff_face(
@@ -460,14 +483,42 @@ def _step_genericeq(
     )
 
     psi[nlev] = _psi_bc_value(
-        _DIRICHLET, ubc_type, z0s, tke[nlev], z0s, u_taus,
-        cm0, kappa, sig_k, cmsf, cw,
-        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+        _DIRICHLET,
+        ubc_type,
+        z0s,
+        tke[nlev],
+        z0s,
+        u_taus,
+        cm0,
+        kappa,
+        sig_k,
+        cmsf,
+        cw,
+        gen_m,
+        gen_n,
+        gen_p,
+        sig_psi,
+        gen_alpha,
+        gen_l,
     )
     psi[0] = _psi_bc_value(
-        _DIRICHLET, lbc_type, z0b, tke[0], z0b, u_taub,
-        cm0, kappa, sig_k, cmsf, cw,
-        gen_m, gen_n, gen_p, sig_psi, gen_alpha, gen_l,
+        _DIRICHLET,
+        lbc_type,
+        z0b,
+        tke[0],
+        z0b,
+        u_taub,
+        cm0,
+        kappa,
+        sig_k,
+        cmsf,
+        cw,
+        gen_m,
+        gen_n,
+        gen_p,
+        sig_psi,
+        gen_alpha,
+        gen_l,
     )
 
     for i in range(nlev + 1):

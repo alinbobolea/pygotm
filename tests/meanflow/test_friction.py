@@ -94,15 +94,33 @@ def _run_step_friction_batch(
         ws.ty[b] = ty
 
     step_friction_batch(
-        batch_size, nlev,
-        KAPPA, state.avmolu, rho0, state.gravity,
-        state.h0b, state.z0s_min,
-        int(state.charnock), state.charnock_val,
-        int(state.calc_bottom_stress), state.MaxItz0b,
-        plume_type, int(first),
-        ws.h, ws.u, ws.v, ws.drag,
-        ws.z0b, ws.z0s, ws.za, ws.u_taub, ws.u_taubo, ws.u_taus, ws.taub,
-        ws.tx, ws.ty,
+        batch_size,
+        nlev,
+        KAPPA,
+        state.avmolu,
+        rho0,
+        state.gravity,
+        state.h0b,
+        state.z0s_min,
+        int(state.charnock),
+        state.charnock_val,
+        int(state.calc_bottom_stress),
+        state.MaxItz0b,
+        plume_type,
+        int(first),
+        ws.h,
+        ws.u,
+        ws.v,
+        ws.drag,
+        ws.z0b,
+        ws.z0s,
+        ws.za,
+        ws.u_taub,
+        ws.u_taubo,
+        ws.u_taus,
+        ws.taub,
+        ws.tx,
+        ws.ty,
     )
     return ws
 
@@ -484,7 +502,13 @@ def test_step_friction_batch_matches_reference_on_first_call() -> None:
 
     friction(state_ref, nlev, tx=tx, ty=ty, plume_type=1, rho0=_RHO0, _first=[True])
     ws = _run_step_friction_batch(
-        state_kernel, nlev, tx=tx, ty=ty, plume_type=1, first=True, batch_size=1,
+        state_kernel,
+        nlev,
+        tx=tx,
+        ty=ty,
+        plume_type=1,
+        first=True,
+        batch_size=1,
     )
 
     assert state_ref.drag is not None
@@ -511,7 +535,13 @@ def test_step_friction_batch_multicolumn_parity() -> None:
 
     friction(state_ref, nlev, tx=tx, ty=ty, plume_type=1, rho0=_RHO0, _first=[False])
     ws = _run_step_friction_batch(
-        state_kernel, nlev, tx=tx, ty=ty, plume_type=1, first=False, batch_size=2,
+        state_kernel,
+        nlev,
+        tx=tx,
+        ty=ty,
+        plume_type=1,
+        first=False,
+        batch_size=2,
     )
 
     assert state_ref.drag is not None

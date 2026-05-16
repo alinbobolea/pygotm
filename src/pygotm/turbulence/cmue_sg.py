@@ -55,8 +55,7 @@ def _step_cmue_sg(
         prandtl = prandtl0_fix
         if ri >= _RI_THRESHOLD:
             prandtl = (
-                prandtl0_fix
-                * math.exp(-ri / (prandtl0_fix * _RI_INFINITY))
+                prandtl0_fix * math.exp(-ri / (prandtl0_fix * _RI_INFINITY))
                 + ri / _RI_INFINITY
             )
 
@@ -78,6 +77,11 @@ def step_cmue_sg(
     r"""Update Schumann-Gerz stability functions (batch)."""
     for b in numba.prange(batch_size):
         _step_cmue_sg(
-            nlev, cm0_fix, prandtl0_fix,
-            as_[b], an[b], cmue1[b], cmue2[b],
+            nlev,
+            cm0_fix,
+            prandtl0_fix,
+            as_[b],
+            an[b],
+            cmue1[b],
+            cmue2[b],
         )

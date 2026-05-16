@@ -165,9 +165,7 @@ class TemperatureSettings(InputSetting):
         default_factory=TemperatureTwoLayerSettings
     )
     NN: float = 0.0
-    relax: ProfileRelaxationSettings = Field(
-        default_factory=ProfileRelaxationSettings
-    )
+    relax: ProfileRelaxationSettings = Field(default_factory=ProfileRelaxationSettings)
 
     @model_validator(mode="after")
     def _normalise_temperature(self) -> TemperatureSettings:
@@ -183,9 +181,7 @@ class SalinitySettings(InputSetting):
         default_factory=SalinityTwoLayerSettings
     )
     NN: float = 0.0
-    relax: ProfileRelaxationSettings = Field(
-        default_factory=ProfileRelaxationSettings
-    )
+    relax: ProfileRelaxationSettings = Field(default_factory=ProfileRelaxationSettings)
 
     @model_validator(mode="after")
     def _normalise_salinity(self) -> SalinitySettings:

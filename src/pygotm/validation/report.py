@@ -10,6 +10,7 @@ import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import numpy as np
 
@@ -19,35 +20,38 @@ __all__ = [
     "CaseResult",
     "Report",
     "load_json",
+    "render_case_html",
     "render_html",
     "save_json",
+    "write_html_reports",
 ]
 
 _STATUS_COLORS: dict[str, str] = {
-    "PASS":       "#2e7d32",
-    "MARGINAL":   "#f9a825",
+    "PASS": "#2e7d32",
+    "MARGINAL": "#f9a825",
     "DISCREPANT": "#e65100",
-    "BROKEN":     "#c62828",
-    "ERROR":      "#c62828",
+    "BROKEN": "#c62828",
+    "ERROR": "#c62828",
 }
 
 _BADGE_CLASSES: dict[str, str] = {
-    "PASS":       "badge-pass",
-    "MARGINAL":   "badge-marginal",
+    "PASS": "badge-pass",
+    "MARGINAL": "badge-marginal",
     "DISCREPANT": "badge-discrepant",
-    "BROKEN":     "badge-broken",
-    "ERROR":      "badge-error",
+    "BROKEN": "badge-broken",
+    "ERROR": "badge-error",
 }
 
 
 @dataclass
 class CaseResult:
     case_name: str
-    status: str           # "PASS" | "FAIL" | "ERROR"
+    status: str  # "PASS" | "FAIL" | "ERROR"
     error: str | None
     py_nc_path: str
     ref_nc_path: str
     wall_time_s: float
+    task_name: str | None = None
     variables: list[VarResult] = field(default_factory=list)
     n_pass: int = 0
     n_marginal: int = 0
@@ -60,7 +64,7 @@ class Report:
     generated_at: str
     hardware: dict[str, str]
     cases: list[CaseResult]
-    verdict: str           # "FULL PARITY" | "PARTIAL PARITY" | "FAILED VALIDATION"
+    verdict: str  # "FULL PARITY" | "PARTIAL PARITY" | "FAILED VALIDATION"
 
 
 def _sanitise(obj: Any) -> Any:
@@ -90,19 +94,45 @@ def load_json(path: Path) -> Report:
         data = json.load(f)
     cases = []
     for cd in data["cases"]:
-        vars_data = cd.pop("variables", [])
-        vars_ = [VarResult(**v) for v in vars_data]
-        cd.setdefault("n_marginal", 0)
-        cd.setdefault("n_discrepant", 0)
-        cd.setdefault("n_broken", 0)
-        cd.pop("n_fail", None)
-        cd.pop("n_skip", None)
-        cases.append(CaseResult(**cd, variables=vars_))
+        case_data = dict(cd)
+        vars_data = case_data.pop("variables", [])
+        vars_ = [_var_result_from_json(v) for v in vars_data]
+        case_data.setdefault("n_marginal", 0)
+        case_data.setdefault("n_discrepant", 0)
+        case_data.setdefault("n_broken", 0)
+        case_data.setdefault("task_name", None)
+        case_data.pop("n_fail", None)
+        case_data.pop("n_skip", None)
+        cases.append(CaseResult(**case_data, variables=vars_))
     data["cases"] = cases
     data.setdefault("hardware", {})
     data.pop("atol", None)
     data.pop("rtol", None)
     return Report(**data)
+
+
+def _json_float(value: Any, default: float = float("nan")) -> float:
+    if value is None:
+        return default
+    return float(value)
+
+
+def _var_result_from_json(data: dict[str, Any]) -> VarResult:
+    raw = dict(data)
+    if "d_norm" not in raw and "primary_score" in raw:
+        raw["d_norm"] = raw["primary_score"]
+    raw.setdefault("d_raw", float("nan"))
+    raw.pop("primary_score", None)
+    raw.pop("birge_ratio", None)
+    raw.pop("normalized_signed_bias", None)
+    raw["reference_at_worst"] = _json_float(raw.get("reference_at_worst"))
+    raw["calculated_at_worst"] = _json_float(raw.get("calculated_at_worst"))
+    raw["d_raw"] = _json_float(raw.get("d_raw"))
+    raw["d_norm"] = _json_float(raw.get("d_norm"))
+    raw.setdefault("plot_html", None)
+    raw.setdefault("metric_mode", "d_norm")
+    raw["score"] = _json_float(raw.get("score"), raw["d_norm"])
+    return VarResult(**raw)
 
 
 def _fmt(v: float | None, precision: int = 3) -> str:
@@ -159,21 +189,25 @@ def _var_rows_html(variables: list[VarResult]) -> str:
     rows = ""
     for v in variables:
         colour = _STATUS_COLORS.get(v.status, "#333")
+        metric_label = (
+            f" <small>({_html.escape(v.metric_mode)})</small>"
+            if v.metric_mode == "d_rel"
+            else ""
+        )
         rows += (
             "<tr>"
             f'<td style="color:{colour};font-weight:bold">{v.status}</td>'
             f"<td>{_html.escape(v.name)}</td>"
             f"<td><code>{_fmt_full(v.reference_at_worst)}</code></td>"
             f"<td><code>{_fmt_full(v.calculated_at_worst)}</code></td>"
-            f"<td>{_fmt(v.primary_score)}</td>"
-            f"<td>{_fmt(v.birge_ratio)}</td>"
-            f"<td>{_fmt(v.normalized_signed_bias)}</td>"
+            f"<td>{_fmt(v.d_raw)}</td>"
+            f"<td>{_fmt(v.primary_score)}{metric_label}</td>"
             f"<td>{'—' if v.plot_html is None else '↓ see below'}</td>"
             f"</tr>\n"
         )
         if v.plot_html is not None:
             rows += (
-                '<tr><td colspan="8" style="padding:0;border-top:none">'
+                '<tr><td colspan="7" style="padding:0;border-top:none">'
                 f'<div class="plot-container">{v.plot_html}</div>'
                 "</td></tr>\n"
             )
@@ -182,16 +216,17 @@ def _var_rows_html(variables: list[VarResult]) -> str:
 
 def _section_html(section_label: str, variables: list[VarResult]) -> str:
     if not variables:
-        return f'<p style="color:#888;font-style:italic">No {section_label} variables.</p>'
+        return (
+            f'<p style="color:#888;font-style:italic">No {section_label} variables.</p>'
+        )
     table_header = (
         "<table>"
         "<thead><tr>"
         "<th>Status</th><th>Variable</th>"
         "<th>Reference (full precision)</th>"
         "<th>Calculated (full precision)</th>"
-        "<th>Primary score (p99)</th>"
-        "<th>Birge ratio</th>"
-        "<th>Normalized signed bias</th>"
+        "<th>Raw Frechet</th>"
+        "<th>Score (Normalized Frechet / d_rel)</th>"
         "<th>Parameter plot</th>"
         "</tr></thead>"
         f"<tbody>{_var_rows_html(variables)}</tbody></table>"
@@ -199,35 +234,50 @@ def _section_html(section_label: str, variables: list[VarResult]) -> str:
     return f'<h4 style="margin:1em 0 .4em">{section_label} variables</h4>{table_header}'
 
 
-def render_html(report: Report) -> str:
-    """Render the validation report as a standalone HTML page."""
-    cases_passed = sum(1 for c in report.cases if c.status == "PASS")
-    total_cases = len(report.cases)
-    verdict_colour = (
-        "#2e7d32"
-        if report.verdict == "FULL PARITY"
-        else ("#e65100" if report.verdict == "PARTIAL PARITY" else "#c62828")
-    )
-    total_wall = sum(c.wall_time_s for c in report.cases)
+def _case_report_stem(case: CaseResult) -> str:
+    if case.task_name:
+        return case.task_name
+    if "-" in case.case_name:
+        return case.case_name
+    return f"{case.case_name}-gotm"
 
-    rows_summary = ""
+
+def _case_report_filename(case: CaseResult) -> str:
+    return f"{_case_report_stem(case)}.html"
+
+
+def _case_counts(case: CaseResult) -> tuple[int, int, int, int, int]:
+    n_total = case.n_pass + case.n_marginal + case.n_discrepant + case.n_broken
+    return (
+        case.n_pass,
+        case.n_marginal,
+        case.n_discrepant,
+        case.n_broken,
+        n_total,
+    )
+
+
+def _summary_rows_html(report: Report) -> str:
+    rows = ""
     for c in report.cases:
-        n_total = c.n_pass + c.n_marginal + c.n_discrepant + c.n_broken
+        n_pass, n_marginal, n_discrepant, n_broken, n_total = _case_counts(c)
         time_str = _fmt_time(c.wall_time_s) if c.wall_time_s > 0 else "—"
         badge_cls = _BADGE_CLASSES.get(c.status, "badge-error")
-        rows_summary += (
+        case_link = _html.escape(quote(_case_report_filename(c), safe=""))
+        rows += (
             f"<tr>"
-            f"<td>{c.case_name}</td>"
+            f'<td><a href="{case_link}" target="case-frame">{_html.escape(c.case_name)}</a></td>'
             f'<td><span class="case-badge {badge_cls}">{c.status}</span></td>'
-            f"<td>{c.n_pass}</td><td>{c.n_marginal}</td>"
-            f"<td>{c.n_discrepant}</td><td>{c.n_broken}</td>"
+            f"<td>{n_pass}</td><td>{n_marginal}</td>"
+            f"<td>{n_discrepant}</td><td>{n_broken}</td>"
             f"<td>{n_total}</td>"
             f"<td style='font-variant-numeric:tabular-nums'>{time_str}</td>"
             f"</tr>\n"
         )
-    rows_summary += (
+    total_wall = sum(c.wall_time_s for c in report.cases)
+    rows += (
         f"<tr style='font-weight:bold;border-top:2px solid #ccc'>"
-        f"<td>TOTAL ({total_cases} cases)</td><td>—</td>"
+        f"<td>TOTAL ({len(report.cases)} cases)</td><td>—</td>"
         f"<td>{sum(c.n_pass for c in report.cases)}</td>"
         f"<td>{sum(c.n_marginal for c in report.cases)}</td>"
         f"<td>{sum(c.n_discrepant for c in report.cases)}</td>"
@@ -236,91 +286,89 @@ def render_html(report: Report) -> str:
         f"<td style='font-variant-numeric:tabular-nums'>{_fmt_time(total_wall)}</td>"
         f"</tr>\n"
     )
+    return rows
 
-    case_sections = ""
-    for c in report.cases:
-        is_open = c.status in ("FAIL", "ERROR") or c.n_marginal + c.n_discrepant + c.n_broken > 0
-        open_attr = " open" if is_open else ""
-        time_str = _fmt_time(c.wall_time_s) if c.wall_time_s > 0 else "—"
-        badge_cls = _BADGE_CLASSES.get(c.status, "badge-error")
 
-        if c.status == "ERROR":
-            case_sections += f"""
-<details class="case-section" data-status="ERROR"{open_attr}>
-  <summary class="case-summary">
-    <span class="case-title">{_html.escape(c.case_name)}</span>
+def _case_nav_html(report: Report) -> str:
+    links = ""
+    for index, case in enumerate(report.cases):
+        filename = _case_report_filename(case)
+        href = _html.escape(quote(filename, safe=""))
+        badge_cls = _BADGE_CLASSES.get(case.status, "badge-error")
+        selected_class = " is-selected" if index == 0 else ""
+        links += f"""
+  <a class="case-link{selected_class}" href="{href}" target="case-frame" data-case-link>
+    <span class="case-name">{_html.escape(_case_report_stem(case))}</span>
+    <span class="case-badge {badge_cls}">{case.status}</span>
+  </a>"""
+    return links
+
+
+def _case_section_html(case: CaseResult) -> str:
+    time_str = _fmt_time(case.wall_time_s) if case.wall_time_s > 0 else "—"
+    badge_cls = _BADGE_CLASSES.get(case.status, "badge-error")
+
+    if case.status == "ERROR":
+        return f"""
+<section class="case-section" data-status="ERROR">
+  <header class="case-summary">
+    <h1>{_html.escape(case.case_name)}</h1>
     <span class="case-badge badge-error">ERROR</span>
     <span class="case-meta">wall time: {time_str}</span>
-  </summary>
-  <p style="color:#c62828;margin:.6em 0 0 1.2em">ERROR: {_html.escape(c.error or "unknown error")}</p>
-</details>
+  </header>
+  <p style="color:#c62828;margin:.6em 0 0">ERROR: {_html.escape(case.error or "unknown error")}</p>
+</section>
 """
-            continue
 
-        pygotm_vars = [v for v in c.variables if v.section == "pygotm"]
-        pyfabm_vars = [v for v in c.variables if v.section == "pyfabm"]
+    n_pass, n_marginal, n_discrepant, n_broken, _ = _case_counts(case)
+    pygotm_vars = [v for v in case.variables if v.section == "pygotm"]
+    pyfabm_vars = [v for v in case.variables if v.section == "pyfabm"]
 
-        case_sections += f"""
-<details class="case-section" data-status="{c.status}"{open_attr}>
-  <summary class="case-summary">
-    <span class="case-title">{_html.escape(c.case_name)}</span>
-    <span class="case-badge {badge_cls}">{c.status}</span>
+    return f"""
+<section class="case-section" data-status="{case.status}">
+  <header class="case-summary">
+    <h1>{_html.escape(case.case_name)}</h1>
+    <span class="case-badge {badge_cls}">{case.status}</span>
     <span class="case-meta">
-      PASS: {c.n_pass} &nbsp;·&nbsp;
-      MARGINAL: {c.n_marginal} &nbsp;·&nbsp;
-      DISCREPANT: {c.n_discrepant} &nbsp;·&nbsp;
-      BROKEN: {c.n_broken} &nbsp;·&nbsp;
+      PASS: {n_pass} &nbsp;·&nbsp;
+      MARGINAL: {n_marginal} &nbsp;·&nbsp;
+      DISCREPANT: {n_discrepant} &nbsp;·&nbsp;
+      BROKEN: {n_broken} &nbsp;·&nbsp;
       wall time: {time_str}
     </span>
-  </summary>
+  </header>
   <div class="case-body">
     <p style="font-size:0.85em;color:#555;margin:.4em 0">
-      Python: <code>{_html.escape(c.py_nc_path)}</code><br>
-      Reference: <code>{_html.escape(c.ref_nc_path)}</code>
+      Python: <code>{_html.escape(case.py_nc_path)}</code><br>
+      Reference: <code>{_html.escape(case.ref_nc_path)}</code>
     </p>
     {_section_html("1. PyGOTM", pygotm_vars)}
     {_section_html("2. PyFABM", pyfabm_vars)}
   </div>
-</details>
+</section>
 """
 
-    hw_html = _hardware_section(report.hardware)
 
+def render_case_html(report: Report, case: CaseResult) -> str:
+    """Render one validation case as a standalone HTML report page."""
+    total_wall = sum(c.wall_time_s for c in report.cases)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>pyGOTM Validation Report</title>
+<title>pyGOTM Validation Case: {_html.escape(case.case_name)}</title>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-<script>
-MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\\\]']] }} }};
-</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 <style>
-  body   {{ font-family: system-ui, sans-serif; max-width: 1600px; margin: 2rem auto; padding: 0 1rem; color: #222; }}
-  h1     {{ border-bottom: 2px solid #ccc; padding-bottom: .4em; }}
-  h2     {{ margin-top: 2.5em; border-bottom: 1px solid #ddd; padding-bottom: .3em; }}
+  body   {{ font-family: system-ui, sans-serif; margin: 1.25rem; color: #222; }}
+  h1     {{ margin: 0; font-size: 1.35rem; }}
   h4     {{ color: #444; }}
   table  {{ border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.85em; }}
   th, td {{ border: 1px solid #ddd; padding: .35em .6em; text-align: left; white-space: nowrap; }}
   th     {{ background: #f5f5f5; font-weight: 600; }}
   tr:hover td {{ background: #fafafa; }}
-  .verdict {{ font-size: 1.4em; font-weight: bold; padding: .5em 1em;
-               border-left: 6px solid; margin: 1.2em 0; }}
   code   {{ background: #f5f5f5; padding: .1em .4em; border-radius: 3px; font-size: 0.9em; }}
-  .hardware-box {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;
-                   padding: .8em 1.2em; margin: 1.2em 0; display: inline-block; min-width: 420px; }}
-  .hw-table {{ margin: 0; font-size: 0.88em; border: none; }}
-  .hw-table th, .hw-table td {{ border: none; padding: .2em .7em .2em 0; background: transparent; }}
-  .hw-table th {{ width: 140px; color: #555; font-weight: 600; }}
-  .case-section {{ border: 1px solid #e0e0e0; border-radius: 6px; margin: .8em 0; }}
-  .case-summary {{ display: flex; align-items: center; gap: .7em; cursor: pointer;
-                   padding: .6em 1em; list-style: none; user-select: none; }}
-  .case-summary::-webkit-details-marker {{ display: none; }}
-  .case-summary::before {{ content: "▶"; font-size: .75em; color: #888;
-                            transition: transform .2s; min-width: 1em; }}
-  details[open] > .case-summary::before {{ transform: rotate(90deg); }}
-  .case-title {{ font-size: 1.1em; font-weight: 600; }}
+  .case-section {{ max-width: 1600px; margin: 0 auto; }}
+  .case-summary {{ display: flex; align-items: center; gap: .7em; border-bottom: 1px solid #ddd; padding-bottom: .7em; }}
   .case-meta  {{ font-size: 0.8em; color: #666; margin-left: auto; }}
   .case-badge {{ font-size: 0.8em; font-weight: 700; padding: .15em .5em; border-radius: 3px; }}
   .badge-pass       {{ background: #e8f5e9; color: #2e7d32; }}
@@ -328,24 +376,104 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
   .badge-discrepant {{ background: #ffe0b2; color: #e65100; }}
   .badge-broken     {{ background: #ffebee; color: #c62828; }}
   .badge-error      {{ background: #ffebee; color: #c62828; }}
-  .case-body  {{ padding: 0 1em 1em; }}
+  .case-body  {{ padding-bottom: 1em; }}
   .plot-container {{ margin: .5em 0; }}
-  .controls {{ display: flex; gap: .5em; margin: 1em 0; }}
-  .btn {{ padding: .35em .9em; border: 1px solid #bbb; border-radius: 4px;
-          background: #f5f5f5; cursor: pointer; font-size: 0.85em; }}
-  .btn:hover {{ background: #e8e8e8; }}
-  .methodology {{ background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px;
-                  padding: 1em 1.4em; margin: 1.2em 0; }}
-  .status-band {{ display: grid; grid-template-columns: auto auto auto 1fr; gap: .3em 1em;
-                  font-size: 0.88em; margin-top: .6em; }}
+  .report-meta {{ color:#666; font-size:0.8em; margin:.4em 0 1em; }}
 </style>
 </head>
 <body>
-<h1>pyGOTM Validation Report</h1>
-<p style="color:#666;font-size:0.9em">Generated: {report.generated_at} &nbsp;·&nbsp; Total wall time: {_fmt_time(total_wall)}</p>
+<p class="report-meta">Generated: {report.generated_at} &nbsp;·&nbsp; Total validation wall time: {_fmt_time(total_wall)}</p>
+{_case_section_html(case)}
+</body>
+</html>
+"""
 
-<div class="verdict" style="color:{verdict_colour};border-color:{verdict_colour}">
-  {report.verdict} &nbsp; ({cases_passed}/{total_cases} cases passed)
+
+def render_html(report: Report) -> str:
+    """Render the lightweight validation index with links to case reports."""
+    cases_passed = sum(1 for c in report.cases if c.status == "PASS")
+    total_cases = len(report.cases)
+    verdict_colour = (
+        "#2e7d32"
+        if report.verdict == "FULL PARITY"
+        else ("#e65100" if report.verdict == "PARTIAL PARITY" else "#c62828")
+    )
+    total_wall = sum(c.wall_time_s for c in report.cases)
+    first_case_src = (
+        _html.escape(quote(_case_report_filename(report.cases[0]), safe=""))
+        if report.cases
+        else "about:blank"
+    )
+    hw_html = _hardware_section(report.hardware)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pyGOTM Validation Report</title>
+<script>
+MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\\\]']] }} }};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+  *      {{ box-sizing: border-box; }}
+  body   {{ font-family: system-ui, sans-serif; margin: 0; color: #1f2937; background: #f7f8fb; }}
+  .page  {{ max-width: 1800px; margin: 0 auto; padding: 1.25rem 1.5rem 1.5rem; }}
+  h1     {{ font-size: 1.25rem; margin: 0; }}
+  h2     {{ margin-top: 1.8em; border-bottom: 1px solid #ddd; padding-bottom: .3em; font-size: 1rem; }}
+  h4     {{ color: #444; }}
+  table  {{ border-collapse: collapse; width: 100%; margin: .8em 0; font-size: 0.85em; background: white; }}
+  th, td {{ border: 1px solid #ddd; padding: .35em .6em; text-align: left; white-space: nowrap; }}
+  th     {{ background: #f1f5f9; font-weight: 600; }}
+  tr:hover td {{ background: #f8fafc; }}
+  a      {{ color: #2563eb; text-decoration: none; }}
+  a:hover {{ text-decoration: underline; }}
+  .topbar {{ display: flex; align-items: center; gap: .8em; padding: .9em 1.1em; background: white; border: 1px solid #d9e2ec; border-radius: 6px; }}
+  .topbar-meta {{ color: #64748b; font-size: .85em; }}
+  .verdict {{ font-size: .9em; font-weight: bold; padding: .25em .55em;
+               border: 1px solid; border-radius: 4px; margin-left: auto; }}
+  code   {{ background: #f5f5f5; padding: .1em .4em; border-radius: 3px; font-size: 0.9em; }}
+  .hardware-box {{ background: white; border: 1px solid #d9e2ec; border-radius: 6px;
+                   padding: .8em 1.2em; margin: 1em 0; display: inline-block; min-width: 420px; }}
+  .hw-table {{ margin: 0; font-size: 0.88em; border: none; }}
+  .hw-table th, .hw-table td {{ border: none; padding: .2em .7em .2em 0; background: transparent; }}
+  .hw-table th {{ width: 140px; color: #555; font-weight: 600; }}
+  .case-badge {{ font-size: 0.8em; font-weight: 700; padding: .15em .5em; border-radius: 3px; }}
+  .badge-pass       {{ background: #e8f5e9; color: #2e7d32; }}
+  .badge-marginal   {{ background: #fff9c4; color: #f57f17; }}
+  .badge-discrepant {{ background: #ffe0b2; color: #e65100; }}
+  .badge-broken     {{ background: #ffebee; color: #c62828; }}
+  .badge-error      {{ background: #ffebee; color: #c62828; }}
+  .methodology {{ background: white; border: 1px solid #d9e2ec; border-radius: 6px;
+                  padding: 1em 1.4em; margin: 1em 0; }}
+  .status-band {{ display: grid; grid-template-columns: auto auto auto 1fr; gap: .3em 1em;
+                  font-size: 0.88em; margin-top: .6em; }}
+  .case-browser {{ display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 680px; margin-top: 1rem; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: white; }}
+  .case-nav {{ border-right: 1px solid #cbd5e1; background: #f8fafc; overflow: auto; }}
+  .case-nav h2 {{ margin: 0; padding: .8em 1em; border-bottom: 1px solid #cbd5e1; font-size: .85em; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }}
+  .case-link {{ display: flex; align-items: center; justify-content: space-between; gap: .7em; padding: .65em .85em; border-bottom: 1px solid #e2e8f0; color: #1f2937; }}
+  .case-link:hover {{ background: #eaf2ff; text-decoration: none; }}
+  .case-link.is-selected {{ background: #dbeafe; border-left: 4px solid #2563eb; padding-left: calc(.85em - 4px); }}
+  .case-name {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+  .case-frame {{ width: 100%; height: 100%; min-height: 680px; border: 0; background: white; }}
+  @media (max-width: 900px) {{
+    .page {{ padding: .8rem; }}
+    .topbar {{ align-items: flex-start; flex-direction: column; }}
+    .verdict {{ margin-left: 0; }}
+    .hardware-box {{ min-width: 0; width: 100%; }}
+    .case-browser {{ grid-template-columns: 1fr; }}
+    .case-nav {{ border-right: 0; border-bottom: 1px solid #cbd5e1; max-height: 260px; }}
+  }}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="topbar">
+  <h1>pyGOTM Validation Report</h1>
+  <span class="topbar-meta">Generated: {report.generated_at} &nbsp;·&nbsp; Total wall time: {_fmt_time(total_wall)}</span>
+  <div class="verdict" style="color:{verdict_colour};border-color:{verdict_colour}">
+    {report.verdict} &nbsp; ({cases_passed}/{total_cases} cases passed)
+  </div>
 </div>
 
 {hw_html}
@@ -353,22 +481,23 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
 <h2>Validation Methodology</h2>
 <div class="methodology">
   <p style="font-size:0.85em;color:#555;margin:.2em 0 .8em">
-    Three indicators are used. Status is driven exclusively by the primary tolerance-normalized score.
+    Discrete Frechet distance is computed per numeric variable after aligning both outputs onto a shared time grid.
+    Status is driven by the score: normalized Frechet distance for physically meaningful signal magnitudes, or relative raw distance below the variable magnitude floor.
   </p>
   <p style="font-size:0.85em">
-    <strong>Pointwise normalized error:</strong>
-    \\[E_i = \\frac{{|\\text{{calc}}_i - \\text{{ref}}_i|}}{{a_{{tol}} + r_{{tol}} \\cdot \\max(|\\text{{ref}}_i|,\\, s_{{floor}})}}\\]
+    <strong>Raw distance:</strong> \\(d_{{raw}} = F(\\text{{ref}}, \\text{{calc}})\\), the discrete Frechet distance on original values.<br>
+    <strong>Normalized distance:</strong> \\(d_{{norm}} = F(N(\\text{{ref}}), N(\\text{{calc}}))\\), where \\(N\\) is dynamic linear/log range normalization.<br>
+    <strong>Relative raw distance:</strong> \\(d_{{rel}} = d_{{raw}} / \\max(|\\text{{ref}}|, |\\text{{calc}}|)\\), used when the signal magnitude is below its variable floor.
   </p>
   <p style="font-size:0.85em">
-    <strong>Primary score (p99):</strong> \\(P_{{99}} = \\text{{percentile}}(E_i, 99)\\) — drives status classification.<br>
-    <strong>Birge ratio:</strong> \\(B = \\sqrt{{\\text{{mean}}(E_i^2)}}\\) — RMS diagnostic only, not used for status.<br>
-    <strong>Normalized signed bias:</strong> \\(\\text{{NSB}} = \\bar{{(\\text{{calc}} - \\text{{ref}})}} \\;/\\; (a_{{tol}} + r_{{tol}} \\cdot \\max(\\bar{{|\\text{{ref}}|}}, s_{{floor}}))\\)
+    If \\(d_{{raw}} &lt; 10^{{-12}}\\), both distances are reported as zero.
+    Reference and calculated values are shown at the largest absolute aligned difference.
   </p>
   <div class="status-band">
-    <span style="color:#2e7d32;font-weight:bold">PASS</span>     <span>green</span>  <span>\\(P_{{99}} \\leq 1\\)</span>       <span>Within tolerance.</span>
-    <span style="color:#f9a825;font-weight:bold">MARGINAL</span> <span>yellow</span> <span>\\(1 &lt; P_{{99}} \\leq 3\\)</span>  <span>Slightly outside. Possible float32 sensitivity.</span>
-    <span style="color:#e65100;font-weight:bold">DISCREPANT</span><span>orange</span><span>\\(3 &lt; P_{{99}} \\leq 10\\)</span> <span>Deterministic implementation difference likely.</span>
-    <span style="color:#c62828;font-weight:bold">BROKEN</span>    <span>red</span>   <span>\\(P_{{99}} > 10\\)</span>          <span>Severe mismatch. Debug before inspecting plots.</span>
+    <span style="color:#2e7d32;font-weight:bold">PASS</span>     <span>green</span>  <span>score \\(&lt; 0.01\\)</span>       <span>Shape-equivalent within threshold.</span>
+    <span style="color:#f9a825;font-weight:bold">MARGINAL</span> <span>yellow</span> <span>score \\(0.01\\) to \\(&lt; 0.05\\)</span>  <span>Small shape deviation. Plot generated.</span>
+    <span style="color:#e65100;font-weight:bold">DISCREPANT</span><span>orange</span><span>score \\(0.05\\) to \\(&lt; 0.20\\)</span> <span>Deterministic implementation difference likely. Plot generated.</span>
+    <span style="color:#c62828;font-weight:bold">BROKEN</span>    <span>red</span>   <span>score \\(\\geq 0.20\\)</span>          <span>Severe mismatch or structural comparison failure.</span>
   </div>
   <p style="font-size:0.85em;margin-top:.6em">
     Comparison plots are generated only for <strong>MARGINAL</strong> and <strong>DISCREPANT</strong> variables.
@@ -385,27 +514,43 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
       <th>Total vars</th><th>Wall time</th>
     </tr>
   </thead>
-  <tbody>{rows_summary}</tbody>
+  <tbody>{_summary_rows_html(report)}</tbody>
 </table>
 
-<div class="controls">
-  <button class="btn" onclick="expandAll()">Expand All</button>
-  <button class="btn" onclick="collapseAll()">Collapse All</button>
-  <button class="btn" onclick="showFailed()">Show Non-Pass</button>
+<div class="case-browser">
+  <nav class="case-nav" aria-label="Case reports">
+    <h2>Cases</h2>
+    {_case_nav_html(report)}
+  </nav>
+  <iframe class="case-frame" name="case-frame" src="{first_case_src}" title="Selected validation case report"></iframe>
 </div>
 
-{case_sections}
-
 <script>
-function expandAll()   {{ document.querySelectorAll('details.case-section').forEach(d => d.open = true); }}
-function collapseAll() {{ document.querySelectorAll('details.case-section').forEach(d => d.open = false); }}
-function showFailed()  {{
-  document.querySelectorAll('details.case-section').forEach(d => {{
-    const s = d.dataset.status;
-    d.open = s === 'FAIL' || s === 'ERROR';
+document.querySelectorAll('[data-case-link]').forEach(link => {{
+  link.addEventListener('click', () => {{
+    document.querySelectorAll('[data-case-link]').forEach(item => item.classList.remove('is-selected'));
+    link.classList.add('is-selected');
   }});
-}}
+}});
 </script>
+</div>
 </body>
 </html>
 """
+
+
+def write_html_reports(
+    report: Report,
+    output_dir: Path,
+    *,
+    index_filename: str = "report.html",
+) -> Path:
+    """Write the report index and one standalone HTML page per validation case."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for case in report.cases:
+        case_path = output_dir / _case_report_filename(case)
+        case_path.write_text(render_case_html(report, case), encoding="utf-8")
+
+    index_path = output_dir / index_filename
+    index_path.write_text(render_html(report), encoding="utf-8")
+    return index_path

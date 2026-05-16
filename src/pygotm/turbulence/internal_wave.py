@@ -129,8 +129,18 @@ def step_internal_wave(
     r"""Apply the Kantha-Clayson internal-wave mixing fallback (batch)."""
     for b in numba.prange(batch_size):
         _step_internal_wave(
-            nlev, iw_model, klimiw, rich_cr, numiw, nuhiw, numshear,
-            tke[b], num[b], nuh[b], NN[b], SS[b],
+            nlev,
+            iw_model,
+            klimiw,
+            rich_cr,
+            numiw,
+            nuhiw,
+            numshear,
+            tke[b],
+            num[b],
+            nuh[b],
+            NN[b],
+            SS[b],
         )
 
 

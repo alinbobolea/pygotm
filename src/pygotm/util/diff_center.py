@@ -155,10 +155,10 @@ def diff_center(
     qu: np.ndarray,
 ) -> None:
     r"""! !ROUTINE: Diffusion schemes --- grid centers
-!
-! !DESCRIPTION:
-! This subroutine solves the one-dimensional diffusion equation including
-! source terms for all variables defined at the centers of the grid cells.
+    !
+    ! !DESCRIPTION:
+    ! This subroutine solves the one-dimensional diffusion equation including
+    ! source terms for all variables defined at the centers of the grid cells.
     """
 
     for i in range(2, nlev):

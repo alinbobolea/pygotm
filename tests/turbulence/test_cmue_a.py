@@ -41,11 +41,7 @@ def _configure_second_order_state(state: TurbulenceState) -> None:
 
     n_val = state.cc1 / 2.0
     state.cm0 = (
-        (
-            state.a2 * state.a2
-            - 3.0 * state.a3 * state.a3
-            + 3.0 * state.a1 * n_val
-        )
+        (state.a2 * state.a2 - 3.0 * state.a3 * state.a3 + 3.0 * state.a1 * n_val)
         / (3.0 * n_val * n_val)
     ) ** 0.25
 
@@ -85,14 +81,15 @@ def _reference_cmue_a(
     xd1 = 84.0 * state.a5 * state.at3
     xd2 = 9.0 * (state.at2**2 - state.at1**2)
     xd3 = -12.0 * (state.a2**2 - 3.0 * state.a3**2)
-    xd4 = 12.0 * state.a5 * state.at3 * (
-        state.a2 * state.at1 - 3.0 * state.a3 * state.at2
+    xd4 = (
+        12.0
+        * state.a5
+        * state.at3
+        * (state.a2 * state.at1 - 3.0 * state.a3 * state.at2)
     )
     xd5 = 12.0 * state.a5 * state.at3 * (state.a3**2 - state.a2**2)
     xd6 = 48.0 * state.a5**2 * state.at3**2
-    xd7 = 3.0 * (state.a2**2 - 3.0 * state.a3**2) * (
-        state.at1**2 - state.at2**2
-    )
+    xd7 = 3.0 * (state.a2**2 - 3.0 * state.a3**2) * (state.at1**2 - state.at2**2)
 
     xn0 = 36.0 * state.a1
     xn1 = -12.0 * state.a5 * state.at3 * (state.at1 + state.at2)

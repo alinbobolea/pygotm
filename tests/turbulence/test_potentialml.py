@@ -181,12 +181,8 @@ def test_matches_reference_translation() -> None:
         eps_min=state.eps_min,
     )
 
-    np.testing.assert_allclose(
-        workspace.L[0], expected_L, rtol=1.0e-12
-    )
-    np.testing.assert_allclose(
-        workspace.eps[0], expected_eps, rtol=1.0e-12
-    )
+    np.testing.assert_allclose(workspace.L[0], expected_L, rtol=1.0e-12)
+    np.testing.assert_allclose(workspace.eps[0], expected_eps, rtol=1.0e-12)
 
 
 def test_stable_length_limit_caps_profile() -> None:
@@ -211,9 +207,7 @@ def test_eps_min_backstop_replaces_too_small_dissipation() -> None:
     workspace = _run_step(state, 1, tke=tke, h=h, NN=NN, depth=1.0, z0b=0.2, z0s=0.3)
     expected_L = state.cde * np.sqrt(tke**3) / state.eps_min
 
-    np.testing.assert_allclose(
-        workspace.eps[0], np.full(2, state.eps_min)
-    )
+    np.testing.assert_allclose(workspace.eps[0], np.full(2, state.eps_min))
     np.testing.assert_allclose(workspace.L[0], expected_L, rtol=1.0e-12)
 
 

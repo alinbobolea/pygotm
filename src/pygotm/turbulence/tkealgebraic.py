@@ -73,13 +73,7 @@ def _step_tkealgebraic(
 
     for i in range(1, nlev):
         tke[i] = (
-            _C_FILT
-            * (
-                L[i]
-                * L[i]
-                / cde
-                * (cmue1[i] * SS[i] - cmue2[i] * NN[i])
-            )
+            _C_FILT * (L[i] * L[i] / cde * (cmue1[i] * SS[i] - cmue2[i] * NN[i]))
             + (1.0 - _C_FILT) * tkeo[i]
         )
 
@@ -112,7 +106,17 @@ def step_tkealgebraic(
     r"""Advance the algebraic TKE closure (batch)."""
     for b in numba.prange(batch_size):
         _step_tkealgebraic(
-            nlev, k_min, cm0, cde,
-            tke[b], tkeo[b], L[b], NN[b], SS[b], cmue1[b], cmue2[b],
-            u_taus[b, 0], u_taub[b, 0],
+            nlev,
+            k_min,
+            cm0,
+            cde,
+            tke[b],
+            tkeo[b],
+            L[b],
+            NN[b],
+            SS[b],
+            cmue1[b],
+            cmue2[b],
+            u_taus[b, 0],
+            u_taub[b, 0],
         )

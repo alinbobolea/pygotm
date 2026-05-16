@@ -154,8 +154,23 @@ def step_kbeq(
     r"""Advance the dynamic buoyancy-variance equation (batch)."""
     for b in numba.prange(batch_size):
         _step_kbeq(
-            nlev, dt, kb_min, k_ubc, k_lbc,
-            kb[b], h[b], Pb[b], epsb[b], nuh[b],
-            avh[b], l_sour[b], q_sour[b],
-            au[b], bu[b], cu[b], du[b], ru[b], qu[b],
+            nlev,
+            dt,
+            kb_min,
+            k_ubc,
+            k_lbc,
+            kb[b],
+            h[b],
+            Pb[b],
+            epsb[b],
+            nuh[b],
+            avh[b],
+            l_sour[b],
+            q_sour[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
         )

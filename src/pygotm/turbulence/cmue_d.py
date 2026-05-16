@@ -93,9 +93,10 @@ def _step_cmue_d(
 
     d0 = 36.0 * n_cube * nt_sq
     d1 = 84.0 * a5 * at3 * n_sq * nt_val + 36.0 * at5 * n_cube * nt_val
-    d2 = 9.0 * (at2 * at2 - at1 * at1) * n_cube - 12.0 * (
-        a2 * a2 - 3.0 * a3 * a3
-    ) * n_val * nt_sq
+    d2 = (
+        9.0 * (at2 * at2 - at1 * at1) * n_cube
+        - 12.0 * (a2 * a2 - 3.0 * a3 * a3) * n_val * nt_sq
+    )
     d3 = (
         12.0 * a5 * at3 * (a2 * at1 - 3.0 * a3 * at2) * n_val
         + 12.0 * a5 * at3 * (a3 * a3 - a2 * a2) * nt_val
@@ -114,13 +115,19 @@ def _step_cmue_d(
 
     nt0 = 12.0 * at3 * n_cube * nt_val
     nt1 = 12.0 * a5 * at3 * at3 * n_sq
-    nt2 = 9.0 * a1 * at3 * (at1 - at2) * n_sq + (
-        6.0 * a1 * (a2 - 3.0 * a3) - 4.0 * (a2 * a2 - 3.0 * a3 * a3)
-    ) * at3 * n_val * nt_val
+    nt2 = (
+        9.0 * a1 * at3 * (at1 - at2) * n_sq
+        + (6.0 * a1 * (a2 - 3.0 * a3) - 4.0 * (a2 * a2 - 3.0 * a3 * a3))
+        * at3
+        * n_val
+        * nt_val
+    )
 
     cm3_inv = 1.0 / (cm0 * cm0 * cm0)
 
-    an_min_num = -(d1 + nt0) + math.sqrt((d1 + nt0) * (d1 + nt0) - 4.0 * d0 * (d4 + nt1))
+    an_min_num = -(d1 + nt0) + math.sqrt(
+        (d1 + nt0) * (d1 + nt0) - 4.0 * d0 * (d4 + nt1)
+    )
     an_min_den = 2.0 * (d4 + nt1)
     an_min = an_min_num / an_min_den
 
@@ -135,9 +142,7 @@ def _step_cmue_d(
             as_[i] = -tmp0 / tmp1
         else:
             tmp2 = n2 - d5
-            as_[i] = (-tmp1 + math.sqrt(tmp1 * tmp1 - 4.0 * tmp0 * tmp2)) / (
-                2.0 * tmp2
-            )
+            as_[i] = (-tmp1 + math.sqrt(tmp1 * tmp1 - 4.0 * tmp0 * tmp2)) / (2.0 * tmp2)
 
         d_cm = (
             d0
@@ -177,8 +182,22 @@ def step_cmue_d(
     r"""Update the quasi-equilibrium stability functions (batch)."""
     for b in numba.prange(batch_size):
         _step_cmue_d(
-            nlev, cm0, cc1, ct1, a1, a2, a3, a5, at1, at2, at3, at5,
-            as_[b], an[b], cmue1[b], cmue2[b],
+            nlev,
+            cm0,
+            cc1,
+            ct1,
+            a1,
+            a2,
+            a3,
+            a5,
+            at1,
+            at2,
+            at3,
+            at5,
+            as_[b],
+            an[b],
+            cmue1[b],
+            cmue2[b],
         )
 
 

@@ -102,9 +102,7 @@ def _reference_algebraiclength(
             db += h[i]
             ds = depth - db
             L[i] = 1.0 / (
-                1.0 / (kappa * (ds + z0s))
-                + 1.0 / (kappa * (db + z0b))
-                + 1.0 / la
+                1.0 / (kappa * (ds + z0s)) + 1.0 / (kappa * (db + z0b)) + 1.0 / la
             )
         L[0] = kappa * z0b
         L[nlev] = kappa * z0s

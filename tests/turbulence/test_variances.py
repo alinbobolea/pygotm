@@ -48,9 +48,7 @@ def _reference_variances(
     vv = tke * (
         fac1 + fac2 * (fac3 * num * SSV - fac5 * num * SSU - 4.0 / 3.0 * state.a5 * B)
     )
-    ww = tke * (
-        fac1 + fac2 * (fac4 * (P + Px) + 8.0 / 3.0 * state.a5 * B)
-    )
+    ww = tke * (fac1 + fac2 * (fac4 * (P + Px) + 8.0 / 3.0 * state.a5 * B))
     return uu, vv, ww
 
 

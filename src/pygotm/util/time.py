@@ -144,8 +144,7 @@ def sunrise_sunset(latitude: float, declination: float) -> tuple[float, float]:
         (sunrise, sunset) in decimal hours (UTC).
     """
     omega = math.acos(
-        -math.tan(latitude * math.pi / 180.0)
-        * math.tan(declination * math.pi / 180.0)
+        -math.tan(latitude * math.pi / 180.0) * math.tan(declination * math.pi / 180.0)
     )
     hour = omega * 180.0 / math.pi / 15.0
     return 12.0 - hour, 12.0 + hour

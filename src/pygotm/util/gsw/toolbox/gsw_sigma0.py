@@ -68,16 +68,25 @@ def gsw_sigma0(sa: float, ct: float) -> float:
     ys = ct * 0.025
 
     vp0 = (
-        v000 + xs * (v010 + xs * (v020 + xs * (v030 + xs * (v040 + xs * (v050
-            + v060 * xs)))))
-        + ys * (
-            v100 + xs * (v110 + xs * (v120 + xs * (v130 + xs * (v140 + v150 * xs))))
-            + ys * (
-                v200 + xs * (v210 + xs * (v220 + xs * (v230 + v240 * xs)))
-                + ys * (
-                    v300 + xs * (v310 + xs * (v320 + v330 * xs))
-                    + ys * (
-                        v400 + xs * (v410 + v420 * xs)
+        v000
+        + xs
+        * (v010 + xs * (v020 + xs * (v030 + xs * (v040 + xs * (v050 + v060 * xs)))))
+        + ys
+        * (
+            v100
+            + xs * (v110 + xs * (v120 + xs * (v130 + xs * (v140 + v150 * xs))))
+            + ys
+            * (
+                v200
+                + xs * (v210 + xs * (v220 + xs * (v230 + v240 * xs)))
+                + ys
+                * (
+                    v300
+                    + xs * (v310 + xs * (v320 + v330 * xs))
+                    + ys
+                    * (
+                        v400
+                        + xs * (v410 + v420 * xs)
                         + ys * (v500 + v510 * xs + v600 * ys)
                     )
                 )

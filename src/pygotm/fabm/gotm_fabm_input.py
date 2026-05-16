@@ -63,7 +63,9 @@ class FabmInputState:
         self.variables = []
 
 
-def configure_gotm_fabm_input(state: FabmInputState, cfg: dict[str, Any] | None = None) -> None:
+def configure_gotm_fabm_input(
+    state: FabmInputState, cfg: dict[str, Any] | None = None
+) -> None:
     """Configure FABM input descriptors from a mapping."""
 
     if cfg is None:
@@ -139,7 +141,9 @@ def init_gotm_fabm_input(
     for variable in state.variables:
         if variable.profile_input is not None:
             register_input(variable.profile_input)
-            variable.relax_tau_1d = np.full(nlev + 1, variable.relax_tau, dtype=np.float64)
+            variable.relax_tau_1d = np.full(
+                nlev + 1, variable.relax_tau, dtype=np.float64
+            )
             db = 0.0
             ds = depth
             for k in range(1, nlev + 1):
@@ -168,4 +172,6 @@ def init_gotm_fabm_input(
                     variable.relax_tau,
                 )
             else:
-                register_observation(fabm, variable.scalar_id, variable.scalar_input.value)
+                register_observation(
+                    fabm, variable.scalar_id, variable.scalar_input.value
+                )

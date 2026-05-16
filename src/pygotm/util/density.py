@@ -98,9 +98,9 @@ __all__ = [
 ]
 
 # Density method codes matching GOTM Fortran density_method variable
-METHOD_TEOS10 = 1        # Full TEOS-10 equation of state (gsw_rho / gsw_sigma0)
+METHOD_TEOS10 = 1  # Full TEOS-10 equation of state (gsw_rho / gsw_sigma0)
 METHOD_LINEAR_TEOS10 = 2  # Linearised EOS; α, β computed from TEOS-10 at (S0,T0,p0)
-METHOD_LINEAR_USER = 3    # Linearised EOS with user-supplied ρ₀, α₀, β₀
+METHOD_LINEAR_USER = 3  # Linearised EOS with user-supplied ρ₀, α₀, β₀
 
 
 class DensityState:
@@ -274,9 +274,7 @@ def do_density(
         state.rho[:] = state.rho_p
 
 
-def get_rho(
-    state: DensityState, S: float, T: float, p: float | None = None
-) -> float:
+def get_rho(state: DensityState, S: float, T: float, p: float | None = None) -> float:
     """Compute density for a single water parcel.
 
     ! !DESCRIPTION:

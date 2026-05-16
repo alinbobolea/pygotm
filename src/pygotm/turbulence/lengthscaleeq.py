@@ -407,8 +407,18 @@ def _step_lengthscaleeq(
     if psi_ubc == _NEUMANN:
         pos_bc = 0.5 * h[nlev]
     diff_q2l_up = _q2l_bc_value(
-        psi_ubc, ubc_type, pos_bc, ki, z0s, u_taus,
-        kappa, sl, sq, cw, gen_alpha, gen_l,
+        psi_ubc,
+        ubc_type,
+        pos_bc,
+        ki,
+        z0s,
+        u_taus,
+        kappa,
+        sl,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
     )
 
     ki = tke[1]
@@ -416,8 +426,18 @@ def _step_lengthscaleeq(
     if psi_lbc == _NEUMANN:
         pos_bc = 0.5 * h[1]
     diff_q2l_down = _q2l_bc_value(
-        psi_lbc, lbc_type, pos_bc, ki, z0b, u_taub,
-        kappa, sl, sq, cw, gen_alpha, gen_l,
+        psi_lbc,
+        lbc_type,
+        pos_bc,
+        ki,
+        z0b,
+        u_taub,
+        kappa,
+        sl,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
     )
 
     diff_face(
@@ -442,12 +462,32 @@ def _step_lengthscaleeq(
     )
 
     q2l[nlev] = _q2l_bc_value(
-        _DIRICHLET, ubc_type, z0s, tke[nlev], z0s, u_taus,
-        kappa, sl, sq, cw, gen_alpha, gen_l,
+        _DIRICHLET,
+        ubc_type,
+        z0s,
+        tke[nlev],
+        z0s,
+        u_taus,
+        kappa,
+        sl,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
     )
     q2l[0] = _q2l_bc_value(
-        _DIRICHLET, lbc_type, z0b, tke[0], z0b, u_taub,
-        kappa, sl, sq, cw, gen_alpha, gen_l,
+        _DIRICHLET,
+        lbc_type,
+        z0b,
+        tke[0],
+        z0b,
+        u_taub,
+        kappa,
+        sl,
+        sq,
+        cw,
+        gen_alpha,
+        gen_l,
     )
 
     for i in range(nlev + 1):

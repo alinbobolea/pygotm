@@ -87,7 +87,7 @@ def test_do_seagrass_clamps_excursion_and_adds_drag_and_production(
     limit = state.excur[1 : state.grassind + 1] + 1.0e-14
     assert np.all(excursion <= limit)
     assert np.any(drag[1 : state.grassind + 1] > 0.0)
-    assert np.any(xP[1:state.grassind] >= 0.0)
+    assert np.any(xP[1 : state.grassind] >= 0.0)
     assert np.isfinite(drag).all()
     assert np.isfinite(xP).all()
 

@@ -35,10 +35,23 @@ def build_figures() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--clean", action="store_true", help="Remove build directory before building")
-    p.add_argument("--strict", action="store_true", help="Treat Sphinx warnings as errors (-W --keep-going)")
-    p.add_argument("--open", action="store_true", dest="open_browser", help="Open index.html in the default browser after a successful build")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--clean", action="store_true", help="Remove build directory before building"
+    )
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="Treat Sphinx warnings as errors (-W --keep-going)",
+    )
+    p.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_browser",
+        help="Open index.html in the default browser after a successful build",
+    )
     return p.parse_args()
 
 

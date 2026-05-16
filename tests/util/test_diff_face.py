@@ -24,9 +24,24 @@ def _call_diff_face(
     y_out = y.copy()
     nu_out = nu_y.copy()
     diff_face(
-        nlev, dt, cnpar, h, bc_up, bc_down, y_up, y_down,
-        nu_out, l_sour, q_sour, y_out,
-        ws.au, ws.bu, ws.cu, ws.du, ws.ru, ws.qu,
+        nlev,
+        dt,
+        cnpar,
+        h,
+        bc_up,
+        bc_down,
+        y_up,
+        y_down,
+        nu_out,
+        l_sour,
+        q_sour,
+        y_out,
+        ws.au,
+        ws.bu,
+        ws.cu,
+        ws.du,
+        ws.ru,
+        ws.qu,
     )
     return y_out, nu_out
 
@@ -124,12 +139,32 @@ def test_dirichlet_matches_numpy_reference() -> None:
     y_up, y_down = 0.3, 1.1
 
     result, _ = _call_diff_face(
-        nlev, dt, cnpar, h, DIRICHLET, DIRICHLET, y_up, y_down,
-        nu_y, l_sour, q_sour, y,
+        nlev,
+        dt,
+        cnpar,
+        h,
+        DIRICHLET,
+        DIRICHLET,
+        y_up,
+        y_down,
+        nu_y,
+        l_sour,
+        q_sour,
+        y,
     )
     expected = _reference_diff_face(
-        nlev, dt, cnpar, DIRICHLET, DIRICHLET, y_up, y_down,
-        h, nu_y, l_sour, q_sour, y,
+        nlev,
+        dt,
+        cnpar,
+        DIRICHLET,
+        DIRICHLET,
+        y_up,
+        y_down,
+        h,
+        nu_y,
+        l_sour,
+        q_sour,
+        y,
     )
     np.testing.assert_allclose(result[1:nlev], expected[1:nlev], rtol=1e-12, atol=1e-12)
 
@@ -147,12 +182,32 @@ def test_two_layer_bugfix_matches_reference() -> None:
     y_up, y_down = 0.04, -0.03
 
     result, nu_out = _call_diff_face(
-        nlev, dt, cnpar, h, NEUMANN, NEUMANN, y_up, y_down,
-        nu_y, l_sour, q_sour, y,
+        nlev,
+        dt,
+        cnpar,
+        h,
+        NEUMANN,
+        NEUMANN,
+        y_up,
+        y_down,
+        nu_y,
+        l_sour,
+        q_sour,
+        y,
     )
     expected = _reference_diff_face(
-        nlev, dt, cnpar, NEUMANN, NEUMANN, y_up, y_down,
-        h, nu_y, l_sour, q_sour, y,
+        nlev,
+        dt,
+        cnpar,
+        NEUMANN,
+        NEUMANN,
+        y_up,
+        y_down,
+        h,
+        nu_y,
+        l_sour,
+        q_sour,
+        y,
     )
     np.testing.assert_allclose(result, expected, rtol=1e-12, atol=1e-12)
     assert nu_out[0] == pytest.approx(nu_out[1])
@@ -171,8 +226,18 @@ def test_no_nan_inf() -> None:
     y_up, y_down = 0.2, -0.1
 
     result, _ = _call_diff_face(
-        nlev, dt, cnpar, h, NEUMANN, NEUMANN, y_up, y_down,
-        nu_y, l_sour, q_sour, y,
+        nlev,
+        dt,
+        cnpar,
+        h,
+        NEUMANN,
+        NEUMANN,
+        y_up,
+        y_down,
+        nu_y,
+        l_sour,
+        q_sour,
+        y,
     )
     assert np.isfinite(result[1:nlev]).all(), "diff_face produced NaN or Inf"
 
@@ -191,8 +256,18 @@ def test_batch_parity() -> None:
     y_up, y_down = 0.3, 1.1
 
     expected, _ = _call_diff_face(
-        nlev, dt, cnpar, h, DIRICHLET, DIRICHLET, y_up, y_down,
-        nu_y, l_sour, q_sour, y,
+        nlev,
+        dt,
+        cnpar,
+        h,
+        DIRICHLET,
+        DIRICHLET,
+        y_up,
+        y_down,
+        nu_y,
+        l_sour,
+        q_sour,
+        y,
     )
 
     ws = TridiagonalBatchWorkspace(nlev, batch_size)
@@ -203,10 +278,25 @@ def test_batch_parity() -> None:
     y_b = np.tile(y, (batch_size, 1))
 
     diff_face_batch(
-        batch_size, nlev, dt, cnpar,
-        h_b, DIRICHLET, DIRICHLET, y_up, y_down,
-        nu_b, ls_b, qs_b, y_b,
-        ws.au, ws.bu, ws.cu, ws.du, ws.ru, ws.qu,
+        batch_size,
+        nlev,
+        dt,
+        cnpar,
+        h_b,
+        DIRICHLET,
+        DIRICHLET,
+        y_up,
+        y_down,
+        nu_b,
+        ls_b,
+        qs_b,
+        y_b,
+        ws.au,
+        ws.bu,
+        ws.cu,
+        ws.du,
+        ws.ru,
+        ws.qu,
     )
 
     for b in range(batch_size):

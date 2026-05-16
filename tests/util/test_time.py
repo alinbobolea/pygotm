@@ -127,7 +127,9 @@ class TestTimeDiff:
     def test_cross_midnight(self) -> None:
         j1 = julian_day(2000, 1, 2)
         j2 = julian_day(2000, 1, 1)
-        assert time_diff(j1, 3600, j2, 82800) == pytest.approx(3600.0 - 82800.0 + 86400.0)
+        assert time_diff(j1, 3600, j2, 82800) == pytest.approx(
+            3600.0 - 82800.0 + 86400.0
+        )
 
 
 # ---------------------------------------------------------------------------

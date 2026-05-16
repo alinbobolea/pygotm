@@ -11,6 +11,7 @@ from pygotm.gotm.runtime_output import RuntimeOutput
 from pygotm.gotm.runtime_params import RuntimeParams
 from pygotm.gotm.runtime_state import RuntimeState
 from pygotm.gotm.runtime_work import RuntimeWork
+from pygotm.icethm.driver import step_ice
 from pygotm.meanflow.coriolis import step_coriolis_single
 from pygotm.meanflow.friction import step_friction_single
 from pygotm.meanflow.salinity import step_salinity_single
@@ -639,6 +640,45 @@ def _write_output_slot(
         output_zi[slot, k] = zi[k]
 
 
+@numba.njit(cache=True)
+def _write_ice_output_slot(
+    slot: int,
+    Hfrazil: np.ndarray,
+    Hice: np.ndarray,
+    T1: np.ndarray,
+    T2: np.ndarray,
+    Tf: np.ndarray,
+    Tice_surface: np.ndarray,
+    bottom_ice_energy: np.ndarray,
+    ocean_ice_flux: np.ndarray,
+    ocean_ice_heat_flux: np.ndarray,
+    ocean_ice_salt_flux: np.ndarray,
+    surface_ice_energy: np.ndarray,
+    output_Hfrazil: np.ndarray,
+    output_Hice: np.ndarray,
+    output_T1: np.ndarray,
+    output_T2: np.ndarray,
+    output_Tf: np.ndarray,
+    output_Tice_surface: np.ndarray,
+    output_bottom_ice_energy: np.ndarray,
+    output_ocean_ice_flux: np.ndarray,
+    output_ocean_ice_heat_flux: np.ndarray,
+    output_ocean_ice_salt_flux: np.ndarray,
+    output_surface_ice_energy: np.ndarray,
+) -> None:
+    output_Hfrazil[slot] = Hfrazil[0]
+    output_Hice[slot] = Hice[0]
+    output_T1[slot] = T1[0]
+    output_T2[slot] = T2[0]
+    output_Tf[slot] = Tf[0]
+    output_Tice_surface[slot] = Tice_surface[0]
+    output_bottom_ice_energy[slot] = bottom_ice_energy[0]
+    output_ocean_ice_flux[slot] = ocean_ice_flux[0]
+    output_ocean_ice_heat_flux[slot] = ocean_ice_heat_flux[0]
+    output_ocean_ice_salt_flux[slot] = ocean_ice_salt_flux[0]
+    output_surface_ice_energy[slot] = surface_ice_energy[0]
+
+
 @numba.njit(cache=True, fastmath=False)
 def time_loop_compiled(
     nlev: int,
@@ -703,6 +743,7 @@ def time_loop_compiled(
     airsea_shortwave_scale_factor: float,
     airsea_heat_scale_factor: float,
     airsea_const_albedo: float,
+    ice_model: int,
     light_A: float,
     light_g1: float,
     light_g2: float,
@@ -854,6 +895,25 @@ def time_loop_compiled(
     taub: np.ndarray,
     tx: np.ndarray,
     ty: np.ndarray,
+    Hice: np.ndarray,
+    Hsnow: np.ndarray,
+    Hfrazil: np.ndarray,
+    T1: np.ndarray,
+    T2: np.ndarray,
+    Tice_surface: np.ndarray,
+    fdd: np.ndarray,
+    ice_cover: np.ndarray,
+    Tf: np.ndarray,
+    albedo_ice: np.ndarray,
+    transmissivity: np.ndarray,
+    ocean_ice_flux: np.ndarray,
+    ocean_ice_heat_flux: np.ndarray,
+    ocean_ice_salt_flux: np.ndarray,
+    surface_ice_energy: np.ndarray,
+    bottom_ice_energy: np.ndarray,
+    melt_rate: np.ndarray,
+    T_melt: np.ndarray,
+    S_melt: np.ndarray,
     au: np.ndarray,
     bu: np.ndarray,
     cu: np.ndarray,
@@ -1030,6 +1090,18 @@ def time_loop_compiled(
     output_nucl: np.ndarray,
     output_z: np.ndarray,
     output_zi: np.ndarray,
+    output_Hfrazil: np.ndarray,
+    output_Hice: np.ndarray,
+    output_T1: np.ndarray,
+    output_T2: np.ndarray,
+    output_Tf: np.ndarray,
+    output_Tice_surface: np.ndarray,
+    output_bottom_ice_energy: np.ndarray,
+    output_ocean_ice_flux: np.ndarray,
+    output_ocean_ice_heat_flux: np.ndarray,
+    output_ocean_ice_salt_flux: np.ndarray,
+    output_surface_ice_energy: np.ndarray,
+    step_offset: int,
     out_slot_base: int,
     write_ic: int,
     init_int_precip: float,
@@ -1048,7 +1120,7 @@ def time_loop_compiled(
 ) -> int:
     """Run profile-forced cases through the compiled timestep loop."""
 
-    if nlev < 1 or nt < 0 or dt <= 0.0 or output_every < 1:
+    if nlev < 1 or nt < 0 or dt <= 0.0 or output_every < 1 or step_offset < 0:
         return -2
 
     for k in range(nlev + 1):
@@ -1189,8 +1261,8 @@ def time_loop_compiled(
         if write_ic != 0:
             _write_output_slot(
                 out_slot_base + out_index,
-                0,
-                0.0,
+                step_offset,
+                step_offset * dt,
                 nlev,
                 rho0,
                 forcing_zeta[0],
@@ -1399,6 +1471,31 @@ def time_loop_compiled(
                 output_nucl,
                 output_z,
                 output_zi,
+            )
+            _write_ice_output_slot(
+                out_slot_base + out_index,
+                Hfrazil,
+                Hice,
+                T1,
+                T2,
+                Tf,
+                Tice_surface,
+                bottom_ice_energy,
+                ocean_ice_flux,
+                ocean_ice_heat_flux,
+                ocean_ice_salt_flux,
+                surface_ice_energy,
+                output_Hfrazil,
+                output_Hice,
+                output_T1,
+                output_T2,
+                output_Tf,
+                output_Tice_surface,
+                output_bottom_ice_energy,
+                output_ocean_ice_flux,
+                output_ocean_ice_heat_flux,
+                output_ocean_ice_salt_flux,
+                output_surface_ice_energy,
             )
         out_index += 1
 
@@ -1609,6 +1706,46 @@ def time_loop_compiled(
         tx[0] = tx_value
         ty[0] = ty_value
         ssf = S[nlev] * swf
+        if ice_model != 0:
+            diff_t_up = -shf / (rho0 * cp)
+            diff_t_up = step_ice(
+                ice_model,
+                T[nlev],
+                S[nlev],
+                forcing_airt[step],
+                h[nlev],
+                dt,
+                diff_t_up,
+                shortwave,
+                ql,
+                qh,
+                qe,
+                forcing_precip[step],
+                u_taus[0],
+                Hice,
+                Hsnow,
+                Hfrazil,
+                T1,
+                T2,
+                Tice_surface,
+                fdd,
+                ice_cover,
+                Tf,
+                albedo_ice,
+                transmissivity,
+                ocean_ice_flux,
+                ocean_ice_heat_flux,
+                ocean_ice_salt_flux,
+                surface_ice_energy,
+                bottom_ice_energy,
+                melt_rate,
+                T_melt,
+                S_melt,
+            )
+            shf = -diff_t_up * rho0 * cp
+            ssf -= ocean_ice_salt_flux[0]
+            if ice_cover[0] == 2.0:
+                current_i0 = shortwave * (1.0 - albedo_ice[0]) * transmissivity[0]
         int_precip += forcing_precip[step] * dt
         int_evap += evap * dt
         int_swr += current_i0 * dt
@@ -2176,8 +2313,8 @@ def time_loop_compiled(
             )
             _write_output_slot(
                 out_slot_base + out_index,
-                step,
-                step * dt,
+                step_offset + step,
+                (step_offset + step) * dt,
                 nlev,
                 rho0,
                 forcing_zeta[step],
@@ -2387,6 +2524,31 @@ def time_loop_compiled(
                 output_z,
                 output_zi,
             )
+            _write_ice_output_slot(
+                out_slot_base + out_index,
+                Hfrazil,
+                Hice,
+                T1,
+                T2,
+                Tf,
+                Tice_surface,
+                bottom_ice_energy,
+                ocean_ice_flux,
+                ocean_ice_heat_flux,
+                ocean_ice_salt_flux,
+                surface_ice_energy,
+                output_Hfrazil,
+                output_Hice,
+                output_T1,
+                output_T2,
+                output_Tf,
+                output_Tice_surface,
+                output_bottom_ice_energy,
+                output_ocean_ice_flux,
+                output_ocean_ice_heat_flux,
+                output_ocean_ice_salt_flux,
+                output_surface_ice_energy,
+            )
             out_index += 1
 
     return out_index
@@ -2570,6 +2732,7 @@ def run_compiled_time_loop(
             params.airsea_shortwave_scale_factor,
             params.airsea_heat_scale_factor,
             params.airsea_const_albedo,
+            params.ice_model,
             params.light_A,
             params.light_g1,
             params.light_g2,
@@ -2721,6 +2884,25 @@ def run_compiled_time_loop(
             state.taub,
             state.tx,
             state.ty,
+            state.Hice,
+            state.Hsnow,
+            state.Hfrazil,
+            state.T1,
+            state.T2,
+            state.Tice_surface,
+            state.fdd,
+            state.ice_cover,
+            state.Tf,
+            state.albedo_ice,
+            state.transmissivity,
+            state.ocean_ice_flux,
+            state.ocean_ice_heat_flux,
+            state.ocean_ice_salt_flux,
+            state.surface_ice_energy,
+            state.bottom_ice_energy,
+            state.melt_rate,
+            state.T_melt,
+            state.S_melt,
             work.au,
             work.bu,
             work.cu,
@@ -2897,6 +3079,18 @@ def run_compiled_time_loop(
             output.nucl,
             output.z,
             output.zi,
+            output.reference_scalars["Hfrazil"],
+            output.reference_scalars["Hice"],
+            output.reference_scalars["T1"],
+            output.reference_scalars["T2"],
+            output.reference_scalars["Tf"],
+            output.reference_scalars["Tice_surface"],
+            output.reference_scalars["bottom_ice_energy"],
+            output.reference_scalars["ocean_ice_flux"],
+            output.reference_scalars["ocean_ice_heat_flux"],
+            output.reference_scalars["ocean_ice_salt_flux"],
+            output.reference_scalars["surface_ice_energy"],
+            step_offset,
             out_slot_base,
             write_ic,
             init_int_precip,
@@ -2914,7 +3108,7 @@ def run_compiled_time_loop(
             _hydro_taub,
         )
     )
-    if written > 0:
+    if written > 0 and params.ice_model == 1:
         _populate_simple_ice_reference_scalars(params, output, written)
     return written
 

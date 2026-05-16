@@ -84,6 +84,13 @@ from pygotm.gotm.runtime_builder import (
     build_runtime_from_run,
 )
 from pygotm.gotm.time_loop import run_compiled_time_loop
+from pygotm.icethm import (
+    IceParams,
+    IceState,
+    init_ice,
+    make_ice_params_from_mapping,
+    step_ice,
+)
 from pygotm.input.input import (
     ProfileInput,
     ScalarInput,
@@ -333,6 +340,8 @@ class GotmRun:
     longitude: float
     depth: float
     output_schedule: OutputSchedule
+    ice_params: IceParams | None = None
+    ice_state: IceState | None = None
     current_i0: float = 0.0
     initialized: bool = False
     friction_first: list[bool] = field(default_factory=lambda: [True])
@@ -572,7 +581,7 @@ def _configure_density_from_document(
 def _configure_airsea_from_document(
     airsea: AirSeaDriverState,
     document: dict[str, Any],
-) -> tuple[SurfaceInputs, str]:
+) -> tuple[SurfaceInputs, IceParams]:
     surface = _mapping(document.get("surface"))
     fluxes = _mapping(surface.get("fluxes"))
     swr = _mapping(surface.get("swr"))
@@ -592,9 +601,17 @@ def _configure_airsea_from_document(
     if ssuv_method not in {"absolute", "relative"}:
         msg = f"unsupported surface.ssuv_method {ssuv_method!r}"
         raise NotImplementedError(msg)
-    if ice_model not in {"no_ice", "simple", "basal_melt", "winton"}:
+    if ice_model not in {
+        "no_ice",
+        "simple",
+        "basal_melt",
+        "lebedev",
+        "mylake",
+        "winton",
+    }:
         msg = f"unsupported surface.ice.model {ice_model!r}"
         raise NotImplementedError(msg)
+    ice_params = make_ice_params_from_mapping(ice)
 
     init_airsea(
         airsea,
@@ -648,7 +665,7 @@ def _configure_airsea_from_document(
         if "sss" in surface
         else None
     )
-    return inputs, ice_model
+    return inputs, ice_params
 
 
 def _configure_turbulence_from_document(
@@ -995,7 +1012,6 @@ def _save_snapshot(run: GotmRun) -> None:
         run.accum_count = 0
 
 
-
 def initialize_gotm_from_settings(
     settings: GotmSettings,
     *,
@@ -1058,7 +1074,7 @@ def initialize_gotm_from_settings(
     )
 
     airsea = AirSeaDriverState()
-    surface_inputs, _ice_model = _configure_airsea_from_document(
+    surface_inputs, ice_params = _configure_airsea_from_document(
         airsea,
         resolved_document,
     )
@@ -1119,6 +1135,14 @@ def initialize_gotm_from_settings(
         )
     )
 
+    assert meanflow.S is not None
+    assert meanflow.T is not None
+    ice_state = init_ice(
+        ice_params,
+        T_air_init=0.0,
+        S_sfc_init=float(meanflow.S[nlev]),
+    )
+
     diagnostics = DiagnosticsState()
     init_diagnostics(diagnostics, nlev)
 
@@ -1147,6 +1171,8 @@ def initialize_gotm_from_settings(
         longitude=settings.location.longitude,
         depth=depth,
         output_schedule=output_schedule,
+        ice_params=ice_params,
+        ice_state=ice_state,
         initialized=True,
     )
     run.registry = do_register_all_variables(
@@ -1160,11 +1186,10 @@ def initialize_gotm_from_settings(
         density=density,
         turbulence=turbulence,
         stokes_drift=stokes,
+        ice_state=ice_state,
         surface_inputs=surface_inputs,
         i0_provider=lambda: run.current_i0,
     )
-    assert meanflow.S is not None
-    assert meanflow.T is not None
     assert meanflow.z is not None
     assert meanflow.zi is not None
     assert meanflow.buoy is not None
@@ -1373,6 +1398,53 @@ def _integrate_gotm_python(
         swf = airsea.precip + airsea.evap
         shf = -airsea.heat
         ssf = float(meanflow.S[run.nlev]) * swf
+        if run.ice_params is not None and run.ice_state is not None:
+            ice_state = run.ice_state
+            diff_t_up = -shf / (density.rho0 * density.cp)
+            diff_t_up = step_ice(
+                int(run.ice_params.model),
+                float(meanflow.T[run.nlev]),
+                float(meanflow.S[run.nlev]),
+                _surface_value(surface_inputs.airt),
+                float(meanflow.h[run.nlev]),
+                run.dt,
+                diff_t_up,
+                airsea.shortwave,
+                airsea.ql,
+                airsea.qh,
+                airsea.qe,
+                airsea.precip,
+                float(meanflow.u_taus),
+                ice_state.Hice,
+                ice_state.Hsnow,
+                ice_state.Hfrazil,
+                ice_state.T1,
+                ice_state.T2,
+                ice_state.Tice_surface,
+                ice_state.fdd,
+                ice_state.ice_cover,
+                ice_state.Tf,
+                ice_state.albedo_ice,
+                ice_state.transmissivity,
+                ice_state.ocean_ice_flux,
+                ice_state.ocean_ice_heat_flux,
+                ice_state.ocean_ice_salt_flux,
+                ice_state.surface_ice_energy,
+                ice_state.bottom_ice_energy,
+                ice_state.melt_rate,
+                ice_state.T_melt,
+                ice_state.S_melt,
+            )
+            shf = -diff_t_up * density.rho0 * density.cp
+            ssf -= float(ice_state.ocean_ice_salt_flux[0])
+            meanflow.Hice = float(ice_state.Hice[0])
+            if ice_state.ice_cover[0] == 2:
+                open_water_shortwave = airsea.shortwave * (
+                    1.0 - float(ice_state.albedo_ice[0]) - airsea.bio_albedo
+                )
+                run.current_i0 = open_water_shortwave * float(
+                    ice_state.transmissivity[0]
+                )
         airsea.tx = airsea.tx / density.rho0
         airsea.ty = airsea.ty / density.rho0
         tx = airsea.tx
@@ -1656,18 +1728,20 @@ def integrate_gotm_compiled(
     chunk_size = min(chunk_size, nt)
 
     # Reusable GOTM hydrodynamic state buffers (chunk_size+1 rows — one per chunk)
-    hydro_T    = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_S    = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_rho  = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_h    = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_nuh  = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_rad  = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_T = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_S = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_rho = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_h = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_nuh = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+    hydro_rad = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
     hydro_taub = np.zeros((chunk_size + 1,), dtype=np.float64)
 
     # Initialise FABM engine once
     assert run.fabm_config is not None
     assert run.fabm_config.config_path is not None
-    h_initial = np.ascontiguousarray(bundle.state.h[1 : nlev + 1], dtype=np.float64)  # noqa: E203
+    h_initial = np.ascontiguousarray(
+        bundle.state.h[1 : nlev + 1], dtype=np.float64
+    )  # noqa: E203
     engine = FABMEngine(run.fabm_config.config_path)
     engine.initialize(nlev=nlev, h_col=h_initial, skip_start=True)
     run.fabm_engine = engine
@@ -1690,26 +1764,26 @@ def integrate_gotm_compiled(
         # Read accumulated values to carry forward, then skip the IC write.
         if is_first_physics_chunk:
             init_int_precip = 0.0
-            init_int_evap   = 0.0
-            init_int_swr    = 0.0
-            init_int_heat   = 0.0
-            init_int_total  = 0.0
+            init_int_evap = 0.0
+            init_int_swr = 0.0
+            init_int_heat = 0.0
+            init_int_total = 0.0
         else:
             prev_slot = out_slot_base
             init_int_precip = float(bundle.output.int_precip[prev_slot])
-            init_int_evap   = float(bundle.output.int_evap[prev_slot])
-            init_int_swr    = float(bundle.output.int_swr[prev_slot])
-            init_int_heat   = float(bundle.output.int_heat[prev_slot])
-            init_int_total  = float(bundle.output.int_total[prev_slot])
+            init_int_evap = float(bundle.output.int_evap[prev_slot])
+            init_int_swr = float(bundle.output.int_swr[prev_slot])
+            init_int_heat = float(bundle.output.int_heat[prev_slot])
+            init_int_total = float(bundle.output.int_total[prev_slot])
 
         # Resize hydrodynamic state buffers if last chunk is smaller than chunk_size
         if this_chunk < chunk_size:
-            hydro_T    = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_S    = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_rho  = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_h    = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_nuh  = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_rad  = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_T = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_S = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_rho = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_h = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_nuh = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+            hydro_rad = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
             hydro_taub = np.zeros((this_chunk + 1,), dtype=np.float64)
 
         # Physics chunk
@@ -1764,6 +1838,9 @@ def integrate_gotm_compiled(
                 forcing_yearday=bundle.forcing.yearday[
                     step_cursor : step_cursor + this_chunk + 1
                 ],
+                forcing_secondsofday=bundle.forcing.secondsofday[
+                    step_cursor : step_cursor + this_chunk + 1
+                ],
                 is_first_chunk=(step_cursor == 0),
             )
 
@@ -1775,7 +1852,6 @@ def integrate_gotm_compiled(
     _copy_runtime_state_to_run(run, bundle)
     run.time.update_time(nt)
     return bundle
-
 
 
 def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:
@@ -1799,6 +1875,30 @@ def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:
     run.meanflow.u_taubo = float(state.u_taubo[0])
     run.meanflow.u_taus = float(state.u_taus[0])
     run.meanflow.taub = float(state.taub[0])
+    if run.ice_state is not None:
+        for name in (
+            "Hice",
+            "Hsnow",
+            "Hfrazil",
+            "T1",
+            "T2",
+            "Tice_surface",
+            "fdd",
+            "ice_cover",
+            "Tf",
+            "albedo_ice",
+            "transmissivity",
+            "ocean_ice_flux",
+            "ocean_ice_heat_flux",
+            "ocean_ice_salt_flux",
+            "surface_ice_energy",
+            "bottom_ice_energy",
+            "melt_rate",
+            "T_melt",
+            "S_melt",
+        ):
+            getattr(run.ice_state, name)[0] = getattr(state, name)[0]
+        run.meanflow.Hice = float(run.ice_state.Hice[0])
 
 
 def finalize_gotm(run: GotmRun) -> None:

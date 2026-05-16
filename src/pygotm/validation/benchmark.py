@@ -42,6 +42,7 @@ __all__ = [
 BenchmarkStatus = Literal["PASS", "FAIL", "ERROR", "UNSUPPORTED"]
 ValidationStatus = Literal["PASS", "FAIL", "SKIP", "ERROR"]
 
+
 @dataclass(slots=True, frozen=True)
 class BenchmarkTimings:
     """Measured wall-clock timings for one benchmarked case."""

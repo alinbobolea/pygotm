@@ -94,10 +94,7 @@ def test_no_nan_or_inf_for_valid_inputs() -> None:
     state = _make_second_order_state()
 
     values = np.array(
-        [
-            compute_cpsi3(state, _C1, _C2, ri)
-            for ri in np.linspace(0.14, 0.24, 5)
-        ]
+        [compute_cpsi3(state, _C1, _C2, ri) for ri in np.linspace(0.14, 0.24, 5)]
     )
 
     assert np.isfinite(values).all()

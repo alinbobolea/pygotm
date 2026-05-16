@@ -107,7 +107,9 @@ def _mapping(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def init_cvmix(state: CVMixState | None = None, branch: dict[str, Any] | None = None) -> CVMixState:
+def init_cvmix(
+    state: CVMixState | None = None, branch: dict[str, Any] | None = None
+) -> CVMixState:
     """Initialise CVMix state from an optional YAML-like branch."""
 
     result = CVMixState() if state is None else state
@@ -215,7 +217,9 @@ def interior_nonconv(
             ri = NN[k] / max(SS[k], _EPS)
             Rig[k] = ri
             if state.shear_mix_scheme == CVMIX_SHEAR_PP:
-                denom = (1.0 + state.shear_PP_alpha * max(0.0, ri)) ** state.shear_PP_exp
+                denom = (
+                    1.0 + state.shear_PP_alpha * max(0.0, ri)
+                ) ** state.shear_PP_exp
                 visc = state.shear_PP_nu_zero / denom
                 diff = visc / (1.0 + state.shear_PP_alpha * max(0.0, ri))
             else:

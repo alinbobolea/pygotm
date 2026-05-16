@@ -39,10 +39,7 @@ html_theme_options = {
         {
             "name": "GOTM",
             "url": "https://gotm.net",
-            "html": (
-                "Based on GOTM by Lars Umlauf, Hans Burchard "
-                "& Karsten Bolding"
-            ),
+            "html": ("Based on GOTM by Lars Umlauf, Hans Burchard & Karsten Bolding"),
             "class": "",
         },
     ],
