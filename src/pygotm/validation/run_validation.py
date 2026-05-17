@@ -22,14 +22,11 @@ Usage
 from __future__ import annotations
 
 import sys
-import threading
-import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 import click
-import numpy as np
 
 from pygotm.validate import REFERENCE_CASE_NAMES
 from pygotm.validation.hardware import detect_platform
@@ -48,13 +45,6 @@ CASE_GROUPS: dict[str, tuple[str, ...]] = {
     "non-stim": NON_STIM_CASES,
     "all": ALL_CASES,
 }
-
-
-def _fmt_time(s: float) -> str:
-    if s < 60:
-        return f"{s:.1f}s"
-    m, sec = divmod(s, 60)
-    return f"{int(m)}m {sec:.0f}s"
 
 
 def _split_case_names(value: str | None) -> list[str]:
@@ -85,138 +75,30 @@ def _select_case_list(
     return case_list
 
 
-class _ProgressMonitor:
-    """Background thread that redraws an in-place progress block from .progress files.
-
-    Workers write  `current total elapsed_s`  to  runs_dir/<case>/.progress  at ~1 Hz.
-    This class polls those files every second and redraws the block using ANSI cursor
-    moves.  Disabled automatically when stdout is not a TTY (piped/redirected output).
-    """
-
-    _POLL_S = 1.0
-
-    def __init__(self, runs_dir: Path) -> None:
-        self._runs_dir = runs_dir
-        self._tty = sys.stdout.isatty()
-        self._lock = threading.Lock()
-        self._prev_lines = 0
-        self._stop = False
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-
-    def start(self) -> None:
-        if self._tty:
-            self._thread.start()
-
-    def stop(self) -> None:
-        self._stop = True
-        if self._tty and self._thread.is_alive():
-            self._thread.join(timeout=2)
-        with self._lock:
-            self._erase()
-
-    def print_line(self, text: str) -> None:
-        """Print a completion line, keeping the progress block below it."""
-        if self._tty:
-            with self._lock:
-                self._erase()
-                print(text, flush=True)
-                self._draw()
-        else:
-            print(text, flush=True)
-
-    # ------------------------------------------------------------------
-    # internal
-
-    def _loop(self) -> None:
-        while not self._stop:
-            time.sleep(self._POLL_S)
-            with self._lock:
-                self._erase()
-                self._draw()
-
-    def _erase(self) -> None:
-        if self._prev_lines:
-            # Move cursor up N lines then erase from cursor to end of screen.
-            print(f"\033[{self._prev_lines}A\033[J", end="", flush=True)
-            self._prev_lines = 0
-
-    def _draw(self) -> None:
-        entries = self._read_progress()
-        if not entries:
-            return
-        print("  In progress:", flush=True)
-        for case_name, current, total, elapsed in entries:
-            pct = int(100 * current / total) if total else 0
-            filled = pct // 5
-            bar = "█" * filled + "░" * (20 - filled)
-            print(
-                f"    {case_name:<20} [{bar}] {pct:>3}%  {_fmt_time(elapsed)}",
-                flush=True,
-            )
-        self._prev_lines = 1 + len(entries)  # header + case lines
-
-    def _read_progress(self) -> list[tuple[str, int, int, float]]:
-        result = []
-        for path in sorted(self._runs_dir.glob("*/.progress")):
-            try:
-                parts = path.read_text().split()
-                result.append(
-                    (
-                        path.parent.name,
-                        int(parts[0]),
-                        int(parts[1]),
-                        float(parts[2]),
-                    )
-                )
-            except (OSError, ValueError, IndexError):
-                pass
-        return result
+def _fmt_duration(s: float) -> str:
+    if s < 60:
+        return f"{s:.1f}s"
+    m, sec = divmod(s, 60)
+    return f"{int(m)}m {sec:.0f}s"
 
 
-def _make_on_result(
-    total: int, monitor: _ProgressMonitor | None = None
-) -> Callable[[CaseResult], None]:
-    """Return a callback that prints each result with a [N/total] counter."""
+def _case_display_name(result: CaseResult) -> str:
+    if result.task_name is not None:
+        return result.task_name
+    return f"{result.case_name}-gotm"
+
+
+def _make_on_result(total: int) -> Callable[[CaseResult], None]:
+    """Return a callback that prints case completion counts."""
     completed = [0]
-    w = len(str(total))
 
     def on_result(result: CaseResult) -> None:
         completed[0] += 1
-        counter = f"[{completed[0]:>{w}}/{total}]"
-        name = f"{result.case_name:<20}"
-
-        if result.status == "ERROR":
-            msg = (result.error or "").splitlines()[0][:60]
-            line = f"  {counter} ERROR  {name}  {msg}"
-        elif result.status == "PASS":
-            line = (
-                f"  {counter} PASS   {name}  "
-                f"{result.n_pass} vars  ({_fmt_time(result.wall_time_s)})"
-            )
-        else:
-            worst = max(
-                (
-                    v
-                    for v in result.variables
-                    if v.status in ("MARGINAL", "DISCREPANT", "BROKEN")
-                ),
-                key=lambda v: v.primary_score if np.isfinite(v.primary_score) else -1,
-                default=None,
-            )
-            worst_str = (
-                f"  worst={worst.name} score={worst.primary_score:.2e}" if worst else ""
-            )
-            n_non_pass = result.n_marginal + result.n_discrepant + result.n_broken
-            line = (
-                f"  {counter} FAIL   {name}  "
-                f"{n_non_pass}/{result.n_pass + n_non_pass} vars"
-                f"{worst_str}  ({_fmt_time(result.wall_time_s)})"
-            )
-
-        if monitor is not None:
-            monitor.print_line(line)
-        else:
-            print(line, flush=True)
+        print(
+            f"Complete case: {_case_display_name(result)} "
+            f"[{_fmt_duration(result.wall_time_s)}] | {completed[0]}/{total} cases",
+            flush=True,
+        )
 
     return on_result
 
@@ -310,12 +192,7 @@ def cli(
     # 1. Detect platform
     platform_info = detect_platform()
     arch_choices = platform_info.available_archs
-    n_cpus = platform_info.cpu_count
-    n_workers = workers if workers is not None else n_cpus
-
-    print("pyGOTM Validation")
-    print(f"  CPU count : {n_cpus}  (Dask workers: {n_workers})")
-    print(f"  Available archs: {', '.join(arch_choices)}")
+    n_workers = workers if workers is not None else platform_info.cpu_count
 
     selected_arch = device or "cpu"
     if selected_arch not in arch_choices:
@@ -325,7 +202,6 @@ def cli(
             file=sys.stderr,
         )
         raise SystemExit(1)
-    print(f"  Execution backend: {selected_arch}")
 
     # 3. Build case list
     case_list = _select_case_list(
@@ -336,23 +212,17 @@ def cli(
     )
 
     runs_dir = output_dir / "runs"
-    print(f"  Cases ({len(case_list)}): {', '.join(case_list)}")
-    print("=" * 60)
+    print(f"pyGOTM validation starting ({len(case_list)} cases)")
 
     # 4. Warm up Numba kernels
     if not skip_run and not skip_warmup:
-        print("  Warming up Numba kernels ...", end=" ", flush=True)
-        warmup_elapsed = trigger_numba_jit()
-        print(f"done ({_fmt_time(warmup_elapsed)})")
-    elif skip_warmup:
-        print("  Skipping warm-up (--no-warmup)")
+        trigger_numba_jit()
 
     # 5. Run cases
     hw = dict(platform_info.hardware)
     hw["execution_backend"] = selected_arch
 
-    monitor = _ProgressMonitor(runs_dir)
-    on_result = _make_on_result(len(case_list), monitor)
+    on_result = _make_on_result(len(case_list))
 
     if skip_run:
         results: list[CaseResult] = []
@@ -366,21 +236,16 @@ def cli(
             on_result(result)
             results.append(result)
     else:
-        print(f"  Running {len(case_list)} cases on {n_workers} workers ...")
-        monitor.start()
-        try:
-            results = run_cases_parallel(
-                case_names=case_list,
-                runs_dir=runs_dir,
-                arch_name=selected_arch,
-                n_workers=n_workers,
-                dashboard_port=dashboard_port,
-                skip_run=False,
-                debug_turbulence=debug_turbulence,
-                on_result=on_result,
-            )
-        finally:
-            monitor.stop()
+        results = run_cases_parallel(
+            case_names=case_list,
+            runs_dir=runs_dir,
+            arch_name=selected_arch,
+            n_workers=n_workers,
+            dashboard_port=dashboard_port,
+            skip_run=False,
+            debug_turbulence=debug_turbulence,
+            on_result=on_result,
+        )
 
     # 6. Build and write report
     cases_passed = sum(1 for r in results if r.status == "PASS")
@@ -404,11 +269,9 @@ def cli(
     save_json(report, json_path)
     write_html_reports(report, output_dir)
 
-    total_wall = sum(r.wall_time_s for r in results)
     print()
-    print("=" * 60)
-    print(f"VERDICT: {verdict}  ({cases_passed}/{n_cases} cases passed)")
-    print(f"  Total wall time : {_fmt_time(total_wall)}")
+    print("pyGOTM validation complete")
+    print(f"  Cases completed: {n_cases}/{len(case_list)}")
     print(f"  JSON  : {json_path}")
     print(f"  HTML  : {html_path}")
 

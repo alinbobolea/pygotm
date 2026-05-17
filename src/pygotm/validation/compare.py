@@ -57,7 +57,7 @@ class VarResult:
 
     @property
     def primary_score(self) -> float:
-        """Compatibility alias for progress logging in plan-excluded code."""
+        """Compatibility alias for report rendering and old JSON payloads."""
 
         return self.d_norm if self.score is None else self.score
 

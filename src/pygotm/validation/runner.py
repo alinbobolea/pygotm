@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import traceback
-from collections.abc import Callable
 from pathlib import Path
 
 from pygotm.validation.compare import compare_nc
@@ -29,7 +28,6 @@ def _yaml_path(case_name: str) -> Path:
 def run_case(
     case_name: str,
     runs_dir: Path,
-    on_step: Callable[[int, int], None] | None = None,
 ) -> tuple[Path, float]:
     """Run a compiled parity case, write NetCDF, return (path, elapsed_s)."""
     from pygotm.driver import GotmDriver
@@ -41,8 +39,6 @@ def run_case(
     nc_path = case_dir / f"{case.run_name}.nc"
 
     t0 = time.monotonic()
-    if on_step is not None:
-        on_step(0, 1)
     dataset = GotmDriver(case.yaml_path).run(output_path=nc_path)
     try:
         if dataset.attrs.get("runtime") != "compiled":
@@ -53,8 +49,6 @@ def run_case(
     finally:
         dataset.close()
     elapsed = time.monotonic() - t0
-    if on_step is not None:
-        on_step(1, 1)
     return nc_path, elapsed
 
 
@@ -64,7 +58,6 @@ def validate_case(
     *,
     skip_run: bool = False,
     debug_turbulence: bool = False,
-    on_step: Callable[[int, int], None] | None = None,
 ) -> CaseResult:
     """Run (optionally) and validate a single GOTM case."""
     from pygotm.validate import resolve_reference_case
@@ -87,7 +80,7 @@ def validate_case(
             )
     else:
         try:
-            py_path, elapsed = run_case(case_name, runs_dir, on_step=on_step)
+            py_path, elapsed = run_case(case_name, runs_dir)
         except Exception as exc:
             return CaseResult(
                 case_name=case.run_name,

@@ -169,14 +169,6 @@ def test_driver_output_false_runs_without_data_snapshots(tmp_path: Path) -> None
     assert not dataset.data_vars
 
 
-def test_driver_rejects_on_step_callback(tmp_path: Path) -> None:
-    config_path = tmp_path / "gotm.yaml"
-    _write_short_couette_config(config_path)
-
-    with pytest.raises(UnsupportedConfigurationError, match="on_step"):
-        GotmDriver(config_path).run(on_step=lambda _step, _total: None)
-
-
 def test_driver_resolves_relative_scalar_input_paths(tmp_path: Path) -> None:
     case_dir = tmp_path / "case"
     case_dir.mkdir()

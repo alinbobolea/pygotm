@@ -379,8 +379,7 @@ def gotm_driver_fatal_error(self: Any, location: str, message: str) -> None:
 def gotm_driver_log_message(self: Any, message: str) -> None:
     """FABM driver log callback."""
 
-    del self
-    print(message)
+    del self, message
 
 
 def calculate_conserved_quantities(

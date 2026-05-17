@@ -13,6 +13,7 @@ from pygotm.fabm.gotm_fabm import (
     do_gotm_fabm,
     do_repair_state,
     gotm_driver_fatal_error,
+    gotm_driver_log_message,
     gotm_fabm_create_model,
     init_gotm_fabm,
     light,
@@ -119,3 +120,12 @@ def test_register_field_and_fatal_error() -> None:
 
     with pytest.raises(RuntimeError, match="loc: bad"):
         gotm_driver_fatal_error(None, "loc", "bad")
+
+
+def test_log_message_callback_is_quiet(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    gotm_driver_log_message(None, "model type: jrc/bsem")
+    gotm_driver_log_message(None, "initialization succeeded.")
+
+    assert capsys.readouterr().out == ""

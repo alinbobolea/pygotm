@@ -66,7 +66,7 @@ def test_var_result_has_no_old_metric_fields() -> None:
     assert not field_names & old_metrics
 
 
-def test_primary_score_property_aliases_d_norm_for_progress_logging() -> None:
+def test_primary_score_property_aliases_d_norm_for_reports() -> None:
     v = VarResult(
         name="temp",
         section="pygotm",

@@ -16,7 +16,6 @@ from pygotm.gotm.gotm import (
     initialize_gotm,
     integrate_gotm,
 )
-from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
 from pygotm.icethm import IceModelEnum
 
 _COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
@@ -95,17 +94,6 @@ def test_integrate_gotm_can_skip_snapshots(tmp_path: Path) -> None:
         assert run.snapshots == []
         assert run.snapshot_times == []
         assert run.time.timestr == "2005-01-01 00:00:20"
-    finally:
-        finalize_gotm(run)
-
-
-def test_integrate_gotm_rejects_on_step_callback(tmp_path: Path) -> None:
-    config_path = tmp_path / "gotm.yaml"
-    _write_short_couette_config(config_path)
-    run = initialize_gotm(config_path)
-    try:
-        with pytest.raises(UnsupportedConfigurationError, match="on_step"):
-            integrate_gotm(run, on_step=lambda _step, _total: None)
     finally:
         finalize_gotm(run)
 

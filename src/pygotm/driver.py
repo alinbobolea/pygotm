@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -18,10 +17,7 @@ from pygotm.gotm.gotm import (
     integrate_gotm_compiled,
 )
 from pygotm.gotm.register_all_variables import FieldRecord
-from pygotm.gotm.runtime_builder import (
-    UnsupportedConfigurationError,
-    runtime_output_to_dataset,
-)
+from pygotm.gotm.runtime_builder import runtime_output_to_dataset
 
 __all__ = ["GotmDriver"]
 
@@ -195,13 +191,8 @@ class GotmDriver:
         max_steps: int | None = None,
         output_path: str | Path | None = None,
         output: bool = True,
-        on_step: Callable[[int, int], None] | None = None,
     ) -> xr.Dataset:
         """Execute a single-column run and return the resulting dataset."""
-
-        if on_step is not None:
-            msg = "compiled GOTM runtime does not yet support on_step callbacks"
-            raise UnsupportedConfigurationError(msg)
 
         yaml_path = self.config.source_path or Path("gotm.yaml")
         pygotm_conf = load_pygotm_conf(yaml_path)

@@ -131,44 +131,6 @@ def test_validate_case_writes_turbulence_debug_dump(tmp_path: Path) -> None:
     assert worst_tke["spatial_index"] == {"zi": 2}
 
 
-def test_validate_case_threads_on_step_to_run_case(tmp_path: Path) -> None:
-    steps_received: list[tuple[int, int]] = []
-
-    def fake_run_case(
-        case_name: str,
-        runs_dir: Path,
-        on_step: object = None,
-    ) -> tuple[Path, float]:
-        nc = tmp_path / f"{case_name}.nc"
-        arr = np.zeros(5)
-        xr.Dataset({"u": (["t"], arr)}).to_netcdf(nc, engine="scipy")
-        if callable(on_step):
-            on_step(1, 10)
-            on_step(10, 10)
-        return nc, 0.5
-
-    ref_nc = tmp_path / "ref.nc"
-    xr.Dataset({"u": (["t"], np.zeros(5))}).to_netcdf(ref_nc, engine="scipy")
-
-    def capture(current: int, total: int) -> None:
-        steps_received.append((current, total))
-
-    with ExitStack() as stack:
-        stack.enter_context(
-            patch("pygotm.validation.runner.run_case", side_effect=fake_run_case)
-        )
-        stack.enter_context(
-            patch(
-                "pygotm.validate.resolve_reference_case",
-                return_value=_fake_case(tmp_path, ref_path=ref_nc),
-            )
-        )
-        validate_case("couette", tmp_path, skip_run=False, on_step=capture)
-
-    assert (1, 10) in steps_received
-    assert (10, 10) in steps_received
-
-
 def test_validate_case_run_exception_returns_error(tmp_path: Path) -> None:
     ref_nc = tmp_path / "ref.nc"
     xr.Dataset({"u": (["t"], np.zeros(5))}).to_netcdf(ref_nc, engine="scipy")

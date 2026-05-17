@@ -19,7 +19,6 @@ r"""
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
@@ -80,7 +79,6 @@ from pygotm.gotm.register_all_variables import (
 )
 from pygotm.gotm.runtime_builder import (
     RuntimeBundle,
-    UnsupportedConfigurationError,
     build_runtime_from_run,
 )
 from pygotm.gotm.time_loop import run_compiled_time_loop
@@ -1281,7 +1279,6 @@ def _integrate_gotm_python(
     run: GotmRun,
     *,
     max_steps: int | None = None,
-    on_step: Callable[[int, int], None] | None = None,
     output: bool = True,
 ) -> None:
     """Legacy Python timestep loop retained for focused migration parity tests."""
@@ -1654,9 +1651,6 @@ def _integrate_gotm_python(
             nucl=turbulence.nucl,
         )
 
-        if on_step is not None:
-            on_step(step - run.time.MinN + 1, last_step - run.time.MinN + 1)
-
         if output and run.output_schedule.time_method != "point":
             _accumulate_snapshot(run)
 
@@ -1670,16 +1664,12 @@ def integrate_gotm(
     run: GotmRun,
     *,
     max_steps: int | None = None,
-    on_step: Callable[[int, int], None] | None = None,
     output: bool = True,
 ) -> None:
     """Advance supported single-column cases through the compiled runtime."""
 
     if not run.initialized:
         raise RuntimeError("run has not been initialised")
-    if on_step is not None:
-        msg = "compiled GOTM runtime does not yet support on_step callbacks"
-        raise UnsupportedConfigurationError(msg)
     integrate_gotm_compiled(run, max_steps=max_steps, output=output)
 
 

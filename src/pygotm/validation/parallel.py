@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -14,25 +13,6 @@ from pygotm.validation.report import CaseResult
 from pygotm.validation.runner import validate_case
 
 __all__ = ["run_cases_parallel"]
-
-
-def _make_step_writer(progress_path: Path) -> Callable[[int, int], None]:
-    """Return a throttled on_step callback that overwrites a progress file at ~1 Hz."""
-    last_write = 0.0
-    t0 = time.monotonic()
-
-    def on_step(current: int, total: int) -> None:
-        nonlocal last_write
-        now = time.monotonic()
-        if current < total and now - last_write < 1.0:
-            return
-        last_write = now
-        try:
-            progress_path.write_text(f"{current} {total} {now - t0:.1f}")
-        except OSError:
-            pass
-
-    return on_step
 
 
 def _run_case_worker(
@@ -49,19 +29,12 @@ def _run_case_worker(
     """
     _ = arch_name
 
-    case = resolve_reference_case(case_name)
-    progress_path = runs_dir / case.run_name / ".progress"
-    on_step = _make_step_writer(progress_path) if not skip_run else None
-    try:
-        return validate_case(
-            case_name,
-            runs_dir,
-            skip_run=skip_run,
-            debug_turbulence=debug_turbulence,
-            on_step=on_step,
-        )
-    finally:
-        progress_path.unlink(missing_ok=True)
+    return validate_case(
+        case_name,
+        runs_dir,
+        skip_run=skip_run,
+        debug_turbulence=debug_turbulence,
+    )
 
 
 def run_cases_parallel(
