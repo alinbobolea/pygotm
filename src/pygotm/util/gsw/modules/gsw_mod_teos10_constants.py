@@ -9,12 +9,20 @@ callers produce bit-for-bit matching results.
 
 __all__ = [
     "gsw_cp0",
+    "gsw_sso",
     "gsw_sfac",
+    "gsw_ups",
     "offset",
 ]
 
 # Specific heat of seawater at SA=0, CT=0, p=0  [J/(kg K)]
 gsw_cp0: float = 3991.86795711963
+
+# Standard Ocean Reference Salinity [g/kg]
+gsw_sso: float = 35.16504
+
+# Unit conversion factor for salinities [g/kg]
+gsw_ups: float = gsw_sso / 35.0
 
 # sfac = 1 / (40 * gsw_ups)  where gsw_ups = gsw_sso/35  = 35.16504/35
 gsw_sfac: float = 0.0248826675584615

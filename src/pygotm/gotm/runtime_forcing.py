@@ -40,11 +40,17 @@ _SCALAR_SERIES = (
     "us0",
     "vs0",
     "ds",
+    "light_A",
+    "light_g1",
+    "light_g2",
 )
 
 _PROFILE_SERIES = (
     "Tobs",
     "Sobs",
+    "Tprof",
+    "Sprof",
+    "epsprof",
     "uprof",
     "vprof",
     "dtdx",
@@ -99,9 +105,15 @@ class RuntimeForcing:
     us0: FloatArray
     vs0: FloatArray
     ds: FloatArray
+    light_A: FloatArray
+    light_g1: FloatArray
+    light_g2: FloatArray
 
     Tobs: FloatArray
     Sobs: FloatArray
+    Tprof: FloatArray
+    Sprof: FloatArray
+    epsprof: FloatArray
     uprof: FloatArray
     vprof: FloatArray
     dtdx: FloatArray
@@ -201,8 +213,14 @@ def allocate_runtime_forcing(nlev: int, nt: int) -> RuntimeForcing:
         us0=_scalar_series(nt),
         vs0=_scalar_series(nt),
         ds=_scalar_series(nt),
+        light_A=_scalar_series(nt),
+        light_g1=_scalar_series(nt),
+        light_g2=_scalar_series(nt),
         Tobs=_profile_series(nt, nlev),
         Sobs=_profile_series(nt, nlev),
+        Tprof=_profile_series(nt, nlev),
+        Sprof=_profile_series(nt, nlev),
+        epsprof=_profile_series(nt, nlev),
         uprof=_profile_series(nt, nlev),
         vprof=_profile_series(nt, nlev),
         dtdx=_profile_series(nt, nlev),

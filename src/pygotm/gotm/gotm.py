@@ -61,10 +61,7 @@ from pygotm.extras.seagrass.seagrass import (
 )
 from pygotm.fabm.config import FABMConfig, load_fabm_config
 from pygotm.fabm.engine import FABMEngine
-from pygotm.fabm.fabm_loop import (
-    _record_scalar_diagnostics,
-    run_fabm_chunk,
-)
+from pygotm.fabm.fabm_loop import run_fabm_chunk
 from pygotm.gotm.diagnostics import (
     DiagnosticsState,
     clean_diagnostics,
@@ -201,6 +198,7 @@ from pygotm.util.density import (
     do_density,
     init_density,
 )
+from pygotm.util.gsw import gsw_sa_from_sp, gsw_sp_from_sa
 from pygotm.util.time import GotmTime
 
 __all__ = [
@@ -878,15 +876,28 @@ def _apply_initial_profiles(run: GotmRun) -> None:
 
     if observations.initial_salinity_type == 1:
         meanflow.Sp[1 : run.nlev + 1] = observations.sprof_input.data[1 : run.nlev + 1]
-        meanflow.S[1 : run.nlev + 1] = gsw.SA_from_SP(
+    else:
+        meanflow.S[1 : run.nlev + 1] = observations.sprof_input.data[1 : run.nlev + 1]
+
+    if observations.initial_temperature_type == 1:
+        meanflow.Ti[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
+    elif observations.initial_temperature_type == 2:
+        meanflow.Tp[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
+    else:
+        meanflow.T[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
+
+    meanflow.Sobs[:] = meanflow.S
+    meanflow.Tobs[:] = meanflow.T
+
+    if observations.initial_salinity_type == 1:
+        meanflow.S[1 : run.nlev + 1] = gsw_sa_from_sp(
             meanflow.Sp[1 : run.nlev + 1],
             pressure,
             run.longitude,
             run.latitude,
         )
     else:
-        meanflow.S[1 : run.nlev + 1] = observations.sprof_input.data[1 : run.nlev + 1]
-        meanflow.Sp[1 : run.nlev + 1] = gsw.SP_from_SA(
+        meanflow.Sp[1 : run.nlev + 1] = gsw_sp_from_sa(
             meanflow.S[1 : run.nlev + 1],
             pressure,
             run.longitude,
@@ -894,7 +905,6 @@ def _apply_initial_profiles(run: GotmRun) -> None:
         )
 
     if observations.initial_temperature_type == 1:
-        meanflow.Ti[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
         meanflow.T[1 : run.nlev + 1] = gsw.CT_from_t(
             meanflow.S[1 : run.nlev + 1],
             meanflow.Ti[1 : run.nlev + 1],
@@ -907,7 +917,6 @@ def _apply_initial_profiles(run: GotmRun) -> None:
             0.0,
         )
     elif observations.initial_temperature_type == 2:
-        meanflow.Tp[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
         meanflow.T[1 : run.nlev + 1] = gsw.CT_from_pt(
             meanflow.S[1 : run.nlev + 1],
             meanflow.Tp[1 : run.nlev + 1],
@@ -918,7 +927,6 @@ def _apply_initial_profiles(run: GotmRun) -> None:
             pressure,
         )
     else:
-        meanflow.T[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
         meanflow.Tp[1 : run.nlev + 1] = gsw.pt_from_CT(
             meanflow.S[1 : run.nlev + 1],
             meanflow.T[1 : run.nlev + 1],
@@ -929,8 +937,6 @@ def _apply_initial_profiles(run: GotmRun) -> None:
             pressure,
         )
 
-    meanflow.Sobs[:] = meanflow.S
-    meanflow.Tobs[:] = meanflow.T
     meanflow.u[1 : run.nlev + 1] = observations.uprof_input.data[1 : run.nlev + 1]
     meanflow.v[1 : run.nlev + 1] = observations.vprof_input.data[1 : run.nlev + 1]
 
@@ -952,7 +958,7 @@ def _update_relaxation_targets(run: GotmRun) -> None:
         and observations.sprof_input.data is not None
     ):
         if observations.initial_salinity_type == 1:
-            meanflow.Sobs[1 : run.nlev + 1] = gsw.SA_from_SP(
+            meanflow.Sobs[1 : run.nlev + 1] = gsw_sa_from_sp(
                 observations.sprof_input.data[1 : run.nlev + 1],
                 pressure,
                 run.longitude,
@@ -1831,13 +1837,14 @@ def integrate_gotm_compiled(
                 forcing_secondsofday=bundle.forcing.secondsofday[
                     step_cursor : step_cursor + this_chunk + 1
                 ],
+                forcing_precip=bundle.forcing.precip[
+                    step_cursor : step_cursor + this_chunk + 1
+                ],
+                step_offset=step_cursor,
                 is_first_chunk=(step_cursor == 0),
             )
 
         step_cursor += this_chunk
-
-    if output:
-        _record_scalar_diagnostics(engine, bundle.output, fabm_out_index)
 
     _copy_runtime_state_to_run(run, bundle)
     run.time.update_time(nt)

@@ -49,6 +49,22 @@ class ReadyModel:
         return self.state * 0.5
 
 
+class TimeAwareModel(ReadyModel):
+    def __init__(self, path: str) -> None:
+        super().__init__(path)
+        self.rate_calls: list[tuple[float, bool, bool]] = []
+
+    def getRates(
+        self,
+        t: float,
+        *,
+        surface: bool = True,
+        bottom: bool = True,
+    ) -> np.ndarray:
+        self.rate_calls.append((t, surface, bottom))
+        return self.state + t
+
+
 class MissingDependencyModel(ReadyModel):
     def __init__(self, path: str) -> None:
         super().__init__(path)
@@ -81,6 +97,17 @@ def test_engine_initializes_sets_dependencies_and_gets_rates(tmp_path: Path) -> 
     engine.set_state(np.array([5.0, 7.0], dtype=np.float64))
     np.testing.assert_allclose(engine.get_rates(), [2.5, 3.5])
     np.testing.assert_allclose(engine.diagnostics()["oxygen"], [1.0, 2.0])
+
+
+def test_engine_passes_time_and_boundary_flags_to_get_rates(tmp_path: Path) -> None:
+    engine = FABMEngine(_fabm_yaml(tmp_path), model_factory=TimeAwareModel)
+    engine.initialize()
+
+    rates = engine.get_rates(surface=False, bottom=True, time=12.5)
+
+    assert isinstance(engine.model, TimeAwareModel)
+    assert engine.model.rate_calls == [(12.5, False, True)]
+    np.testing.assert_allclose(rates, [13.5, 14.5])
 
 
 def test_engine_reports_every_unresolved_dependency(tmp_path: Path) -> None:

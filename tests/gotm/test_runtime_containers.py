@@ -127,11 +127,17 @@ def test_runtime_forcing_allocates_scalar_and_profile_series() -> None:
     assert forcing.w_adv.shape == (6,)
     assert forcing.w_height.shape == (6,)
     assert forcing.us0.shape == (6,)
+    assert forcing.light_A.shape == (6,)
+    assert forcing.light_g1.shape == (6,)
+    assert forcing.light_g2.shape == (6,)
     assert forcing.dtdx.shape == (6, 4)
     assert forcing.dsdx.shape == (6, 4)
     assert forcing.us.shape == (6, 4)
     assert forcing.vs.shape == (6, 4)
     assert forcing.Tobs.shape == (6, 4)
+    assert forcing.Tprof.shape == (6, 4)
+    assert forcing.Sprof.shape == (6, 4)
+    assert forcing.epsprof.shape == (6, 4)
     assert forcing.Sobs.flags.c_contiguous
     assert np.isnan(forcing.sst_obs).all()
 

@@ -417,7 +417,7 @@ def _step_dissipationeq(
                 eps[i] = epslim
 
     for i in range(nlev + 1):
-        L[i] = cde * math.sqrt(tke[i] ** 3) / eps[i]
+        L[i] = cde * math.sqrt(tke[i] * tke[i] * tke[i]) / eps[i]
 
 
 @numba.njit(parallel=True, cache=True)

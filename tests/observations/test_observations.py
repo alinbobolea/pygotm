@@ -117,6 +117,28 @@ def test_init_observations_keeps_top_level_vertical_velocity_compatibility() -> 
     assert state.w_adv_input.index == 4
 
 
+def test_init_observations_handles_legacy_height_only_w_adv_file() -> None:
+    settings = GotmSettings.model_validate(
+        {
+            "mimic_3d": {
+                "w": {
+                    "max": {"method": "file", "file": "w_adv.dat", "column": 1},
+                    "height": {"method": "file", "file": "w_adv.dat", "column": 2},
+                }
+            }
+        }
+    )
+    state = ObservationsState()
+
+    init_observations(state, settings)
+
+    assert state.w_adv_input.method == 0
+    assert state.w_adv_input.path == ""
+    assert state.w_adv_input.index == 1
+    assert state.w_height_input.path == "w_adv.dat"
+    assert state.w_height_input.index == 1
+
+
 def test_init_observations_uses_real_case_nested_zeta_period() -> None:
     settings = load_settings(Path("gotm-model/cases-runs/seagrass/gotm.yaml"))
     state = ObservationsState()
@@ -136,7 +158,8 @@ def test_init_observations_uses_real_case_nested_vertical_advection() -> None:
 
         init_observations(state, settings)
 
-        assert state.w_adv_input.method == FROMFILE
+        assert state.w_adv_input.method == 0
+        assert state.w_height_input.index == 1
 
 
 def test_post_init_observations_creates_two_layer_profile_and_relaxation() -> None:

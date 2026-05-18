@@ -966,6 +966,8 @@ def time_loop_compiled(
     forcing_sss_obs: np.ndarray,
     forcing_Tobs: np.ndarray,
     forcing_Sobs: np.ndarray,
+    forcing_Tprof: np.ndarray,
+    forcing_Sprof: np.ndarray,
     forcing_uprof: np.ndarray,
     forcing_vprof: np.ndarray,
     forcing_dtdx: np.ndarray,
@@ -978,6 +980,9 @@ def time_loop_compiled(
     forcing_us0: np.ndarray,
     forcing_vs0: np.ndarray,
     forcing_ds: np.ndarray,
+    forcing_light_A: np.ndarray,
+    forcing_light_g1: np.ndarray,
+    forcing_light_g2: np.ndarray,
     forcing_us: np.ndarray,
     forcing_vs: np.ndarray,
     forcing_dusdz: np.ndarray,
@@ -1315,10 +1320,10 @@ def time_loop_compiled(
                 Tp,
                 Ti,
                 Sp,
-                Tobs,
-                Sobs,
-                uprof,
-                vprof,
+                forcing_Tprof[0],
+                forcing_Sprof[0],
+                forcing_uprof[0],
+                forcing_vprof[0],
                 idpdx,
                 idpdy,
                 tke,
@@ -1521,36 +1526,10 @@ def time_loop_compiled(
             for k in range(nlev + 1):
                 vprof[k] = forcing_vprof[step, k]
 
-        if zeta_input_active != 0:
-            step_updategrid_single(
-                nlev,
-                depth,
-                forcing_zeta[step],
-                grid_method,
-                ga,
-                h,
-                ho,
-                z,
-                zi,
-            )
-
         if stokes_active != 0:
             for k in range(nlev + 1):
                 dusdz[k] = forcing_dusdz[step, k]
                 dvsdz[k] = forcing_dvsdz[step, k]
-
-        if w_adv_active != 0:
-            _step_wequation_single(
-                nlev,
-                w_adv_active,
-                forcing_w_adv[step],
-                forcing_w_height[step],
-                zi,
-                w,
-            )
-
-        if cori != 0.0:
-            step_coriolis_single(nlev, cosomega, sinomega, u, v, uprof, vprof)
 
         evap = 0.0
         albedo = 0.0
@@ -1752,6 +1731,39 @@ def time_loop_compiled(
         int_heat += heat * dt
         int_total += (heat + current_i0) * dt
 
+        step_updategrid_single(
+            nlev,
+            depth,
+            forcing_zeta[step],
+            grid_method,
+            ga,
+            h,
+            ho,
+            z,
+            zi,
+        )
+
+        if w_adv_active != 0:
+            _step_wequation_single(
+                nlev,
+                w_adv_active,
+                forcing_w_adv[step],
+                forcing_w_height[step],
+                zi,
+                w,
+            )
+
+        if cori != 0.0:
+            step_coriolis_single(
+                nlev,
+                cosomega,
+                sinomega,
+                u,
+                v,
+                forcing_us[step],
+                forcing_vs[step],
+            )
+
         relax_factor = 1.0
         elapsed = step * dt
         if vel_relax_ramp < _LONG and elapsed < vel_relax_ramp:
@@ -1928,7 +1940,7 @@ def time_loop_compiled(
             ty,
         )
         if sprof_input_active != 0:
-            _copy_profile(nlev, forcing_Sobs[step], Sobs)
+            _copy_profile(nlev, forcing_Sobs[step - 1], Sobs)
             step_salinity_single(
                 nlev,
                 dt,
@@ -1963,7 +1975,7 @@ def time_loop_compiled(
             for k in range(nlev + 1):
                 avh[k] = work_avh[k]
         if tprof_input_active != 0:
-            _copy_profile(nlev, forcing_Tobs[step], Tobs)
+            _copy_profile(nlev, forcing_Tobs[step - 1], Tobs)
             step_temperature_single(
                 nlev,
                 dt,
@@ -1971,9 +1983,9 @@ def time_loop_compiled(
                 avmolT,
                 rho0,
                 cp,
-                light_A,
-                light_g1,
-                light_g2,
+                forcing_light_A[step],
+                forcing_light_g1[step],
+                forcing_light_g2[step],
                 w_adv_for_equations,
                 w_adv_discr,
                 t_adv,
@@ -2058,6 +2070,9 @@ def time_loop_compiled(
             NNT,
             NNS,
         )
+        if hydro_store != 0:
+            for k in range(nlev + 1):
+                hydro_nuh[step, k] = nuh[k]
         if turb_method == 3:  # second_order
             _run_second_order_turbulence_single(
                 nlev,
@@ -2291,7 +2306,6 @@ def time_loop_compiled(
                 hydro_S[step, k] = S[k]
                 hydro_rho[step, k] = rho[k]
                 hydro_h[step, k] = h[k]
-                hydro_nuh[step, k] = nuh[k]
                 hydro_rad[step, k] = rad[k]
             hydro_taub[step] = taub[0]
 
@@ -2367,8 +2381,8 @@ def time_loop_compiled(
                 Tp,
                 Ti,
                 Sp,
-                Tobs,
-                Sobs,
+                forcing_Tprof[step],
+                forcing_Sprof[step],
                 uprof,
                 vprof,
                 idpdx,
@@ -2578,6 +2592,20 @@ def _populate_simple_ice_reference_scalars(
         tf[slot] = _simple_freezing_temperature(float(salinity))
 
 
+def _populate_observation_reference_profiles(
+    forcing: RuntimeForcing,
+    output: RuntimeOutput,
+) -> None:
+    eps_obs = output.reference_z_profiles.get("eps_obs")
+    if eps_obs is None:
+        return
+
+    for slot, step in enumerate(output.output_step):
+        if step < 0 or step >= forcing.epsprof.shape[0]:
+            continue
+        np.copyto(eps_obs[slot], forcing.epsprof[int(step)])
+
+
 def run_compiled_time_loop(
     params: RuntimeParams,
     state: RuntimeState,
@@ -2645,8 +2673,13 @@ def run_compiled_time_loop(
     _f_us0 = np.ascontiguousarray(forcing.us0[_s:_e])
     _f_vs0 = np.ascontiguousarray(forcing.vs0[_s:_e])
     _f_ds = np.ascontiguousarray(forcing.ds[_s:_e])
+    _f_light_A = np.ascontiguousarray(forcing.light_A[_s:_e])
+    _f_light_g1 = np.ascontiguousarray(forcing.light_g1[_s:_e])
+    _f_light_g2 = np.ascontiguousarray(forcing.light_g2[_s:_e])
     _f_Tobs = np.ascontiguousarray(forcing.Tobs[_s:_e, :])
     _f_Sobs = np.ascontiguousarray(forcing.Sobs[_s:_e, :])
+    _f_Tprof = np.ascontiguousarray(forcing.Tprof[_s:_e, :])
+    _f_Sprof = np.ascontiguousarray(forcing.Sprof[_s:_e, :])
     _f_uprof = np.ascontiguousarray(forcing.uprof[_s:_e, :])
     _f_vprof = np.ascontiguousarray(forcing.vprof[_s:_e, :])
     _f_dtdx = np.ascontiguousarray(forcing.dtdx[_s:_e, :])
@@ -2955,6 +2988,8 @@ def run_compiled_time_loop(
             _f_sss_obs,
             _f_Tobs,
             _f_Sobs,
+            _f_Tprof,
+            _f_Sprof,
             _f_uprof,
             _f_vprof,
             _f_dtdx,
@@ -2967,6 +3002,9 @@ def run_compiled_time_loop(
             _f_us0,
             _f_vs0,
             _f_ds,
+            _f_light_A,
+            _f_light_g1,
+            _f_light_g2,
             _f_us,
             _f_vs,
             _f_dusdz,
@@ -3110,6 +3148,8 @@ def run_compiled_time_loop(
     )
     if written > 0 and params.ice_model == 1:
         _populate_simple_ice_reference_scalars(params, output, written)
+    if written > 0:
+        _populate_observation_reference_profiles(forcing, output)
     return written
 
 
@@ -4259,9 +4299,9 @@ def _update_density_single(
             pi_k = -zi[k]
             alpha[k] = gsw_alpha(Si_k, Ti_k, pi_k)
             beta[k] = gsw_beta(Si_k, Ti_k, pi_k)
-        # Boundary interfaces: use boundary cell values
-        alpha[0] = gsw_alpha(S[1], T[1], -zi[0])
-        beta[0] = gsw_beta(S[1], T[1], -zi[0])
+        # Boundary interfaces: match density.F90's Si(0)=S(0), Ti(0)=T(0)
+        alpha[0] = gsw_alpha(S[0], T[0], -zi[0])
+        beta[0] = gsw_beta(S[0], T[0], -zi[0])
         alpha[nlev] = gsw_alpha(S[nlev], T[nlev], -zi[nlev])
         beta[nlev] = gsw_beta(S[nlev], T[nlev], -zi[nlev])
     else:

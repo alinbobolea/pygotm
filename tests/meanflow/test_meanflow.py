@@ -21,7 +21,7 @@ from pygotm.meanflow.meanflow import (
 _NLEV = 10
 _DEPTH = 25.0
 _SIDEREAL_DAY = 86164.0  # default rotation period [s]
-_PI = math.pi
+_PI = float(np.float32(3.141592654))
 
 
 def _make_state(nlev: int = _NLEV, depth: float = _DEPTH) -> MeanflowState:

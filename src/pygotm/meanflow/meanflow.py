@@ -128,7 +128,7 @@ __all__ = [
     "post_init_meanflow",
 ]
 
-_PI: float = math.pi
+_PI: float = float(np.float32(3.141592654))
 
 
 class MeanflowState:

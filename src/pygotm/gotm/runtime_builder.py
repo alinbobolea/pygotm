@@ -18,6 +18,7 @@ from pygotm.gotm.runtime_state import RuntimeState, allocate_runtime_state
 from pygotm.gotm.runtime_work import RuntimeWork, allocate_runtime_work
 from pygotm.gotm.time_loop import run_compiled_time_loop
 from pygotm.input.input import do_input
+from pygotm.meanflow.updategrid import updategrid
 from pygotm.observations.observations import get_all_obs
 from pygotm.stokes_drift.stokes_drift import do_stokes_drift
 from pygotm.turbulence.turbulence import (
@@ -36,6 +37,7 @@ from pygotm.turbulence.turbulence import (
     tke_MY,
     weak_Eq_Kb_Eq,
 )
+from pygotm.util.gsw import gsw_sa_from_sp, gsw_sp_from_sa
 
 __all__ = [
     "RuntimeBundle",
@@ -488,7 +490,7 @@ def _update_runtime_relaxation_targets(run: Any) -> None:
         and observations.sprof_input.data is not None
     ):
         if observations.initial_salinity_type == 1:
-            meanflow.Sobs[1 : run.nlev + 1] = gsw.SA_from_SP(
+            meanflow.Sobs[1 : run.nlev + 1] = gsw_sa_from_sp(
                 observations.sprof_input.data[1 : run.nlev + 1],
                 pressure,
                 run.longitude,
@@ -551,6 +553,9 @@ def _record_forcing_step(run: Any, forcing: RuntimeForcing, step: int) -> None:
 
     np.copyto(forcing.Tobs[step], run.meanflow.Tobs)
     np.copyto(forcing.Sobs[step], run.meanflow.Sobs)
+    _copy_profile_data(observations.tprof_input, forcing.Tprof[step])
+    _copy_profile_data(observations.sprof_input, forcing.Sprof[step])
+    _copy_profile_data(observations.epsprof_input, forcing.epsprof[step])
     _copy_profile_data(observations.uprof_input, forcing.uprof[step])
     _copy_profile_data(observations.vprof_input, forcing.vprof[step])
     _copy_profile_data(observations.dtdx_input, forcing.dtdx[step])
@@ -561,6 +566,9 @@ def _record_forcing_step(run: Any, forcing: RuntimeForcing, step: int) -> None:
     forcing.us0[step] = float(stokes.us0)
     forcing.vs0[step] = float(stokes.vs0)
     forcing.ds[step] = float(stokes.ds)
+    forcing.light_A[step] = _surface_input_value(observations.A_input)
+    forcing.light_g1[step] = _surface_input_value(observations.g1_input)
+    forcing.light_g2[step] = _surface_input_value(observations.g2_input)
     if stokes.usprof is not None:
         np.copyto(forcing.us[step], stokes.usprof)
     if stokes.vsprof is not None:
@@ -577,51 +585,68 @@ def _populate_runtime_forcing_from_run(
 ) -> None:
     stokes = run.stokes_drift
     stokes_active = _stokes_runtime_active(stokes)
+    meanflow = run.meanflow
 
     if forcing.nt == 0:
         _record_forcing_step(run, forcing, 0)
         forcing.validate()
         return
 
+    initial_zeta = float(meanflow.zeta)
+    initial_grid = (
+        np.array(meanflow.h, copy=True),
+        np.array(meanflow.ho, copy=True),
+        np.array(meanflow.z, copy=True),
+        np.array(meanflow.zi, copy=True),
+    )
     _record_forcing_step(run, forcing, 0)
-    for step in range(1, forcing.nt + 1):
-        run.time.update_time(step)
-        do_input(
-            run.time.julianday,
-            run.time.secondsofday,
-            run.nlev,
-            run.meanflow.z,
-        )
-        get_all_obs(
-            run.observations,
-            run.time.julianday,
-            run.time.secondsofday,
-            run.nlev,
-            run.meanflow.z,
-            fsecs=run.time.fsecs,
-        )
-        if stokes_active:
-            do_stokes_drift(
-                stokes,
+    try:
+        for step in range(1, forcing.nt + 1):
+            run.time.update_time(step)
+            do_input(
+                run.time.julianday,
+                run.time.secondsofday,
                 run.nlev,
-                run.meanflow.z,
-                run.meanflow.zi,
-                run.meanflow.gravity,
-                (
-                    float(run.surface_inputs.u10.value)
-                    if run.surface_inputs.u10 is not None
-                    else 0.0
-                ),
-                (
-                    float(run.surface_inputs.v10.value)
-                    if run.surface_inputs.v10 is not None
-                    else 0.0
-                ),
+                meanflow.z,
             )
-        _update_runtime_relaxation_targets(run)
-        _record_forcing_step(run, forcing, step)
+            get_all_obs(
+                run.observations,
+                run.time.julianday,
+                run.time.secondsofday,
+                run.nlev,
+                meanflow.z,
+                fsecs=run.time.fsecs,
+            )
+            if stokes_active:
+                do_stokes_drift(
+                    stokes,
+                    run.nlev,
+                    meanflow.z,
+                    meanflow.zi,
+                    meanflow.gravity,
+                    (
+                        float(run.surface_inputs.u10.value)
+                        if run.surface_inputs.u10 is not None
+                        else 0.0
+                    ),
+                    (
+                        float(run.surface_inputs.v10.value)
+                        if run.surface_inputs.v10 is not None
+                        else 0.0
+                    ),
+                )
+            meanflow.zeta = float(run.observations.zeta_input.value)
+            updategrid(meanflow, run.nlev, run.dt, meanflow.zeta)
+            _update_runtime_relaxation_targets(run)
+            _record_forcing_step(run, forcing, step)
+    finally:
+        meanflow.zeta = initial_zeta
+        np.copyto(meanflow.h, initial_grid[0])
+        np.copyto(meanflow.ho, initial_grid[1])
+        np.copyto(meanflow.z, initial_grid[2])
+        np.copyto(meanflow.zi, initial_grid[3])
+        run.time.update_time(0)
 
-    run.time.update_time(0)
     forcing.validate()
 
 
@@ -1170,11 +1195,14 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
                     )
                 ),
                 "salt_p": diagnostic_z_profile(
-                    gsw.SP_from_SA(
-                        absolute_salinity,
-                        pressure,
-                        float(run.longitude),
-                        float(run.latitude),
+                    np.asarray(
+                        gsw_sp_from_sa(
+                            absolute_salinity,
+                            pressure,
+                            float(run.longitude),
+                            float(run.latitude),
+                        ),
+                        dtype=np.float64,
                     )
                 ),
             }

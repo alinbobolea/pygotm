@@ -35,6 +35,8 @@ modelling with no Fortran compiler required.
    physics/meanflow
    physics/turbulence
    physics/airsea
+   physics/ice_thermodynamics
+   physics/biogeochemistry
 
 .. toctree::
    :maxdepth: 2
@@ -52,6 +54,7 @@ modelling with no Fortran compiler required.
    api/validation
    api/stokes_drift
    api/fabm
+   api/icethm
    api/extras
    api/cvmix
 

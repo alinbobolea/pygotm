@@ -43,6 +43,7 @@ from pygotm.turbulence.omegaeq import step_omegaeq_single
 from pygotm.turbulence.production import step_production_single
 from pygotm.turbulence.tkeeq import step_tkeeq_single
 from pygotm.turbulence.turbulence import Constant, first_order, omega_eq, tke_keps
+from pygotm.util.gsw import gsw_sp_from_sa
 from pygotm.validate import (
     compare_datasets,
     open_reference_dataset,
@@ -51,6 +52,7 @@ from pygotm.validate import (
 
 _COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
 _ESTUARY_CONFIG = Path("gotm-model/cases-runs/estuary/gotm.yaml")
+_FLEX_CONFIG = Path("gotm-model/cases-runs/flex/gotm.yaml")
 _LANGMUIR_CONFIG = Path("gotm-model/cases-runs/langmuir/gotm.yaml")
 _LIVERPOOL_BAY_CONFIG = Path("gotm-model/cases-runs/liverpool_bay/gotm.yaml")
 _MEDSEA_WEST_CONFIG = Path("gotm-model/cases-runs/medsea_west/gotm.yaml")
@@ -166,7 +168,7 @@ def test_runtime_dataset_derives_teos10_temperature_and_salinity_outputs() -> No
     )
     np.testing.assert_allclose(
         dataset["salt_p"].values[:, :, 0, 0],
-        gsw.SP_from_SA(salt, pressure, run.longitude, run.latitude),
+        gsw_sp_from_sa(salt, pressure, run.longitude, run.latitude),
     )
 
 
@@ -378,6 +380,27 @@ def test_runtime_forcing_precomputes_medsea_profile_and_airsea_series() -> None:
     assert forcing.v10[0] != 0.0
     assert 0.0 <= forcing.cloud[0] <= 1.0
     assert forcing.yearday.tolist() == [15, 15]
+
+
+@pytest.mark.slow
+def test_flex_runtime_uses_lagged_targets_and_raw_profile_outputs() -> None:
+    run = initialize_gotm(_FLEX_CONFIG)
+    try:
+        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
+    finally:
+        finalize_gotm(run)
+
+    assert runtime.forcing.Sprof[0, 1] == pytest.approx(35.13075471698114)
+    assert runtime.forcing.Tprof[0, 1] == pytest.approx(6.21958071278826)
+    assert runtime.forcing.light_A[0] == pytest.approx(0.62)
+    assert runtime.forcing.light_g1[0] == pytest.approx(0.6)
+    assert runtime.forcing.light_g2[0] == pytest.approx(22.47189)
+    assert runtime.forcing.light_g2[1] != pytest.approx(runtime.forcing.light_g2[0])
+    assert runtime.forcing.Sobs[0, 1] == pytest.approx(0.0)
+    assert runtime.forcing.Sobs[1, 1] > 35.0
+    assert runtime.output.Sobs[0, 1] == pytest.approx(runtime.forcing.Sprof[0, 1])
+    assert runtime.output.Tobs[0, 1] == pytest.approx(runtime.forcing.Tprof[0, 1])
+    assert runtime.output.S[1, 1] < runtime.output.S[0, 1] - 0.05
 
 
 @pytest.mark.slow

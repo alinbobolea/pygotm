@@ -34,23 +34,30 @@ def run_fabm_chunk(
     forcing_v10: np.ndarray | None = None,
     forcing_yearday: np.ndarray | None = None,
     forcing_secondsofday: np.ndarray | None = None,
+    forcing_precip: np.ndarray | None = None,
     hydro_taub: np.ndarray | None = None,
+    step_offset: int = 0,
     is_first_chunk: bool = True,
 ) -> tuple[np.ndarray, int]:
     """Run pyfabm for one physics chunk and return updated (cc, out_index).
 
     Parameters
     ----------
-    cc_in : None on first chunk — engine.start() sets IC; np.ndarray on
-            subsequent chunks (shape n_vars × nlev) carrying FABM state.
-    out_index_base : output slot counter before this chunk starts.
-    is_first_chunk : True on the first chunk — triggers engine.start() and
-                     records the IC diagnostic slot.
+    cc_in : np.ndarray or None
+        None on first chunk — engine.start() sets initial conditions.
+        Shape ``(n_vars, nlev)`` array carrying FABM state on subsequent chunks.
+    out_index_base : int
+        Output slot counter before this chunk starts.
+    is_first_chunk : bool
+        True on the first chunk — triggers engine.start() and records the IC
+        diagnostic slot.
 
     Returns
     -------
-    cc : updated FABM state at end of chunk (shape n_vars × nlev)
-    out_index : updated output slot counter after this chunk
+    cc : np.ndarray
+        Updated FABM state at end of chunk, shape ``(n_vars, nlev)``.
+    out_index : int
+        Updated output slot counter after this chunk.
     """
 
     model = engine.model
@@ -64,14 +71,22 @@ def run_fabm_chunk(
     light_g1 = chunk_params.light_g1
     light_g2 = chunk_params.light_g2
 
-    sv_names = engine.state_variable_names()
-    n_vars = len(sv_names)
+    state_names = engine.state_variable_names()
+    n_vars = len(state_names)
+    n_interior = _interior_state_variable_count(model)
+    n_surface = _surface_state_variable_count(model)
+    n_bottom = _bottom_state_variable_count(model)
 
-    sv_to_ref: list[np.ndarray | None] = []
-    for name in sv_names:
+    state_z_refs: list[tuple[int, np.ndarray]] = []
+    state_scalar_refs: list[tuple[int, np.ndarray, str]] = []
+    for idx, name in enumerate(state_names):
         norm_name = name.replace("/", "_")
-        arr = output.reference_z_profiles.get(norm_name)
-        sv_to_ref.append(arr)
+        z_arr = output.reference_z_profiles.get(norm_name)
+        if z_arr is not None and idx < n_interior:
+            state_z_refs.append((idx, z_arr))
+        scalar_arr = output.reference_scalars.get(norm_name)
+        if scalar_arr is not None:
+            state_scalar_refs.append((idx, scalar_arr, norm_name))
 
     _au = np.zeros(nlev + 1, dtype=np.float64)
     _bu = np.zeros(nlev + 1, dtype=np.float64)
@@ -118,12 +133,21 @@ def run_fabm_chunk(
         cc = np.zeros((n_vars, nlev), dtype=np.float64)
         _read_model_state_into(model, cc)
         _set_model_state(model, cc)
-        engine.get_rates(surface=False, bottom=False)
+        engine.get_rates(surface=False, bottom=False, time=float(step_offset))
         _update_light_from_diagnostics(
             engine, nlev, hydro_h[0], hydro_rad[0], light_A, light_g2
         )
-        engine.get_rates(surface=False, bottom=False)
-        _record_fabm_output(engine, cc, sv_to_ref, output, out_index, nlev)
+        engine.get_rates(surface=False, bottom=False, time=float(step_offset))
+        engine.get_rates(surface=True, bottom=True, time=float(step_offset))
+        _record_fabm_output(
+            engine,
+            cc,
+            state_z_refs,
+            state_scalar_refs,
+            output,
+            out_index,
+            nlev,
+        )
         out_index += 1
     else:
         assert cc_in is not None, "cc_in must be provided on non-first chunks"
@@ -172,16 +196,26 @@ def run_fabm_chunk(
         if (
             vert_move is not None
             and vert_move.ndim == 2
-            and vert_move.shape[0] == n_vars
+            and vert_move.shape[0] >= n_interior
             and vert_move.shape[1] == nlev
         ):
             _apply_sinking(
-                vert_move, h_step, cc, nlev, dt, n_vars, _y, _ws, _adv_cu
+                vert_move[:n_interior],
+                h_step,
+                cc,
+                nlev,
+                dt,
+                n_interior,
+                _y,
+                _ws,
+                _adv_cu,
             )
 
         # Turbulent diffusion
-        for var in range(n_vars):
+        precip = float(forcing_precip[step]) if forcing_precip is not None else 0.0
+        for var in range(n_interior):
             _y[1 : nlev + 1] = cc[var, :]
+            surface_flux = -float(cc[var, -1]) * precip
             diff_center(
                 nlev,
                 dt,
@@ -190,7 +224,7 @@ def run_fabm_chunk(
                 h_step,
                 NEUMANN,
                 NEUMANN,
-                0.0,
+                surface_flux,
                 0.0,
                 nuh_step,
                 _l_sour,
@@ -207,31 +241,56 @@ def run_fabm_chunk(
             )
             cc[var, :] = _y[1 : nlev + 1]
 
-        # Source/sink rates computed on post-transport state (matches Fortran)
-        _set_model_state(model, cc)
-        engine.get_rates(surface=False, bottom=False)
-        _update_light_from_diagnostics(
-            engine, nlev, h_step, hydro_rad[step], light_A, light_g2
-        )
-        bulk_rates = engine.get_rates(surface=False, bottom=False).copy()
-        surf_rates = engine.get_rates(surface=True, bottom=False).copy()
-        bot_rates = engine.get_rates(surface=False, bottom=True)
-
-        cc += dt * bulk_rates
-        cc[:, -1] += dt * (surf_rates[:, -1] - bulk_rates[:, -1])
-        cc[:, 0] += dt * (bot_rates[:, 0] - bulk_rates[:, 0])
-        _set_model_state(model, cc)
-
         is_output = (step % output_every == 0) or (
             force_final and step == nt and nt % output_every != 0
         )
+
+        # Source/sink rates computed on post-transport state (matches Fortran)
+        _set_model_state(model, cc)
+        fabm_time = float(step_offset + step)
+        engine.get_rates(surface=False, bottom=False, time=fabm_time)
+        _update_light_from_diagnostics(
+            engine, nlev, h_step, hydro_rad[step], light_A, light_g2
+        )
+        bulk_rates = engine.get_rates(
+            surface=False, bottom=False, time=fabm_time
+        ).copy()
+        surf_rates = engine.get_rates(surface=True, bottom=False, time=fabm_time).copy()
+        bot_rates = engine.get_rates(surface=False, bottom=True, time=fabm_time)
+        output_diagnostics = (
+            _copy_diagnostics(engine.diagnostics()) if is_output else None
+        )
+
+        cc[:n_interior] += dt * bulk_rates[:n_interior]
+        cc[:n_interior, -1] += dt * (
+            surf_rates[:n_interior, -1] - bulk_rates[:n_interior, -1]
+        )
+        cc[:n_interior, 0] += dt * (
+            bot_rates[:n_interior, 0] - bulk_rates[:n_interior, 0]
+        )
+        if n_surface:
+            surface_start = n_interior
+            surface_stop = surface_start + n_surface
+            for var in range(surface_start, surface_stop):
+                cc[var, :] = cc[var, -1] + dt * surf_rates[var, -1]
+        if n_bottom:
+            bottom_start = n_interior + n_surface
+            bottom_stop = bottom_start + n_bottom
+            for var in range(bottom_start, bottom_stop):
+                cc[var, :] = cc[var, 0] + dt * bot_rates[var, 0]
+        _set_model_state(model, cc)
+
         if is_output:
-            engine.get_rates(surface=False, bottom=False)
-            _update_light_from_diagnostics(
-                engine, nlev, h_step, hydro_rad[step], light_A, light_g2
+            _record_fabm_output(
+                engine,
+                cc,
+                state_z_refs,
+                state_scalar_refs,
+                output,
+                out_index,
+                nlev,
+                diagnostics=output_diagnostics,
             )
-            engine.get_rates(surface=False, bottom=False)
-            _record_fabm_output(engine, cc, sv_to_ref, output, out_index, nlev)
             out_index += 1
 
     return cc, out_index
@@ -251,6 +310,7 @@ def run_fabm_loop(
     forcing_v10: np.ndarray | None = None,
     forcing_yearday: np.ndarray | None = None,
     forcing_secondsofday: np.ndarray | None = None,
+    forcing_precip: np.ndarray | None = None,
     hydro_taub: np.ndarray | None = None,
 ) -> None:
     """Run pyfabm over every stored GOTM hydro step, then fill reference outputs.
@@ -271,7 +331,7 @@ def run_fabm_loop(
     ``number_of_days_since_start_of_the_year``.
     """
 
-    _, out_index = run_fabm_chunk(
+    run_fabm_chunk(
         engine,
         params,
         output,
@@ -287,10 +347,10 @@ def run_fabm_loop(
         forcing_v10=forcing_v10,
         forcing_yearday=forcing_yearday,
         forcing_secondsofday=forcing_secondsofday,
+        forcing_precip=forcing_precip,
         hydro_taub=hydro_taub,
         is_first_chunk=True,
     )
-    _record_scalar_diagnostics(engine, output, out_index)
 
 
 # ---------------------------------------------------------------------------
@@ -406,7 +466,7 @@ def _apply_sinking(
     # Face k (k=1..nlev-1) lies between cell k (lower) and cell k+1 (upper).
     # iweight_k = h[k+1] / (h[k] + h[k+1])  (Fortran 1-indexed)
     # Python: h_step[k] = h[k], so face k → h_lower=h_step[k], h_upper=h_step[k+1]
-    h_lower = h_step[1:nlev]       # shape (nlev-1,): lower-cell thicknesses
+    h_lower = h_step[1:nlev]  # shape (nlev-1,): lower-cell thicknesses
     h_upper = h_step[2 : nlev + 1]  # shape (nlev-1,): upper-cell thicknesses
     h_sum = h_lower + h_upper
     iw = h_upper / h_sum  # shape (nlev-1,): weight for the lower cell
@@ -441,6 +501,25 @@ def _apply_sinking(
             _adv_cu,
         )
         cc[var, :] = _y[1 : nlev + 1]
+
+
+def _interior_state_variable_count(model: object) -> int:
+    variables = getattr(model, "interior_state_variables", None)
+    if variables is None:
+        variables = getattr(model, "bulk_state_variables", None)
+    if variables is None:
+        variables = getattr(model, "state_variables", None)
+    return len(variables) if variables is not None else 0
+
+
+def _surface_state_variable_count(model: object) -> int:
+    variables = getattr(model, "surface_state_variables", None)
+    return len(variables) if variables is not None else 0
+
+
+def _bottom_state_variable_count(model: object) -> int:
+    variables = getattr(model, "bottom_state_variables", None)
+    return len(variables) if variables is not None else 0
 
 
 def _read_model_state_into(model: object, cc: np.ndarray) -> None:
@@ -569,44 +648,79 @@ def _try_set_scalar(engine: FABMEngine, name: str, value: float) -> None:
 def _record_fabm_output(
     engine: FABMEngine,
     cc: np.ndarray,
-    sv_to_ref: list[np.ndarray | None],
+    state_z_refs: list[tuple[int, np.ndarray]],
+    state_scalar_refs: list[tuple[int, np.ndarray, str]],
     output: RuntimeOutput,
     slot: int,
     nlev: int,
+    *,
+    diagnostics: dict[str, np.ndarray | float] | None = None,
 ) -> None:
     if slot >= output.nout:
         return
 
-    for var_idx, arr in enumerate(sv_to_ref):
-        if arr is None or var_idx >= cc.shape[0]:
+    for var_idx, profile_ref in state_z_refs:
+        if var_idx >= cc.shape[0]:
             continue
-        arr[slot, 1 : nlev + 1] = cc[var_idx, :]
+        profile_ref[slot, 1 : nlev + 1] = cc[var_idx, :]
 
-    diags = engine.diagnostics()
+    for var_idx, scalar_ref, name in state_scalar_refs:
+        if var_idx >= cc.shape[0]:
+            continue
+        scalar_ref[slot] = _scalar_from_profile(name, cc[var_idx], nlev)
+
+    diags = diagnostics if diagnostics is not None else engine.diagnostics()
     for name, diag_val in diags.items():
         norm_name = name.replace("/", "_")
-        arr = output.reference_z_profiles.get(norm_name)
-        if arr is None:
-            continue
-        if isinstance(diag_val, np.ndarray) and diag_val.ndim == 1:
+        profile_arr = output.reference_z_profiles.get(norm_name)
+        if (
+            profile_arr is not None
+            and isinstance(diag_val, np.ndarray)
+            and diag_val.ndim == 1
+        ):
             n = min(diag_val.shape[0], nlev)
-            arr[slot, 1 : n + 1] = diag_val[:n]
+            profile_arr[slot, 1 : n + 1] = diag_val[:n]
+        scalar_arr = output.reference_scalars.get(norm_name)
+        if scalar_arr is not None:
+            scalar_arr[slot] = _scalar_from_value(norm_name, diag_val, nlev)
 
 
-def _record_scalar_diagnostics(
-    engine: FABMEngine,
-    output: RuntimeOutput,
-    n_written: int,
-) -> None:
-    if n_written == 0:
-        return
-    diags = engine.diagnostics()
-    norm_diags = {k.replace("/", "_"): v for k, v in diags.items()}
-    for name, arr in output.reference_scalars.items():
-        val = norm_diags.get(name)
-        if val is None:
-            continue
-        if isinstance(val, (int, float, np.floating)):
-            arr[:n_written] = float(val)
-        elif isinstance(val, np.ndarray) and val.ndim == 0:
-            arr[:n_written] = float(val)
+def _copy_diagnostics(
+    engine_diagnostics: dict[str, np.ndarray | float],
+) -> dict[str, np.ndarray | float]:
+    copied: dict[str, np.ndarray | float] = {}
+    for name, value in engine_diagnostics.items():
+        if isinstance(value, np.ndarray):
+            copied[name] = value.copy()
+        else:
+            copied[name] = float(value)
+    return copied
+
+
+_SURFACE_SCALAR_NAMES = frozenset(
+    {
+        "jrc_med_ergom_OFL",
+    }
+)
+
+
+def _scalar_from_value(
+    name: str,
+    value: np.ndarray | float,
+    nlev: int,
+) -> float:
+    if isinstance(value, (int, float, np.floating)):
+        return float(value)
+    array = np.asarray(value, dtype=np.float64)
+    if array.ndim == 0:
+        return float(array)
+    return _scalar_from_profile(name, array, nlev)
+
+
+def _scalar_from_profile(name: str, value: np.ndarray, nlev: int) -> float:
+    del nlev
+    if value.size == 0:
+        return 0.0
+    index = value.shape[0] - 1 if name in _SURFACE_SCALAR_NAMES else 0
+    index = max(0, min(index, value.shape[0] - 1))
+    return float(value[index])

@@ -69,18 +69,29 @@ Each timestep follows this sequence:
    from the density field (Section 3.2.8).
 4. **U/V momentum equations** — advance :math:`U` and :math:`V` with
    implicit vertical diffusion (Sections 3.2.5–3.2.6).
-5. **Temperature equation** — advance :math:`\theta` including short-wave
-   radiation extinction (Section 3.2.10).
-6. **Salinity equation** — advance :math:`S` (Section 3.2.11).
-7. **Equation of state** — update density :math:`\rho` and buoyancy frequency
+5. **Ice thermodynamics** — update ice cover, thickness, albedo, and
+   transmissivity; diagnose the ocean–ice heat flux that modifies the
+   temperature upper boundary condition (see :doc:`ice_thermodynamics`).
+6. **Temperature equation** — advance :math:`\theta` including short-wave
+   radiation extinction with the ice-modified albedo and transmissivity
+   (Section 3.2.10).
+7. **Salinity equation** — advance :math:`S` (Section 3.2.11).
+8. **Equation of state** — update density :math:`\rho` and buoyancy frequency
    :math:`N^2`.
-8. **Shear frequency** — compute :math:`M^2` from the updated velocity field
+9. **Shear frequency** — compute :math:`M^2` from the updated velocity field
    (Section 3.2.13).
-9. **Turbulence closure** — advance :math:`k` and the second turbulence
-   quantity; update stability functions and diffusivities
-   (Chapter 4).
+10. **Turbulence closure** — advance :math:`k` and the second turbulence
+    quantity; update stability functions and diffusivities
+    (Chapter 4).
 
 All section references are to the GOTM manual (Umlauf, Burchard & Bolding).
+
+When FABM biogeochemistry is enabled, the physics loop above runs for a
+*chunk* of timesteps (default: ~1 day), storing snapshots of
+:math:`T`, :math:`S`, :math:`\rho`, :math:`h`, :math:`\nu_h`, and radiation.
+The biogeochemical engine then steps through those snapshots at the same
+:math:`\Delta t`.  See :doc:`biogeochemistry` for the full description of the
+coupled loop.
 
 See Also
 --------
@@ -88,3 +99,5 @@ See Also
 * :doc:`meanflow` — mean-flow equation details
 * :doc:`turbulence` — turbulence closure details
 * :doc:`airsea` — air–sea interaction and boundary conditions
+* :doc:`ice_thermodynamics` — ice thermodynamics models (simple through Winton three-layer)
+* :doc:`biogeochemistry` — pyfabm coupling and chunked biogeochemical loop

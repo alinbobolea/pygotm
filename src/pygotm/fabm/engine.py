@@ -141,6 +141,7 @@ class FABMEngine:
         *,
         surface: bool = True,
         bottom: bool = True,
+        time: float | None = None,
     ) -> np.ndarray:
         """Return FABM source rates for each layer.
 
@@ -158,7 +159,12 @@ class FABMEngine:
             msg = "pyfabm model does not expose getRates()"
             raise RuntimeError(msg)
 
-        rates = self._call_get_rates_flags(get_fn, surface=surface, bottom=bottom)
+        rates = self._call_get_rates_flags(
+            get_fn,
+            surface=surface,
+            bottom=bottom,
+            time=time,
+        )
 
         array = np.ascontiguousarray(rates, dtype=np.float64)
         if self._rates.shape != array.shape:
@@ -375,14 +381,25 @@ class FABMEngine:
         *,
         surface: bool,
         bottom: bool,
+        time: float | None,
     ) -> Any:
         """Call getRates respecting pyfabm 3.0 surface/bottom kwargs."""
-        for kwargs in (
-            {"surface": surface, "bottom": bottom},
-            {},
-        ):
+        calls: tuple[tuple[tuple[float, ...], dict[str, object]], ...]
+        if time is None:
+            calls = (
+                ((), {"surface": surface, "bottom": bottom}),
+                ((), {}),
+            )
+        else:
+            calls = (
+                ((float(time),), {"surface": surface, "bottom": bottom}),
+                ((), {"t": float(time), "surface": surface, "bottom": bottom}),
+                ((float(time),), {}),
+                ((), {}),
+            )
+        for args, kwargs in calls:
             try:
-                return method(**kwargs) if kwargs else method()
+                return method(*args, **kwargs)
             except TypeError:
                 continue
         return method(self._state)

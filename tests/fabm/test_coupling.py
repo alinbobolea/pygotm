@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 
 from pygotm.fabm.coupling import apply_fabm_dependencies, copy_bioshade_feedback
 from pygotm.fabm.fabm_loop import (
     _fabm_day_of_year,
     _par_with_bioext_from_attenuation,
+    _record_fabm_output,
     _set_environment,
 )
 
@@ -121,3 +124,48 @@ def test_par_with_bioext_matches_gotm_light_formula() -> None:
         bioext += local_ext[idx] * h[idx + 1] * 0.5
     np.testing.assert_allclose(par, expected)
     assert surface_par == 60.0
+
+
+def test_record_fabm_output_uses_cached_diagnostics_and_boundary_scalars() -> None:
+    class EngineWithStaleDiagnostics:
+        def diagnostics(self) -> dict[str, np.ndarray]:
+            raise AssertionError("cached output diagnostics should be used")
+
+    reference_z_profiles = {
+        "jrc_med_ergom_Amm": np.zeros((1, 4), dtype=np.float64),
+    }
+    reference_scalars = {
+        "jrc_med_ergom_OFL": np.zeros(1, dtype=np.float64),
+        "jrc_med_ergom_DNB": np.zeros(1, dtype=np.float64),
+        "jrc_med_ergom_fl": np.zeros(1, dtype=np.float64),
+    }
+    output = SimpleNamespace(
+        nout=1,
+        reference_z_profiles=reference_z_profiles,
+        reference_scalars=reference_scalars,
+    )
+    cc = np.array([[10.0, 20.0, 30.0]], dtype=np.float64)
+    cached_diagnostics = {
+        "jrc/med/ergom/OFL": np.array([1.0, 2.0, 3.0], dtype=np.float64),
+        "jrc/med/ergom/DNB": np.array([4.0, 5.0, 6.0], dtype=np.float64),
+        "jrc/med/ergom/Amm": np.array([7.0, 8.0, 9.0], dtype=np.float64),
+    }
+
+    _record_fabm_output(
+        EngineWithStaleDiagnostics(),
+        cc,
+        [],
+        [(0, reference_scalars["jrc_med_ergom_fl"], "jrc_med_ergom_fl")],
+        output,
+        0,
+        3,
+        diagnostics=cached_diagnostics,
+    )
+
+    assert reference_scalars["jrc_med_ergom_OFL"][0] == 3.0
+    assert reference_scalars["jrc_med_ergom_DNB"][0] == 4.0
+    assert reference_scalars["jrc_med_ergom_fl"][0] == 10.0
+    np.testing.assert_allclose(
+        reference_z_profiles["jrc_med_ergom_Amm"][0],
+        [0.0, 7.0, 8.0, 9.0],
+    )

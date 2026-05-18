@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from pygotm.config.settings import GotmSettings, VerticalVelocitySettings
+from pygotm.config.settings import GotmSettings, InputSetting, VerticalVelocitySettings
 from pygotm.input.input import (
     ProfileInput,
     ScalarInput,
@@ -84,6 +84,27 @@ def _vertical_velocity_settings(parsed: GotmSettings) -> VerticalVelocitySetting
     if "w" in parsed.mimic_3d.model_fields_set:
         return parsed.mimic_3d.w
     return parsed.w
+
+
+def _vertical_velocity_input_settings(
+    vertical_velocity: VerticalVelocitySettings,
+) -> tuple[InputSetting, InputSetting]:
+    w_adv = vertical_velocity.max
+    w_height = vertical_velocity.height
+
+    # Converted legacy GOTM cases can retain a shared w_adv file in the
+    # max/height fields while the reference run only registers w/height.
+    if (
+        w_adv.method == "file"
+        and w_height.method == "file"
+        and w_adv.path == w_height.path
+        and w_adv.path
+        and w_adv.column == 1
+        and w_height.column == 2
+    ):
+        return InputSetting(method="off"), w_adv
+
+    return w_adv, w_height
 
 
 def _profile_method(name: str, *, analytical_constant: bool) -> int:
@@ -357,6 +378,9 @@ def init_observations(
     state.plume_slope_x = parsed.mimic_3d.int_pressure.plume.x_slope
     state.plume_slope_y = parsed.mimic_3d.int_pressure.plume.y_slope
     vertical_velocity = _vertical_velocity_settings(parsed)
+    w_adv_setting, w_height_setting = _vertical_velocity_input_settings(
+        vertical_velocity
+    )
     state.w_adv_discr = _W_ADV_DISCR[vertical_velocity.adv_discr]
 
     state.AmpMu = parsed.mimic_3d.ext_pressure.dpdx.tidal.amp_1
@@ -515,21 +539,21 @@ def init_observations(
     )
     state.w_adv_input = _scalar_input(
         name="w_adv",
-        method=_scalar_method(vertical_velocity.max.method),
-        path=vertical_velocity.max.path,
-        index=vertical_velocity.max.column,
-        constant_value=vertical_velocity.max.constant_value,
-        scale_factor=vertical_velocity.max.scale_factor,
-        add_offset=vertical_velocity.max.add_offset,
+        method=_scalar_method(w_adv_setting.method),
+        path=w_adv_setting.path,
+        index=w_adv_setting.column,
+        constant_value=w_adv_setting.constant_value,
+        scale_factor=w_adv_setting.scale_factor,
+        add_offset=w_adv_setting.add_offset,
     )
     state.w_height_input = _scalar_input(
         name="w_height",
-        method=_scalar_method(vertical_velocity.height.method),
-        path=vertical_velocity.height.path,
-        index=vertical_velocity.height.column,
-        constant_value=vertical_velocity.height.constant_value,
-        scale_factor=vertical_velocity.height.scale_factor,
-        add_offset=vertical_velocity.height.add_offset,
+        method=_scalar_method(w_height_setting.method),
+        path=w_height_setting.path,
+        index=w_height_setting.column,
+        constant_value=w_height_setting.constant_value,
+        scale_factor=w_height_setting.scale_factor,
+        add_offset=w_height_setting.add_offset,
     )
     state.A_input = _scalar_input(
         name="A",
