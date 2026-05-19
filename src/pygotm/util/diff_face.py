@@ -1,70 +1,24 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Diffusion schemes --- grid faces\label{sec:diffusionFace}
-!
-! !INTERFACE:
-!
-! !DESCRIPTION:
-!
-! !USES:
-!
-! !INPUT PARAMETERS:
-!
-!  number of vertical layers
-!   integer,  intent(in)                :: N
-!
-!  time step (s)
-!   REALTYPE, intent(in)                :: dt
-!
-!  "implicitness" parameter
-!   REALTYPE, intent(in)                :: cnpar
-!
-!  layer thickness (m)
-!   REALTYPE, intent(in)                :: h(0:N)
-!
-!  type of upper BC
-!   integer,  intent(in)                :: Bcup
-!
-!  type of lower BC
-!   integer,  intent(in)                :: Bcdw
-!
-!  value of upper BC
-!   REALTYPE, intent(in)                :: Yup
-!
-!  value of lower BC
-!   REALTYPE, intent(in)                :: Ydw
-!
-!  diffusivity of Y
-! !   REALTYPE, intent(in)                :: nuY(0:N)
-!   REALTYPE                            :: nuY(0:N) ! Bug fix Georg Umgiesser
-!
-!  linear source term
-!  (treated implicitly)
-!   REALTYPE, intent(in)                :: Lsour(0:N)
-!
-!  constant source term
-!  (treated explicitly)
-!   REALTYPE, intent(in)                :: Qsour(0:N)
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!   REALTYPE, intent(inout)             :: Y(0:N)
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!
-! !LOCAL VARIABLES:
-!   integer                   :: i
-!   REALTYPE                  :: a,c,l
-!
-!-----------------------------------------------------------------------
-!EOC
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Vertical diffusion for face-centred variables — translation of ``diff_face.F90``.
+
+Solves the one-dimensional diffusion equation for variables defined at grid
+faces (interfaces) rather than cell centres.  Uses the same Crank–Nicolson
+approach as :mod:`~pygotm.util.diff_center` but with the stencil appropriate
+for face-centred quantities.  Source terms ``l_sour`` (linear, implicit) and
+``q_sour`` (constant, explicit) are supported; relaxation is not included.
+
+Boundary conditions (``bc_up``, ``bc_down``) are Dirichlet (``Dirichlet = 0``)
+or Neumann (``Neumann = 1``).  The solved range spans indices ``1`` to
+``nlev - 1`` (interior faces only).
+
+Includes a bug-fix for ``nlev == 2`` attributed to Georg Umgiesser: when only
+two layers are present, boundary diffusivities and values are replicated from
+the single interior face to stabilise the system.
+
+The Thomas algorithm (:func:`~pygotm.util.tridiagonal.tridiagonal`) solves the
+resulting banded system.
+
+Original author: Lars Umlauf.
 """
 
 import numba
@@ -103,7 +57,14 @@ def diff_face(
     ru: np.ndarray,
     qu: np.ndarray,
 ) -> None:
-    r"""! !ROUTINE: Diffusion schemes --- grid faces"""
+    """Solve diffusion for a face-centred variable using Crank–Nicolson.
+
+    Advances ``y`` at interior faces (indices 1 to nlev−1) one time step.
+    Implicitness is controlled by ``cnpar``; optional linear (``l_sour``) and
+    explicit constant (``q_sour``) source terms are included.  Boundary
+    conditions ``bc_up`` and ``bc_down`` are ``DIRICHLET`` (prescribe value) or
+    ``NEUMANN`` (prescribe flux).
+    """
 
     # Bug fix Georg Umgiesser: set boundary nu and y values for nlev==2
     if nlev == 2:

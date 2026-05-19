@@ -1,19 +1,4 @@
-"""Ice-shelf basal melt three-equation closure.
-
-The kernel solves the Holland-Jenkins ice-ocean interface system:
-
-``T_b = lambda_1 S_b + lambda_2 + lambda_3 H``
-
-``gamma_T (T - T_b) =
-M (L/c_w + c_i/c_w (T_b - T_i))``
-
-``gamma_S (S - S_b) = M S_b``
-
-where ``M`` is positive for melting. The pressure/freezing relation is expressed
-with the McDougall-Jackett potential-temperature coefficients used by GOTM's
-ice-shelf cases. The reported ``ocean_ice_heat_flux`` is positive when melting
-extracts heat from the ocean.
-"""
+"""Ice-shelf basal melt closure translated from STIM ``stim_basal_melt.F90``."""
 
 from __future__ import annotations
 
@@ -25,29 +10,37 @@ import numpy as np
 from pygotm.icethm.constants import (
     C_ICE_BASAL,
     C_WATER_BASAL,
-    DEFAULT_BASAL_USTAR,
-    GAMMA_S,
-    GAMMA_T,
     L_ICE,
     LAMBDA1,
     LAMBDA2,
     LAMBDA3,
     RHO_ICE_BASAL,
+    RHO_WATER_BASAL,
     T_ICE_CORE,
 )
+
+_Z0_ICE: float = 0.01
+_NU: float = 1.95e-6
+_KAPPA: float = 0.4
+_BS: float = 8.5
+_PR_TURB: float = 0.7
+_PR_TEMP: float = 13.8
+_PR_SALT: float = 2432.0
 
 
 @numba.njit(cache=True)
 def basal_freezing_temperature(S_b: float, H_ice: float) -> float:
     """Return the pressure-adjusted interface freezing temperature."""
 
-    return LAMBDA1 * S_b + LAMBDA2 + LAMBDA3 * H_ice
+    draft = H_ice * RHO_ICE_BASAL / RHO_WATER_BASAL
+    return LAMBDA1 * S_b + LAMBDA2 + LAMBDA3 * draft
 
 
 @numba.njit(cache=True)
 def step_basal_melt(
     T_w: float,
     S_w: float,
+    h_sfc: float,
     H_ice: float,
     ustar: float,
     melt_rate: np.ndarray,
@@ -59,56 +52,53 @@ def step_basal_melt(
 ) -> None:
     """Solve one basal-melt interface step for a single water column."""
 
-    ustar_eff = ustar
-    if ustar_eff <= 0.0:
-        ustar_eff = DEFAULT_BASAL_USTAR
-    gamma_t = GAMMA_T * ustar_eff
-    gamma_s = GAMMA_S * ustar_eff
+    _ = Tf
+    if ustar < 1.0e-10:
+        melt_rate[0] = 0.0
+        T_melt[0] = basal_freezing_temperature(S_w, H_ice)
+        S_melt[0] = S_w
+        ocean_ice_heat_flux[0] = 0.0
+        ocean_ice_salt_flux[0] = 0.0
+        return
 
-    ll = LAMBDA2 + LAMBDA3 * max(0.0, H_ice)
-    a0 = L_ICE / C_WATER_BASAL + (C_ICE_BASAL / C_WATER_BASAL) * (ll - T_ICE_CORE)
-    a1 = (C_ICE_BASAL / C_WATER_BASAL) * LAMBDA1
+    beta_t = 0.55 * math.exp(0.5 * _KAPPA * _BS) * math.sqrt(_Z0_ICE * ustar / _NU)
+    beta_t = beta_t * (_PR_TEMP ** (2.0 / 3.0) - 0.2)
+    beta_t = beta_t - _PR_TURB * _BS + 9.5
 
-    qa = -gamma_t * LAMBDA1 + gamma_s * a1
-    qb = gamma_t * (T_w - ll) - gamma_s * S_w * a1 + gamma_s * a0
-    qc = -gamma_s * S_w * a0
-    disc = qb * qb - 4.0 * qa * qc
+    beta_s = 0.55 * math.exp(0.5 * _KAPPA * _BS) * math.sqrt(_Z0_ICE * ustar / _NU)
+    beta_s = beta_s * (_PR_SALT ** (2.0 / 3.0) - 0.2)
+    beta_s = beta_s - _PR_TURB * _BS + 9.5
+
+    log_t = math.log((0.5 * h_sfc + _Z0_ICE) / _Z0_ICE) + _KAPPA / _PR_TURB * beta_t
+    log_s = math.log((0.5 * h_sfc + _Z0_ICE) / _Z0_ICE) + _KAPPA / _PR_TURB * beta_s
+    a1t = _KAPPA * ustar / (_PR_TURB * log_t)
+    a1s = _KAPPA * ustar / (_PR_TURB * log_s)
+
+    ll = LAMBDA2 + LAMBDA3 * H_ice * RHO_ICE_BASAL / RHO_WATER_BASAL
+    s1 = LAMBDA1 * (a1t - a1s * C_ICE_BASAL / C_WATER_BASAL)
+    s2 = (
+        a1s * S_w * LAMBDA1 * C_ICE_BASAL / C_WATER_BASAL
+        - a1s / C_WATER_BASAL * (C_ICE_BASAL * (ll - T_ICE_CORE) + L_ICE)
+        - a1t * (T_w - ll)
+    )
+    s3 = a1s * S_w / C_WATER_BASAL * (C_ICE_BASAL * (ll - T_ICE_CORE) + L_ICE)
+    pp = s2 / s1
+    qq = s3 / s1
+    disc = 0.25 * pp * pp - qq
     if disc < 0.0:
         disc = 0.0
 
-    if abs(qa) < 1.0e-30:
-        if abs(qb) < 1.0e-30:
-            S_b = S_w
-        else:
-            S_b = -qc / qb
-    else:
-        sqrt_disc = math.sqrt(disc)
-        root_a = (-qb - sqrt_disc) / (2.0 * qa)
-        root_b = (-qb + sqrt_disc) / (2.0 * qa)
-        S_b = S_w
-        if math.isfinite(root_a) and root_a > 0.0:
-            S_b = root_a
-        if math.isfinite(root_b) and root_b > 0.0:
-            if S_b <= 0.0 or abs(root_b - S_w) < abs(S_b - S_w):
-                S_b = root_b
-        if T_w > basal_freezing_temperature(S_w, max(0.0, H_ice)):
-            if math.isfinite(root_a) and 0.0 < root_a < S_w:
-                S_b = root_a
-            if math.isfinite(root_b) and 0.0 < root_b < S_w:
-                if S_b >= S_w or root_b > S_b:
-                    S_b = root_b
-
-    if not math.isfinite(S_b) or S_b <= 0.0:
-        S_b = max(1.0e-12, S_w)
-
-    T_b = basal_freezing_temperature(S_b, max(0.0, H_ice))
-    rate = gamma_s * (S_w - S_b) / S_b
-    if not math.isfinite(rate):
-        rate = 0.0
+    S_b = -0.5 * pp + math.sqrt(disc)
+    T_b = LAMBDA1 * S_b + ll
+    rate = a1t * (T_w - T_b) / (
+        C_ICE_BASAL / C_WATER_BASAL * (T_b - T_ICE_CORE)
+        + L_ICE / C_WATER_BASAL
+    )
 
     melt_rate[0] = rate
     T_melt[0] = T_b
     S_melt[0] = S_b
-    Tf[0] = basal_freezing_temperature(S_w, max(0.0, H_ice))
-    ocean_ice_heat_flux[0] = RHO_ICE_BASAL * L_ICE * rate
-    ocean_ice_salt_flux[0] = rate * (S_b - S_w)
+    ocean_ice_heat_flux[0] = (
+        a1t * (T_w - T_b) - rate * T_b
+    ) * C_WATER_BASAL * RHO_WATER_BASAL
+    ocean_ice_salt_flux[0] = a1s * (S_w - S_b) - rate * S_b

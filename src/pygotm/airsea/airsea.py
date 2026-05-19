@@ -1,34 +1,15 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: airsea --- atmospheric fluxes \label{sec:airsea}
-!
-! !DESCRIPTION:
-!  This module calculates the heat, momentum
-!  and freshwater fluxes between the ocean and the atmosphere as well as
-!  the incoming solar radiation. Fluxes and solar radiation may be
-!  prescribed. Alternatively, they may be calculated by means
-!  of bulk formulae from observed or modelled meteorological
-!  parameters and the solar radiation may be calculated
-!  from longitude, latitude, time and cloudiness.
-!  Albedo correction is applied according to a configuration variable.
-!
-! !PUBLIC MEMBER FUNCTIONS:
-!   public init_airsea, post_init_airsea
-!   public do_airsea
-!   public clean_airsea
-!   public set_sst
-!   public set_ssuv
-!   public surface_fluxes
-!   public integrated_fluxes
-!EOP
-!-----------------------------------------------------------------------
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Air-sea flux driver — translation of ``airsea.F90``.
+
+Calculates heat, momentum, and freshwater fluxes between the ocean and the
+atmosphere, and the incoming solar radiation.  Fluxes and solar radiation may
+be prescribed directly or computed from meteorological parameters using bulk
+formulae.  Albedo correction is applied when ``shortwave_type == 2``.
+
+Public interface: :func:`init_airsea`, :func:`post_init_airsea`,
+:func:`do_airsea`, :func:`clean_airsea`, :func:`set_sst`, :func:`set_ssuv`,
+:func:`surface_fluxes`, :func:`integrated_fluxes`.
 """
 
 from __future__ import annotations

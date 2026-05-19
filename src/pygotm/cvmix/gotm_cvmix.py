@@ -1,20 +1,31 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: gotm_cvmix: interface to the Community Ocean Vertical Mixing Project (CVMix)
-!
-! !DESCRIPTION:
-!  This module provides an interface to use the Community Ocean Vertical Mixing
-!  Project (CVMix) in the General Ocean Turbulence Model.
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!   Adapted for CVMix: Qing Li
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+CVMix interface — translation of ``gotm_cvmix.F90``.
+
+Provides an interface to the Community Ocean Vertical Mixing Project (CVMix,
+http://cvmix.github.io) in the General Ocean Turbulence Model.  CVMix is an
+optional alternative to the native GOTM two-equation closures for ocean models
+that use CVMix as their mixing library.
+
+Fortran CVMix library modules (``cvmix_background``, ``cvmix_convection``,
+``cvmix_kpp``, ``cvmix_shear``, ``cvmix_tidal``, ``cvmix_ddiff``) are
+encapsulated by the Python mixing routines below.  All configuration and state
+are held in :class:`CVMixState`.
+
+Mixing parameterisations:
+
+* Surface boundary layer — :func:`surface_layer` (parabolic KPP-style).
+* Bottom boundary layer — :func:`bottom_layer`.
+* Interior non-convective — :func:`interior_nonconv` (background diffusivity;
+  Pacanowski–Philander or KPP shear scheme).
+* Interior convective — :func:`interior_conv`.
+
+Public interface: :func:`init_cvmix`, :func:`init_cvmix_yaml`,
+:func:`post_init_cvmix`, :func:`do_cvmix`, :func:`clean_cvmix`,
+:func:`surface_layer`, :func:`bottom_layer`, :func:`interior_nonconv`,
+:func:`interior_conv`, :class:`CVMixState`.
+
+Original authors: Lars Umlauf; adapted for CVMix by Qing Li.
 """
 
 from dataclasses import dataclass

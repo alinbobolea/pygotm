@@ -1,38 +1,16 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Heat and momemtum fluxes according to Kondo \label{sec:kondo}
-!
-! !INTERFACE:
-!   subroutine kondo(sst,airt,u10,v10,precip,evap,taux,tauy,qe,qh)
-!
-! !DESCRIPTION:
-!  Based on the model sea surface temperature, the wind vector
-!  at 10 m height, the air pressure at 2 m, the dry air
-!  temperature and the air pressure at 2 m, and the relative
-!  humidity (either directly given or recalculated from the
-!  wet bulb or the dew point temperature),
-!  this routine first computes the transfer coefficients for the surface
-!  momentum flux vector, $(\tau_x^s,\tau_y^s)$ ($c_{dd}$),
-!  the latent heat flux, $Q_e$, ($c_{ed}$)
-!  and the sensible heat flux, $Q_h$,
-!  ($c_{hd}$) heat flux according to the \cite{Kondo75}
-!  bulk formulae.
-!
-! !USES:
-!   use airsea_variables, only: kelvin,const06,rgas,rho_0
-!   use airsea_variables, only: qs,qa,rhoa
-!   use airsea_variables, only: cpa,cpw
-!   use airsea_variables, only: rain_impact,calc_evaporation
-!   IMPLICIT NONE
-!EOP
-!-----------------------------------------------------------------------
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Kondo (1975) bulk flux parameterisation — translation of ``kondo.F90``.
+
+Computes transfer coefficients for the surface momentum flux vector
+:math:`(\\tau_x, \\tau_y)` (:math:`c_{dd}`), latent heat flux :math:`Q_e`
+(:math:`c_{ed}`), and sensible heat flux :math:`Q_h` (:math:`c_{hd}`)
+following the Kondo (1975) bulk formulae.
+
+Transfer coefficients are selected from five wind-speed regimes
+(0–2.2, 2.2–5, 5–8, 8–25, and >25 m s⁻¹) and then modified by a bulk
+Richardson-number stability correction.  Rain impact on sensible heat and wind
+stress is applied optionally when ``state.rain_impact`` is ``True``.
 """
 
 from __future__ import annotations

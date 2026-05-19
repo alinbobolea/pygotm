@@ -1,19 +1,15 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: stokes_drift_exp
-!
-! !DESCRIPTION:
-!  Calculate the Stokes drift profile from surface Stokes drift and the
-!  Stokes penetration depth, assuming exponential profile.
-!
-! !REVISION HISTORY:
-!  Original author(s): Qing Li
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Exponential Stokes drift profile — translation of ``stokes_drift_exp.F90``.
+
+Calculates the Stokes drift profile from the surface Stokes drift ``us0``,
+``vs0`` and the Stokes penetration depth ``ds``, assuming an exponential
+vertical profile.  The profile is averaged analytically over each grid cell.
+
+Provides a single-column Numba kernel :func:`stokes_drift_exp` and a
+parallel batch variant :func:`stokes_drift_exp_batch` for ensemble use.
+
+Original authors: Qing Li.
 """
 
 import math

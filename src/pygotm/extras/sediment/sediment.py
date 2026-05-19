@@ -1,20 +1,33 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: sediment --- suspended sediment dynamics
-!
-! !DESCRIPTION:
-!  This subroutine computes the transport of sediment, given by its
-!  concentration. Settling is advective and turbulent mixing is represented
-!  by diffusion. The sinking speed is negative by definition.
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Suspended sediment transport — translation of ``sediment.F90``.
+
+Computes the transport of suspended sediment concentration :math:`C` via:
+
+.. math::
+
+   \\frac{\\partial C}{\\partial t} + \\frac{\\partial w_s C}{\\partial z}
+   = \\mathcal{D}_C
+
+where :math:`w_s < 0` is the sinking speed and :math:`\\mathcal{D}_C` is
+turbulent diffusion with diffusivity equal to the turbulent momentum
+diffusivity :math:`\\nu_t`.  Two transport methods are supported:
+
+* ``sedi_eulerian = True`` (default) — settling advection via :func:`adv_center`
+  plus diffusion via :func:`diff_center`.
+* ``sedi_eulerian = False`` — Lagrangian particle tracking via :func:`lagrange`.
+
+Settling velocity is computed from grain properties using the Zanke (1977)
+formula in :func:`settling_velocity_zanke`.  Bottom boundary conditions are
+either no-flux (``NoFlux``) or the Smith–McLean (``SmithMcLean``) resuspension
+formula.
+
+Public interface: :func:`init_sediment`, :func:`do_sediment`,
+:func:`sediment_eulerian`, :func:`sediment_lagrangian`,
+:func:`settling_velocity_zanke`, :func:`save_sediment`, :func:`end_sediment`,
+:class:`SedimentState`, :data:`NoFlux`, :data:`SmithMcLean`.
+
+Original authors: Hans Burchard, Karsten Bolding.
 """
 
 from dataclasses import dataclass

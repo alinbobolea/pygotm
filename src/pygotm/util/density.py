@@ -1,76 +1,32 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: density --- the equation of state \label{sec:eqstate}
-!
-! !INTERFACE:
-!   MODULE density
-!
-! !DESCRIPTION:
-!  Computes the density, $\mean{\rho}$, and buoyancy from the
-!  salinity, $S$, the temperature, $\Theta$, and the thermodynamic
-!  pressure, $P$, according to an \emph{equation of state},
-!  \begin{equation}
-!    \label{DefEOS}
-!     \mean{\rho} = \hat{\rho} (S,\Theta,P)
-!     \point
-!  \end{equation}
-!
-!  The following remark on the thermodynamic interpretation of
-!  density, temperature, and pressure is useful here.  If $\Theta$ is
-!  identified with the in-situ temperature, and $P$ with the in-situ
-!  pressure, then $\mean{\rho}$ will be the in-situ density.  On the
-!  other hand, if $P$ is identified with the surface pressure, and
-!  $\Theta$ with the potential temperature, the same equation of
-!  state, \eq{DefEOS}, will yield $\mean{\rho}$ as the potential
-!  density. Note that the quantity {\tt sigma\_t} found in the GOTM output
-!  is simply computed from  $\mean{\rho}$ - 1000 kg m$^{-3}$, and may
-!  therefore adopt different meanings.
-!
-!  At present, two different models for the equation of state ("modes"),
-!  and four different "methods" how to evalute the equation of state
-!  are implemented.
-!
-!  Modes:
-!  \begin{enumerate}
-!     \item The UNESCO equation of state according to \cite{FofonoffMillard83}
-!     \item The \cite{JACKETTea05} equation of state
-!  \end{enumerate}
-!  Methods:
-!  \begin{enumerate}
-!     \item the full equation of state --- including pressure effects
-!     \item the full equation of state --- without pressure effects
-!     \item the linearised equation of state
-!     \item a general linear form of the equation of state
-!  \end{enumerate}
-!
-!USES:
-!   use gsw_mod_teos10_constants, only: gsw_cp0
-!   use gsw_mod_toolbox, only: gsw_rho,gsw_sigma0,gsw_alpha,gsw_beta
-!
-! !PUBLIC MEMBER FUNCTIONS:
-!   public init_density, do_density, get_rho, get_alpha, get_beta
-!
-! !PUBLIC DATA MEMBERS:
-!   integer, public :: density_method
-!   REALTYPE, public :: T0,S0,p0,rho0=1027.,alpha0,beta0,cp
-!   REALTYPE, public, allocatable :: alpha(:), beta(:)
-!   REALTYPE, public, allocatable :: rho(:), rho_p(:)
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Equation of state (density) — translation of ``density.F90``.
 
-Note: The GOTM Fortran source (density.F90) uses the TEOS-10 Gibbs SeaWater
-toolbox (gsw) rather than the original UNESCO 1983 polynomial described in the
-module header. This Python translation wraps the same TEOS-10 library via the
-`gsw` Python package (McDougall & Barker 2011; Roquet et al. 2015).
+Computes density :math:`\\bar{\\rho}(S, \\Theta, P)`, potential density, and
+buoyancy expansion coefficients from salinity, temperature, and pressure.
+Three methods are supported, selected via ``DensityState.density_method``:
 
-TEOS-10 reference: IOC, SCOR and IAPSO (2010). The international thermodynamic
-equation of seawater 2010. Intergovernmental Oceanographic Commission,
-Manuals and Guides No. 56.
+* ``METHOD_TEOS10`` (1) — Full TEOS-10 equation of state via the ``gsw``
+  package: ``gsw_rho``, ``gsw_sigma0``, ``gsw_alpha``, ``gsw_beta``.
+* ``METHOD_LINEAR_TEOS10`` (2) — Linearised EOS; thermal expansion
+  :math:`\\alpha_0` and haline contraction :math:`\\beta_0` are computed from
+  TEOS-10 at the user reference point :math:`(S_0, T_0, p_0)`.
+* ``METHOD_LINEAR_USER`` (3) — Linearised EOS with user-supplied
+  :math:`\\rho_0`, :math:`\\alpha_0`, :math:`\\beta_0`.
+
+The GOTM Fortran source (``density.F90``) uses the TEOS-10 Gibbs SeaWater
+toolbox (``gsw``) rather than the original UNESCO 1983 polynomial described in
+the historical module header.  This Python translation wraps the same TEOS-10
+library via the ``gsw`` Python package (McDougall & Barker 2011).
+
+TEOS-10 reference: IOC, SCOR and IAPSO (2010). *The International
+Thermodynamic Equation of Seawater 2010.* Intergovernmental Oceanographic
+Commission, Manuals and Guides No. 56.
+
+Public interface: :func:`init_density`, :func:`do_density`, :func:`get_rho`,
+:func:`get_alpha`, :func:`get_beta`, :func:`clean_density`,
+:class:`DensityState`.
+
+Original authors: Hans Burchard, Karsten Bolding.
 """
 
 from __future__ import annotations
@@ -156,19 +112,20 @@ class DensityState:
 def init_density(state: DensityState, nlev: int) -> None:
     """Initialise the density module state for a column of *nlev* layers.
 
-    ! !IROUTINE: Configuring {\tt eqstate}
-    !
-    ! !DESCRIPTION:
-    !   select case (density_method)
-    !      case(1) ! use gsw_rho(S,T,p) - default p=0
-    !         cp = gsw_cp0
-    !      case(2) ! S0, T0, p0 are provided - alpha, beta, cp are calculated
-    !         rhob   = gsw_sigma0(S0,T0) + 1000.
-    !         alpha0 = gsw_alpha(S0,T0,p0)
-    !         beta0  = gsw_beta(S0,T0,p0)
-    !         cp     = gsw_cp0
-    !      case(3) ! S0, T0, rho0, alpha, beta are all provided
-    !         rhob = rho0
+    Method-specific initialisation:
+
+    * ``METHOD_TEOS10`` (1): sets ``cp = CP0``; all other coefficients are
+      computed per call in :func:`do_density`.
+    * ``METHOD_LINEAR_TEOS10`` (2): computes ``_rhob = gsw_sigma0(S0,T0) + 1000``,
+      ``alpha0 = gsw_alpha(S0,T0,p0)``, ``beta0 = gsw_beta(S0,T0,p0)``,
+      and ``cp = CP0`` from TEOS-10 at the user reference point.
+    * ``METHOD_LINEAR_USER`` (3): sets ``_rhob = rho0`` from the caller-supplied
+      reference density; ``alpha0`` and ``beta0`` must be set by the caller
+      before calling this function.
+
+    After all methods, allocates ``alpha``, ``beta`` (shape ``nlev+1``, filled
+    with ``alpha0`` / ``beta0``), ``rho``, and ``rho_p`` (shape ``nlev+1``,
+    zero-initialised).
 
     Parameters
     ----------
@@ -203,24 +160,20 @@ def do_density(
 ) -> None:
     """Compute density, potential density, and expansion coefficients.
 
-    ! !DESCRIPTION:
-    !   ! compute interface salinity and temperature
-    !   Si(1:nlev-1) = 0.5*(S(1:nlev-1) + S(2:nlev))
-    !   Ti(1:nlev-1) = 0.5*(T(1:nlev-1) + T(2:nlev))
-    !   Si(0) = S(0)  ;  Si(nlev) = S(nlev)
-    !   Ti(0) = T(0)  ;  Ti(nlev) = T(nlev)
-    !
-    !   select case (density_method)
-    !      case(1)
-    !         rho(1:nlev)   = gsw_rho(S(1:nlev),T(1:nlev),p(1:nlev))
-    !         rho_p(1:nlev) = gsw_sigma0(S(1:nlev),T(1:nlev)) + 1000.
-    !         alpha         = gsw_alpha(Si,Ti,pi)
-    !         beta          = gsw_beta(Si,Ti,pi)
-    !      case(2,3)
-    !         rho_p(1:nlev) = rhob*(1 - alpha0*(T(1:nlev)-T0)
-    !                               + beta0*(S(1:nlev)-S0))
-    !         rho = rho_p   ! Lars: here, we should implement some sort of
-    !                       ! pressure dependency
+    Interface salinity and temperature are computed as arithmetic means of
+    adjacent cell-centre values.  Boundary faces (seabed index 0 and surface
+    index nlev) use the single adjacent cell value.
+
+    Method-specific computation:
+
+    * ``METHOD_TEOS10`` (1): computes ``rho[1:nlev+1]`` via ``gsw_rho``,
+      ``rho_p[1:nlev+1]`` via ``gsw_sigma0 + 1000``, and the full
+      interface arrays ``alpha`` and ``beta`` via ``gsw_alpha`` / ``gsw_beta``
+      evaluated at the interface salinity, temperature, and pressure.
+    * ``METHOD_LINEAR_TEOS10`` / ``METHOD_LINEAR_USER`` (2, 3): applies the
+      linear EOS :math:`\\rho_p = \\rho_b(1 - \\alpha_0(T-T_0) + \\beta_0(S-S_0))`
+      at all cell centres.  In-situ density is set equal to potential density
+      (no pressure dependence implemented, following the Fortran source).
 
     Parameters
     ----------
@@ -277,17 +230,11 @@ def do_density(
 def get_rho(state: DensityState, S: float, T: float, p: float | None = None) -> float:
     """Compute density for a single water parcel.
 
-    ! !DESCRIPTION:
-    !   select case (density_method)
-    !      case(1)
-    !         if (present(p)) then
-    !            get_rho = gsw_rho(S,T,p)
-    !         else
-    !            get_rho = gsw_sigma0(S,T) + 1000.
-    !         end if
-    !      case (2,3)
-    !         get_rho = rhob*(1 - alpha0*(T-T0) + beta0*(S-S0))
-    !         ! Lars: here, we should implement some pressure dependency
+    * ``METHOD_TEOS10`` (1): returns ``gsw_rho(S, T, p)`` when ``p`` is given,
+      or ``gsw_sigma0(S, T) + 1000`` (potential density) when ``p`` is omitted.
+    * ``METHOD_LINEAR_TEOS10`` / ``METHOD_LINEAR_USER`` (2, 3): returns
+      :math:`\\rho_b(1 - \\alpha_0(T-T_0) + \\beta_0(S-S_0))`.  No pressure
+      dependence is applied (following the Fortran source).
 
     Parameters
     ----------
@@ -314,12 +261,9 @@ def get_rho(state: DensityState, S: float, T: float, p: float | None = None) -> 
 def get_alpha(state: DensityState, S: float, T: float, p: float) -> float:
     """Compute thermal expansion coefficient for a single water parcel.
 
-    ! !DESCRIPTION:
-    !   select case (density_method)
-    !      case(1)
-    !         get_alpha = gsw_alpha(S,T,p)
-    !      case (2,3)
-    !         get_alpha = alpha0
+    * ``METHOD_TEOS10`` (1): returns ``gsw_alpha(S, T, p)`` from TEOS-10.
+    * ``METHOD_LINEAR_TEOS10`` / ``METHOD_LINEAR_USER`` (2, 3): returns the
+      constant reference value ``alpha0`` set during initialisation.
 
     Parameters
     ----------
@@ -340,12 +284,9 @@ def get_alpha(state: DensityState, S: float, T: float, p: float) -> float:
 def get_beta(state: DensityState, S: float, T: float, p: float) -> float:
     """Compute haline contraction coefficient for a single water parcel.
 
-    ! !DESCRIPTION:
-    !   select case (density_method)
-    !      case(1)
-    !         get_beta = gsw_beta(S,T,p)
-    !      case (2,3)
-    !         get_beta = beta0
+    * ``METHOD_TEOS10`` (1): returns ``gsw_beta(S, T, p)`` from TEOS-10.
+    * ``METHOD_LINEAR_TEOS10`` / ``METHOD_LINEAR_USER`` (2, 3): returns the
+      constant reference value ``beta0`` set during initialisation.
 
     Parameters
     ----------
@@ -366,13 +307,9 @@ def get_beta(state: DensityState, S: float, T: float, p: float) -> float:
 def clean_density(state: DensityState) -> None:
     """Release the density arrays held by *state*.
 
-    ! !DESCRIPTION:
-    !   if (allocated(alpha)) deallocate(alpha)
-    !   if (allocated(beta))  deallocate(beta)
-    !   if (allocated(rho))   deallocate(rho)
-    !   if (allocated(rho_p)) deallocate(rho_p)
-
-    After clean_density, call init_density again before do_density.
+    Sets ``alpha``, ``beta``, ``rho``, and ``rho_p`` to ``None``, mirroring
+    Fortran ``deallocate``.  Call :func:`init_density` again before the next
+    :func:`do_density` call.
     """
     state.alpha = None
     state.beta = None

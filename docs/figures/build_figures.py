@@ -255,213 +255,140 @@ def figure_crank_nicolson(sigma: float = 0.6) -> None:
 def figure_fabm_coupling() -> None:
     """Figure 3: pyGOTM–pyfabm chunked coupling architecture.
 
-    Shows the interleaved physics/biogeochemistry loop: each chunk runs the
-    Numba-compiled physics kernel first (storing hydrodynamic snapshots), then
-    drives pyfabm through those snapshots.  Variables exchanged at each step
-    are shown as labelled arrows between the two engines.
+    Two-column layout showing the sequential per-chunk execution:
+      1. Physics pass (Numba JIT) fills hydro buffers.
+      2. pyfabm pass reads buffers step-by-step.
+    The biological state cc passes horizontally from chunk k to chunk k+1.
     """
-    fig, ax = plt.subplots(figsize=(11.0, 7.5))
+    fig, ax = plt.subplots(figsize=(13.0, 10.5))
     ax.axis("off")
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, 7.5)
+    ax.set_xlim(0, 13.0)
+    ax.set_ylim(0, 10.5)
 
     # ── colour palette ────────────────────────────────────────────────────────
-    C_PHYS = "#2c7bb6"     # pyGOTM physics box
-    C_BIO  = "#1a9641"     # pyfabm box
-    C_BUF  = "#fdae61"     # hydro-buffer box
-    C_LOOP = "#d7191c"     # chunk-loop annotation
-    C_ARROW_PB = "#0571b0" # physics → buffer arrow
-    C_ARROW_BF = "#ca0020" # buffer → FABM arrow
-    C_ARROW_FB = "#006837" # FABM → physics feedback arrow
-    GREY   = "#555555"
+    C_PHYS     = "#2c7bb6"
+    C_BIO      = "#1a9641"
+    C_BUF      = "#fdae61"
+    C_CC       = "#7b2f8a"   # biological state continuity
+    C_ARROW_PB = "#0571b0"   # physics → buffer
+    C_ARROW_BF = "#ca0020"   # buffer → FABM
+    GREY       = "#555555"
 
-    BOXH  = 2.8   # box height
-    BOXW  = 3.0   # box width
+    BOXW = 4.0   # box width for both columns
 
-    # ── Physics box (left) ────────────────────────────────────────────────────
-    px, py = 0.6, 2.4
-    phys_box = plt.Rectangle(
-        (px, py), BOXW, BOXH,
-        linewidth=2, edgecolor=C_PHYS, facecolor="#d0e4f3", zorder=2,
-    )
-    ax.add_patch(phys_box)
-    ax.text(
-        px + BOXW / 2, py + BOXH - 0.22,
-        "pyGOTM Physics Kernel",
-        ha="center", va="top", fontsize=11, fontweight="bold", color=C_PHYS,
-    )
-    phys_items = [
-        r"Numba JIT  (run_compiled_time_loop)",
-        r"• Coriolis, pressure, U/V momentum",
-        r"• Temperature, salinity equations",
-        r"• Turbulence closure  ($k$–$\varepsilon$, $k$–$\omega$, …)",
-        r"• Air-sea fluxes, ice thermodynamics",
-        r"• Stores snapshots → hydro buffers",
-    ]
-    for i, item in enumerate(phys_items):
-        ax.text(
-            px + 0.15, py + BOXH - 0.55 - i * 0.37,
-            item, ha="left", va="top",
-            fontsize=7.8, color=GREY,
-            fontfamily="monospace" if "texttt" not in item else "sans-serif",
-        )
+    # Column centres and left edges
+    Lcx, Lx = 2.5, 0.5    # Chunk k   column
+    Rcx, Rx = 10.5, 8.5   # Chunk k+1 column
 
-    # ── Hydro buffer box (centre) ─────────────────────────────────────────────
-    bx, by = 3.9, 3.2
-    bw, bh = 3.2, 1.8
-    buf_box = plt.Rectangle(
-        (bx, by), bw, bh,
-        linewidth=1.5, edgecolor=C_BUF, facecolor="#fff3cd", zorder=2,
-    )
-    ax.add_patch(buf_box)
-    ax.text(
-        bx + bw / 2, by + bh - 0.18,
-        "Hydrodynamic State Buffers",
-        ha="center", va="top", fontsize=9.5, fontweight="bold", color="#b45309",
-    )
-    buf_items = [
-        r"T, S, $\rho$, $h$, $\nu_h$, rad, $\tau_b$",
-        r"shape: $(C+1)\times(N_\mathrm{lev}+1)$",
-        r"one row per physics timestep",
-    ]
-    for i, item in enumerate(buf_items):
-        ax.text(
-            bx + bw / 2, by + bh - 0.55 - i * 0.37,
-            item, ha="center", va="top", fontsize=8, color=GREY,
-        )
+    # Vertical layout (bottom → top)
+    # Gap sizes: Buffer→FABM = 2.0 units (holds 4 var lines + header)
+    #            Physics→Buffer = 1.2 units (holds 2 label lines)
+    fab_y, fab_h = 0.5, 2.5   # pyfabm:  y = 0.5 .. 3.0
+    buf_y, buf_h = 5.0, 1.0   # buffers: y = 5.0 .. 6.0   gap = 2.0
+    phy_y, phy_h = 7.2, 2.6   # physics: y = 7.2 .. 9.8   gap = 1.2
 
-    # ── FABM box (right) ──────────────────────────────────────────────────────
-    fx, fy = 7.4, 2.4
-    fabm_box = plt.Rectangle(
-        (fx, fy), BOXW, BOXH,
-        linewidth=2, edgecolor=C_BIO, facecolor="#d4edda", zorder=2,
-    )
-    ax.add_patch(fabm_box)
-    ax.text(
-        fx + BOXW / 2, fy + BOXH - 0.22,
-        "pyfabm Engine",
-        ha="center", va="top", fontsize=11, fontweight="bold", color=C_BIO,
-    )
-    fabm_items = [
-        r"Python  (run_fabm_chunk)",
-        r"• Set environment (T, S, ρ, PAR, …)",
-        r"• Sinking/rising advection (P2-PDM)",
-        r"• Turbulent diffusion (diff_center)",
-        r"• Biogeochemical rates (getRates)",
-        r"• Apply source/sink: cc += dt·rates",
-    ]
-    for i, item in enumerate(fabm_items):
-        ax.text(
-            fx + 0.15, fy + BOXH - 0.55 - i * 0.37,
-            item, ha="left", va="top",
-            fontsize=7.8, color=GREY,
-        )
+    cc_y = fab_y + fab_h / 2  # horizontal cc arrow at FABM mid-height = 1.75
 
-    # ── Arrow: Physics → Buffer ───────────────────────────────────────────────
-    ax.annotate(
-        "",
-        xy=(bx, by + bh * 0.65),
-        xytext=(px + BOXW, py + BOXH * 0.65),
-        arrowprops=dict(arrowstyle="-|>", color=C_ARROW_PB, lw=2.0),
-        zorder=3,
-    )
-    ax.text(
-        (px + BOXW + bx) / 2, py + BOXH * 0.65 + 0.18,
-        "store snapshots\nevery step",
-        ha="center", va="bottom", fontsize=7.5, color=C_ARROW_PB,
-    )
+    # ── Chunk column headers ──────────────────────────────────────────────────
+    for cx, lbl in [(Lcx, "CHUNK  k"), (Rcx, "CHUNK  k+1")]:
+        ax.text(cx, 10.0, lbl, ha="center", va="bottom", fontsize=12,
+                fontweight="bold", color="#333333",
+                bbox=dict(fc="#eeeeee", ec="#aaaaaa", pad=4, boxstyle="round,pad=0.3"))
 
-    # ── Arrow: Buffer → FABM ──────────────────────────────────────────────────
-    ax.annotate(
-        "",
-        xy=(fx, fy + BOXH * 0.5),
-        xytext=(bx + bw, by + bh * 0.35),
-        arrowprops=dict(arrowstyle="-|>", color=C_ARROW_BF, lw=2.0),
-        zorder=3,
-    )
-    buf_labels = [
-        "T, S, ρ, h  (profiles)",
-        "nuh  (turbulent diffusivity)",
-        "rad  (shortwave)",
-        "τ_b  (bottom stress)",
-        "u10, v10, yearday, precip",
-    ]
-    bfx = (bx + bw + fx) / 2
-    bfy = (by + bh * 0.35 + fy + BOXH * 0.5) / 2
-    for i, lbl in enumerate(buf_labels):
-        ax.text(
-            bfx, bfy + 0.25 - i * 0.28,
-            lbl, ha="center", va="center",
-            fontsize=6.8, color=C_ARROW_BF,
-            bbox=dict(facecolor="white", edgecolor="none", pad=0.5),
-        )
+    # ── Physics boxes ──────────────────────────────────────────────────────────
+    for x in (Lx, Rx):
+        ax.add_patch(plt.Rectangle((x, phy_y), BOXW, phy_h, lw=2, ec=C_PHYS, fc="#d0e4f3", zorder=2))
+        ax.text(x+BOXW/2, phy_y+phy_h-0.20, "pyGOTM Physics Kernel",
+                ha="center", va="top", fontsize=10, fontweight="bold", color=C_PHYS)
+        for i, item in enumerate([
+            r"Numba JIT  (run_compiled_time_loop)",
+            r"• Coriolis, pressure, U/V momentum",
+            r"• Temperature, salinity equations",
+            r"• Turbulence closure  ($k$–$\varepsilon$, $k$–$\omega$, …)",
+            r"• hydro_store=ON  →  fill buffers",
+        ]):
+            ax.text(x+0.18, phy_y+phy_h-0.52-i*0.38, item,
+                    ha="left", va="top", fontsize=7.5, color=GREY)
 
-    # ── Arrow: FABM feedback → Physics (light attenuation) ───────────────────
-    ax.annotate(
-        "",
-        xy=(px + BOXW * 0.7, py),
-        xytext=(fx + BOXW * 0.3, fy),
-        arrowprops=dict(
-            arrowstyle="-|>", color=C_ARROW_FB, lw=1.6, linestyle="dashed",
-        ),
-        zorder=3,
-    )
-    ax.text(
-        (px + BOXW * 0.7 + fx + BOXW * 0.3) / 2,
-        py - 0.22,
-        "kc (bio-shading feedback, optional)",
-        ha="center", va="top", fontsize=7.5, color=C_ARROW_FB, style="italic",
-    )
+    # ── Hydro buffer boxes ────────────────────────────────────────────────────
+    for x in (Lx, Rx):
+        ax.add_patch(plt.Rectangle((x, buf_y), BOXW, buf_h, lw=1.5, ec=C_BUF, fc="#fff3cd", zorder=2))
+        ax.text(x+BOXW/2, buf_y+buf_h-0.16, "Hydrodynamic State Buffers",
+                ha="center", va="top", fontsize=9, fontweight="bold", color="#b45309")
+        ax.text(x+BOXW/2, buf_y+buf_h-0.44,
+                r"T, S, $\rho$, $h$, $\nu_h$, rad, $\tau_b$  ·  shape $(C+1)\times(N_\mathrm{lev}+1)$",
+                ha="center", va="top", fontsize=7.0, color=GREY)
 
-    # ── Chunk loop annotation ─────────────────────────────────────────────────
-    loop_y = 7.1
-    ax.annotate(
-        "",
-        xy=(10.6, loop_y),
-        xytext=(0.4, loop_y),
-        arrowprops=dict(arrowstyle="-|>", color=C_LOOP, lw=1.8),
-    )
-    ax.text(
-        5.5, loop_y + 0.18,
-        r"Chunk loop  ($k = 0, 1, 2, \dots$,  each chunk $= C$ physics timesteps)",
-        ha="center", va="bottom", fontsize=9, color=C_LOOP, fontweight="bold",
-    )
-    # Chunk-boundary ticks
-    for frac in (0.0, 0.33, 0.66, 1.0):
-        xp = 0.4 + frac * (10.6 - 0.4)
-        ax.plot([xp, xp], [loop_y - 0.12, loop_y + 0.12], color=C_LOOP, lw=1.5)
-        if frac < 1.0:
-            ax.text(
-                xp + (10.6 - 0.4) * 0.165, loop_y - 0.32,
-                f"Chunk {int(frac / 0.33)}",
-                ha="center", va="top", fontsize=7.5, color=C_LOOP,
-            )
+    # ── pyfabm boxes ──────────────────────────────────────────────────────────
+    for x in (Lx, Rx):
+        ax.add_patch(plt.Rectangle((x, fab_y), BOXW, fab_h, lw=2, ec=C_BIO, fc="#d4edda", zorder=2))
+        ax.text(x+BOXW/2, fab_y+fab_h-0.20, "pyfabm Engine",
+                ha="center", va="top", fontsize=10, fontweight="bold", color=C_BIO)
+        for i, item in enumerate([
+            r"Python  (run_fabm_chunk)",
+            r"• set_environment(T, S, $\rho$, …)",
+            r"• Sinking / rising advection",
+            r"• Turbulent diffusion",
+            r"• Biogeochemical rates (getRates)",
+            r"• cc  +=  dt · rates",
+        ]):
+            ax.text(x+0.18, fab_y+fab_h-0.50-i*0.35, item,
+                    ha="left", va="top", fontsize=7.5, color=GREY)
 
-    # ── Chunk-size annotation ─────────────────────────────────────────────────
-    ax.text(
-        5.5, 0.35,
-        r"Default $C = \max\!\left(\lfloor 86400\,\mathrm{s}/\Delta t \rceil,\,1\right)$,"
-        r"  rounded up to nearest output interval",
-        ha="center", va="bottom", fontsize=8.5, color=GREY, style="italic",
-    )
+    # ── Vertical arrows: Physics ↓ Buffers  (same for both columns) ───────────
+    # Physics bottom → Buffer top, labelled in the gap
+    pb_gap_mid = (phy_y + buf_y + buf_h) / 2   # mid of gap between Physics and Buffer
 
-    # ── State continuity arrow ────────────────────────────────────────────────
-    ax.annotate(
-        "",
-        xy=(fx + BOXW / 2, fy + BOXH + 0.55),
-        xytext=(fx + BOXW / 2, fy + BOXH),
-        arrowprops=dict(arrowstyle="-|>", color=C_BIO, lw=1.4),
-    )
-    ax.text(
-        fx + BOXW / 2, fy + BOXH + 0.6,
-        "cc passed to next chunk",
-        ha="center", va="bottom", fontsize=7.5, color=C_BIO,
-    )
+    for cx in (Lcx, Rcx):
+        ax.annotate("", xy=(cx, buf_y + buf_h), xytext=(cx, phy_y),
+                    arrowprops=dict(arrowstyle="-|>", color=C_ARROW_PB, lw=2.2), zorder=3)
+        ax.text(cx, pb_gap_mid + 0.08, "store snapshots  (every step)",
+                ha="center", va="bottom", fontsize=7.5, fontweight="bold", color=C_ARROW_PB)
+        ax.text(cx, pb_gap_mid - 0.08,
+                r"T, S, $\rho$, $h$, $\nu_h$, rad, $\tau_b$",
+                ha="center", va="top", fontsize=7.0, color=C_ARROW_PB)
 
-    ax.set_title(
-        "pyGOTM – pyfabm Chunked Interleaved Coupling",
-        fontsize=13, fontweight="bold", pad=4,
-    )
+    # ── Vertical arrows: Buffers ↓ pyfabm  (same for both columns) ────────────
+    # Buffer bottom → FABM top, labelled in the gap
+    bf_gap_mid = (buf_y + fab_y + fab_h) / 2   # mid of gap between Buffer and FABM
+
+    for cx in (Lcx, Rcx):
+        ax.annotate("", xy=(cx, fab_y + fab_h), xytext=(cx, buf_y),
+                    arrowprops=dict(arrowstyle="-|>", color=C_ARROW_BF, lw=2.2), zorder=3)
+        ax.text(cx, bf_gap_mid + 0.52, "per-step inputs to pyfabm",
+                ha="center", va="bottom", fontsize=7.5, fontweight="bold", color=C_ARROW_BF)
+        for i, line in enumerate([
+            r"T, S, $\rho$, $h$  (profiles)",
+            r"$\nu_h$  (turbulent diffusivity)",
+            r"rad, $\tau_b$  (shortwave, bottom stress)",
+            r"u10, v10,  yearday,  precip",
+        ]):
+            ax.text(cx, bf_gap_mid + 0.28 - i * 0.26, line,
+                    ha="center", va="top", fontsize=6.8, color=C_ARROW_BF)
+
+    # ── Horizontal cc arrow: chunk k FABM → chunk k+1 FABM ───────────────────
+    ax.annotate("", xy=(Rx, cc_y), xytext=(Lx + BOXW, cc_y),
+                arrowprops=dict(arrowstyle="-|>", color=C_CC, lw=2.5), zorder=3)
+    ax.text((Lx + BOXW + Rx) / 2, cc_y + 0.22,
+            "cc  (biological state)",
+            ha="center", va="bottom", fontsize=9, fontweight="bold", color=C_CC)
+    ax.text((Lx + BOXW + Rx) / 2, cc_y - 0.18,
+            r"shape $(n_\mathrm{vars} \times N_\mathrm{lev})$",
+            ha="center", va="top", fontsize=7.5, color=C_CC)
+
+    # Dashed continuation arrow beyond chunk k+1
+    ax.annotate("", xy=(12.85, cc_y), xytext=(Rx + BOXW, cc_y),
+                arrowprops=dict(arrowstyle="-|>", color=C_CC, lw=1.5, linestyle="dashed"), zorder=3)
+    ax.text(12.9, cc_y, "…", ha="left", va="center", fontsize=14, color=C_CC)
+
+    # ── Default chunk-size note ───────────────────────────────────────────────
+    ax.text(6.5, 0.20,
+            r"Default $C = \max\!\left(\lfloor 86400\,\mathrm{s}/\Delta t \rceil,\,1\right)$,"
+            r"  rounded up to nearest output interval",
+            ha="center", va="bottom", fontsize=8.5, color=GREY, style="italic")
+
+    ax.set_title("pyGOTM – pyfabm Chunked Interleaved Coupling",
+                 fontsize=13, fontweight="bold", pad=4)
 
     _save(fig, "fabm_coupling.png")
 

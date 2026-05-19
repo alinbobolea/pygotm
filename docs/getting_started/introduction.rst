@@ -68,18 +68,40 @@ Key differences from the Fortran GOTM:
      - ``conda activate pygotm``; browser SaaS planned
 
 **Scientific parity:** pyGOTM must pass every official GOTM test case using a
-per-variable three-indicator validation system.  Each variable is scored by the
-99th-percentile pointwise normalised error
+discrete Fréchet distance comparison against Fortran GOTM 6.0.7 reference
+NetCDF output.  After time-aligning both datasets, each variable is scored by
+the **normalized discrete Fréchet distance** :math:`d_\mathrm{norm}` — the
+worst-case leash length between the two value trajectories after dynamic
+linear-or-log normalization to :math:`[0, 1]`.  For variables whose signal
+magnitude is below a per-variable floor, the relative raw Fréchet score
+:math:`d_\mathrm{rel} = d_\mathrm{raw} / \text{signal\_scale}` is used instead
+(``metric_mode = "d_rel"``).
 
-.. math::
+.. list-table::
+   :header-rows: 1
+   :widths: 20 30 50
 
-   E_i = \frac{|\text{calc}_i - \text{ref}_i|}
-              {a_\text{tol} + r_\text{tol} \cdot \max(|\text{ref}_i|,\, s_\text{floor})}
+   * - Status
+     - Score range
+     - Meaning
+   * - **PASS**
+     - :math:`score < 0.01`
+     - Variable is within the Fréchet parity threshold.
+   * - **MARGINAL**
+     - :math:`0.01 \leq score < 0.05`
+     - Variable is close to parity but outside the pass threshold.
+   * - **DISCREPANT**
+     - :math:`0.05 \leq score < 0.20`
+     - Variable has a deterministic implementation difference.
+   * - **BROKEN**
+     - :math:`score \geq 0.20` or structural failure
+     - Variable is severely mismatched, missing, extra, or structurally
+       incompatible.
 
-against the Fortran GOTM 6.0.7 reference output.  A variable **passes** when
-:math:`P_{99} = \text{percentile}(E_i,\,99) \leq 1`.  Per-variable tolerance
-parameters are defined in ``src/pygotm/validation/tolerances.py``; see
-:doc:`../validation/overview` for the full scoring system.
+A case has status **PASS** only when every compared variable passes.  Fréchet
+thresholds, normalization settings, and per-variable magnitude floors are
+configured in ``src/pygotm/validation/tolerances.py``; see
+:doc:`../validation/overview` for the full pipeline and scoring details.
 
 Execution Model
 ---------------

@@ -1,44 +1,18 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Heat and momentum fluxes according to Fairall et al.
-!
-! !INTERFACE:
-!   subroutine fairall(sst,airt,u10,v10,precip,evap,taux,tauy,qe,qh)
-!
-! !DESCRIPTION:
-!  The surface momentum flux vector, $(\tau_x^s,\tau_y^s)$,
-!  in [N\,m$^{-2}$],
-!  the latent heat flux, $Q_e$,
-!  and the sensible heat flux, $Q_h$, both in [W\,m$^{-2}$]
-!  are calculated here according to the \cite{Fairalletal96a} bulk
-!  formulae, which are build on the Liu-Katsaros-Businger
-!  (\cite{Liuetal79}) method.
-!  Cool skin and warm layer effects are considered according to the
-!  suggestions of \cite{Fairalletal96b}.
-!
-!  The air temperature {\tt airt} and the sea surface temperature
-!  {\tt sst} may be given in Kelvin or Celsius:
-!  if they are $>$ 100 - Kelvin is assumed.
-!
-!  This piece of code has been adapted from the COARE code originally
-!  written by David Rutgers and Frank Bradley - see
-!  http://www.coaps.fsu.edu/COARE/flux\_algor/flux.html.
-!
-! !USES:
-!   use airsea_variables, only: kelvin,const06,rgas,rho_0,g,rho_0,kappa
-!   use airsea_variables, only: qs,qa,rhoa
-!   use airsea_variables, only: cpa,cpw
-!   use airsea_variables, only: rain_impact,calc_evaporation
-!   IMPLICIT NONE
-!EOP
-!-----------------------------------------------------------------------
-!
-!-----------------------------------------------------------------------
-!Copyright (C) 2007 - Adolf Stips
-!-----------------------------------------------------------------------
+"""
+Fairall et al. (1996) COARE bulk fluxes — translation of ``fairall.F90``.
+
+Computes the surface momentum flux vector :math:`(\\tau_x, \\tau_y)` [N m⁻²],
+latent heat flux :math:`Q_e` [W m⁻²], and sensible heat flux :math:`Q_h`
+[W m⁻²] according to Fairall et al. (1996a), built on the
+Liu–Katsaros–Businger (Liu et al. 1979) method.  Cool-skin and warm-layer
+effects follow Fairall et al. (1996b).
+
+Temperature inputs (``airt``, ``sst``) may be in Celsius or Kelvin; values
+above 100 are treated as Kelvin.
+
+Adapted from the COARE code originally written by David Rutgers and Frank
+Bradley.  Original GOTM Python port by Adolf Stips.
 """
 
 from __future__ import annotations

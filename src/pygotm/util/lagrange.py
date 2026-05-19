@@ -1,65 +1,28 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Lagrangian particle random walk \label{sec:lagrange}
-!
-! !INTERFACE:
-!    subroutine lagrange(nlev,dt,zlev,nuh,w,npar,active,zi,zp)
-!
-! !DESCRIPTION:
-!
-! Here a Lagrangian particle random walk for spatially
-! inhomogeneous turbulence according to \cite{Visser1997} is implemented.
-! With the random walk, the particle $i$ is moved from the vertical
-! position $z_i^n$ to $z_i^{n+1}$ according to the following algorithm:
-! \begin{equation}
-! \begin{array}{rcl}
-! z_i^{n+1} &=&
-! z^n_i + \partial_z \nu_t (z^n_i)\Delta t \\ \\
-! &+&
-! R \left\{2 r^{-1} \nu_t (z^n_i + \frac12  \partial_z \nu_t (z^n_i)\Delta t)
-! \Delta t\right\}^{1/2},
-! \end{array}
-! \end{equation}
-! where $R$ is a random process with $\langle R \rangle =0$ (zero mean) and
-! and the variance $\langle R^2 \rangle=r$.
-! Set {\tt visc\_corr=.true.} for
-! evaluating eddy viscosity in a semi-implicit way. A background viscosity
-! ({\tt visc\_back}) may be set. The variance $r$ of the random walk scheme
-! ({\tt rnd\_var}) has to be set manually as well here.
-!
-! !USES:
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!   integer, intent(in)                 :: nlev
-!   REALTYPE, intent(in)                :: dt
-!   REALTYPE, intent(in)                :: zlev(0:nlev)
-!   REALTYPE, intent(in)                :: nuh(0:nlev)
-!   REALTYPE, intent(in)                :: w
-!   integer, intent(in)                 :: npar
-!   logical, intent(in)                 :: active(npar)
-!
-! !INPUT/OUTPUT PARAMETERS:
-!   integer, intent(inout)              :: zi(npar)
-!   REALTYPE, intent(inout)             :: zp(npar)
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-! !LOCAL VARIABLES:
-!   integer            :: i,n
-!   REALTYPE           :: rnd(npar),rnd_var_inv
-!   REALTYPE,parameter :: visc_back=0.e-6,rnd_var=0.333333333
-!   REALTYPE           :: depth,dz(nlev),dzn(nlev),step,zp_old
-!   REALTYPE           :: visc,rat,dt_inv,zloc
-!   logical,parameter  :: visc_corr=.false.
-!
-!EOP
-!-----------------------------------------------------------------------
-!
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Lagrangian particle random walk — translation of ``lagrange.F90``.
+
+Implements the Visser (1997) random-walk scheme for spatially inhomogeneous
+turbulence.  Each active particle is advanced from :math:`z^n` to
+:math:`z^{n+1}` by:
+
+.. math::
+
+   z^{n+1} = z^n + \\partial_z \\nu_t(z^n)\\,\\Delta t
+            + R\\left[2\\,r^{-1}\\,\\nu_t\\!\\left(z^n
+              + \\tfrac{1}{2}\\partial_z\\nu_t(z^n)\\,\\Delta t\\right)
+              \\Delta t\\right]^{1/2}
+
+where :math:`R` is a zero-mean random variable with variance
+:math:`\\langle R^2 \\rangle = r`.
+
+Fixed parameters: background viscosity ``VISC_BACK = 0.0e-6`` m²/s,
+random-walk variance ``RND_VAR = 1/3``.  Semi-implicit viscosity correction
+(``visc_corr``) is disabled, matching the Fortran default.  Reflective
+boundary conditions are applied at the surface and bottom.
+
+Original authors: Hans Burchard, Karsten Bolding.
+
+Public interface: :func:`lagrange`, :data:`VISC_BACK`, :data:`RND_VAR`.
 """
 
 from __future__ import annotations
@@ -126,17 +89,6 @@ def lagrange(
         Random number generator. If None, a default generator is used.
         Pass a seeded generator for reproducible results.
 
-    !BOC
-    !  dt_inv=1./dt
-    !  rnd_var_inv=1./rnd_var
-    !  call random_number(rnd)
-    !  rnd=(2.*rnd-1.)
-    !  do i=1,nlev
-    !     dz(i)=zlev(i)-zlev(i-1)
-    !     dzn(i)=(nuh(i)-nuh(i-1))/dz(i)
-    !  end do
-    !  depth=-zlev(0)
-    !EOC
     """
     if rng is None:
         rng = np.random.default_rng()

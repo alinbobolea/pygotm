@@ -1,41 +1,21 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-! !ROUTINE: Convert between buoyancy fluxes and others \label{sec:convertFluxes}
-!
-! !INTERFACE:
-!    subroutine  convert_fluxes(nlev,gravity,swf,shf,ssf,rad,Tsrf,Ssrf,
-!                               tFlux,sFlux,btFlux,bsFlux,tRad,bRad)
-!
-! !DESCRIPTION:
-!  This subroutine computes the buoyancy fluxes that are due
-!  to
-!  \begin{enumerate}
-!    \item the surface heat flux,
-!    \item the surface salinity flux caused by the value of
-!          P-E (precipitation-evaporation),
-!    \item and the short wave radiative flux.
-!  \end{enumerate}
-!  Additionally, it outputs the temperature flux ({\tt tFlux})
-!  corresponding to the surface heat flux, the salinity flux
-!  ({\tt sFlux})  corresponding to the value P-E, and the profile
-!  of the temperature flux ({\tt tRad}) corresponding to the profile
-!  of the radiative heat flux.
-!
-! This function is only called when the KPP turbulence model is used.
-! When you call the KPP routines from another model outside GOTM, you
-! are on your own in computing the  fluxes required by the KPP model, because
-! they have to be consistent with the equation of state used in your model.
-!
-! !USES:
-!   use density, only: rho0, cp
-!   use density, only: get_alpha, get_beta
-!   use density, only: alpha, beta
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Flux conversion for KPP turbulence model — translation of ``convert_fluxes.F90``.
+
+Converts surface heat, salinity, and shortwave radiative fluxes into the
+temperature and buoyancy flux forms required by the KPP turbulence closure.
+Three surface contributions are handled:
+
+1. Surface heat flux → temperature flux and thermal buoyancy flux.
+2. Surface salinity flux (P − E) → salinity flux and haline buoyancy flux.
+3. Shortwave radiative flux profile → radiative temperature and buoyancy flux
+   profiles.
+
+Only called when the KPP turbulence model is active.  Callers outside GOTM
+must supply fluxes consistent with their own equation of state.
+
+Original author: Lars Umlauf.
+
+Public interface: :func:`convert_fluxes`.
 """
 
 from __future__ import annotations
@@ -59,23 +39,31 @@ def convert_fluxes(
 ) -> tuple[float, float, float, float, np.ndarray, np.ndarray]:
     """Convert surface and radiative fluxes to temperature and buoyancy fluxes.
 
-    !BOC
-    !   ! alpha, beta at surface
-    !   alpha0  = get_alpha(Ssrf,Tsrf,_ZERO_)
-    !   beta0   = get_beta(Ssrf,Tsrf,_ZERO_)
-    !
-    !   ! temperature flux and associated buoyancy flux
-    !   tFlux   = - shf/(rho0*cp)
-    !   btFlux  = gravity*alpha0*tFlux
-    !
-    !   ! salinity flux and associated buoyancy flux
-    !   sFlux   = - ssf
-    !   bsFlux  = -gravity*beta0*sFlux
-    !
-    !   ! radiative temperature and buoyancy flux profiles
-    !   tRad    =  rad/(rho0*cp)
-    !   bRad    = gravity*alpha*tRad
-    !EOC
+    The algorithm proceeds in three steps:
+
+    1. Evaluate the thermal expansion coefficient :math:`\\alpha_0` and haline
+       contraction coefficient :math:`\\beta_0` at the surface using the
+       configured equation of state.
+    2. Convert the surface heat flux and salinity flux to temperature and
+       buoyancy fluxes:
+
+       .. math::
+
+          t_{\\mathrm{flux}} = -\\frac{q_{\\mathrm{shf}}}{\\rho_0 c_p},\\quad
+          bt_{\\mathrm{flux}} = g\\,\\alpha_0\\,t_{\\mathrm{flux}}
+
+       .. math::
+
+          s_{\\mathrm{flux}} = -q_{\\mathrm{ssf}},\\quad
+          bs_{\\mathrm{flux}} = -g\\,\\beta_0\\,s_{\\mathrm{flux}}
+
+    3. Convert the shortwave radiative profile to temperature and buoyancy
+       flux profiles:
+
+       .. math::
+
+          t_{\\mathrm{rad}} = \\frac{\\mathrm{rad}}{\\rho_0 c_p},\\quad
+          b_{\\mathrm{rad}} = g\\,\\alpha\\,t_{\\mathrm{rad}}
 
     Parameters
     ----------

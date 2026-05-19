@@ -1,36 +1,31 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: General ODE solver (template version) \label{sec:ode-solver}
-!
-! !DESCRIPTION:
-! This is the template version of the ODE solver (ode_solvers_template.F90).
-! In Fortran, this file was designed to be #include'd with preprocessor macros
-! (_NAME_, _LOWI_, _ODE_ZEROD_, _SIZE_, _INCC_, _INPP_, _ODE_LOOP_BEGIN_,
-! etc.) that parametrize it for zero-dimensional or one-dimensional spatial
-! systems and for different array indexing conventions.
-!
-! The template version differs from ode_solvers.F90 in two solvers:
-!
-!  runge_kutta_2: uses the explicit midpoint method (not Heun's trapezoidal)
-!    c^{(mid)} = c^n + dt/2 * f(c^n)
-!    c^{n+1}   = c^n + dt   * f(c^{(mid)})
-!
-!  runge_kutta_4: uses standard RK4 with half-step intermediates
-!    k1 = f(c^n)
-!    k2 = f(c^n + dt/2 * k1)
-!    k3 = f(c^n + dt/2 * k2)
-!    k4 = f(c^n + dt   * k3)
-!    c^{n+1} = c^n + dt/3 * (k1/2 + k2 + k3 + k4/2)
-!
-! All other solvers (Euler, Patankar, Modified Patankar, EMP) are identical
-! to ode_solvers.F90 and are re-exported directly.
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard, Karsten Bolding
-!
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+ODE solver template — translation of ``ode_solvers_template.F90``.
+
+Alternate implementations of the Runge-Kutta solvers (codes 2 and 3) that
+differ from :mod:`~pygotm.util.ode_solvers`:
+
+* **RK2** (code 2): explicit midpoint method.
+
+  .. math::
+
+     c^{\\mathrm{mid}} = c^n + \\tfrac{\\Delta t}{2}\\,f(c^n),\\quad
+     c^{n+1} = c^n + \\Delta t\\,f(c^{\\mathrm{mid}})
+
+* **RK4** (code 3): standard four-stage RK with half-step intermediates.
+
+  .. math::
+
+     k_1 = f(c^n),\\quad k_2 = f(c^n + \\tfrac{\\Delta t}{2}k_1),\\quad
+     k_3 = f(c^n + \\tfrac{\\Delta t}{2}k_2),\\quad k_4 = f(c^n + \\Delta t\\,k_3)
+
+  .. math::
+
+     c^{n+1} = c^n + \\tfrac{\\Delta t}{3}\\left(\\tfrac{k_1}{2} + k_2 + k_3 + \\tfrac{k_4}{2}\\right)
+
+All other solvers (Euler, Patankar, Modified Patankar, EMP — codes 1, 4–11)
+are re-exported unchanged from :mod:`~pygotm.util.ode_solvers`.
+
+Original authors: Hans Burchard, Karsten Bolding.
 """
 
 from __future__ import annotations
@@ -81,19 +76,16 @@ def runge_kutta_2(
 ) -> None:
     """Second-order Runge-Kutta — explicit midpoint method (template version).
 
-    !DESCRIPTION:
-    ! Here, the second-order Runge-Kutta (RK2) scheme is coded, with two
-    ! evaluations of the right hand side per time step (midpoint method):
-    !   c^{(mid)} = c^n + dt/2 * f(c^n)
-    !   c^{n+1}   = c^n + dt   * f(c^{(mid)})
-    !
-    ! This is the template (ode_solvers_template.F90) variant.  The
-    ! non-template ode_solvers.F90 uses Heun's trapezoidal method instead.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Two evaluations of the right-hand side per time step:
 
-    Updates cc in-place. Level 0 (index 0) is never modified.
+    .. math::
+
+       c^{\\mathrm{mid}} &= c^n + \\tfrac{\\Delta t}{2}\\,f(c^n) \\\\
+       c^{n+1}           &= c^n + \\Delta t\\,f(c^{\\mathrm{mid}})
+
+    This is the ``ode_solvers_template.F90`` variant.  The non-template
+    ``ode_solvers.F90`` uses Heun's trapezoidal method instead.
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     rhs = get_rhs(True, numc, nlev, cc)
 
@@ -113,25 +105,19 @@ def runge_kutta_4(
 ) -> None:
     """Fourth-order Runge-Kutta — standard half-step variant (template version).
 
-    !DESCRIPTION:
-    ! Here, the fourth-order Runge-Kutta (RK4) scheme is coded,
-    ! with four evaluations of the right hand sides per time step
-    ! using the standard half-step intermediate evaluations:
-    !   k1 = f(c^n)
-    !   k2 = f(c^n + dt/2 * k1)
-    !   k3 = f(c^n + dt/2 * k2)
-    !   k4 = f(c^n + dt   * k3)
-    !   c^{n+1} = c^n + dt/3 * (k1/2 + k2 + k3 + k4/2)
-    !           = c^n + dt/6 * (k1 + 2*k2 + 2*k3 + k4)   [standard form]
-    !
-    ! This is the template (ode_solvers_template.F90) variant, which achieves
-    ! true 4th-order accuracy.  The non-template ode_solvers.F90 uses full-dt
-    ! intermediate steps and does not achieve 4th-order accuracy.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Four evaluations of the right-hand side per time step with standard
+    half-step intermediates (achieves true 4th-order accuracy):
 
-    Updates cc in-place. Level 0 (index 0) is never modified.
+    .. math::
+
+       k_1 &= f(c^n),\\quad k_2 = f\\!\\left(c^n + \\tfrac{\\Delta t}{2}k_1\\right),\\quad
+       k_3 = f\\!\\left(c^n + \\tfrac{\\Delta t}{2}k_2\\right),\\quad
+       k_4 = f(c^n + \\Delta t\\,k_3) \\\\
+       c^{n+1} &= c^n + \\tfrac{\\Delta t}{3}\\bigl(\\tfrac{k_1}{2} + k_2 + k_3 + \\tfrac{k_4}{2}\\bigr)
+
+    This is the ``ode_solvers_template.F90`` variant.  The non-template
+    ``ode_solvers.F90`` uses full-:math:`\\Delta t` intermediate steps instead.
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     k1 = get_rhs(True, numc, nlev, cc)
 
@@ -168,19 +154,10 @@ def ode_solver(
 ) -> None:
     """Dispatch to one of 11 ODE solvers (template version).
 
-    !DESCRIPTION:
-    ! Template version of the general ODE solver dispatcher.  Identical to
-    ! ode_solvers.ode_solver except solvers 2 (RK2) and 3 (RK4) use the
-    ! template-version algorithms (midpoint RK2, standard half-step RK4).
-    !
-    ! Solver IDs:
-    !   1 = Euler-forward (E1)
-    !   2 = Runge-Kutta 2 (midpoint — template variant)
-    !   3 = Runge-Kutta 4 (standard half-step — template variant)
-    !   4-11 = same as ode_solvers.ode_solver
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Identical to :func:`pygotm.util.ode_solvers.ode_solver` except that
+    solvers 2 and 3 use the template-version algorithms: midpoint RK2 and
+    standard half-step RK4.  Solvers 4–11 delegate to the shared
+    implementations in :mod:`~pygotm.util.ode_solvers`.
 
     Parameters
     ----------

@@ -1,110 +1,20 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: mtridiagonal --- solving the system\label{sec:tridiagonal}
-!
-! !INTERFACE:
-!
-! !DESCRIPTION:
-!
-!  Solves a linear system of equations with a tridiagonal matrix
-!  using Gaussian elimination.
-!
-! !PUBLIC MEMBER FUNCTIONS:
-!   public init_tridiagonal, tridiagonal, clean_tridiagonal
-!
-! !PUBLIC DATA MEMBERS:
-!   REALTYPE, dimension(:), allocatable     :: au,bu,cu,du
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-!EOP
-!
-!  private data members
-!   REALTYPE, private, dimension(:),allocatable  ::  ru,qu
-!
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: Allocate memory
-!
-! !INTERFACE:
-!
-! !DESCRIPTION:
-!  This routines allocates memory necessary to perform the Gaussian
-!  elimination.
-!
-! !USES:
-!
-! !INPUT PARAMETERS:
-!   integer, intent(in)                 :: N
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-!EOP
-!
-! !LOCAL VARIABLES:
-!   integer                   :: rc
-!
-!-----------------------------------------------------------------------
-!EOC
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: Simplified Gaussian elimination
-!
-! !INTERFACE:
-!
-! !DESCRIPTION:
-! A linear equation with tridiagonal matrix structure is solved here. The main
-! diagonal is stored on {\tt bu}, the upper diagonal on {\tt au}, and the
-! lower diagonal on {\tt cu}, the right hand side is stored on {\tt du}.
-! The method used here is the simplified Gauss elimination, also called
-! \emph{Thomas algorithm}.
-!
-! !USES:
-!
-! !INPUT PARAMETERS:
-!   integer, intent(in)                 :: N,fi,lt
-!
-! !OUTPUT PARAMETERS:
-!   REALTYPE                            :: value(0:N)
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-!EOP
-!
-! !LOCAL VARIABLES:
-!   integer                   :: i
-!
-!-----------------------------------------------------------------------
-!EOC
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: De-allocate memory
-!
-! !INTERFACE:
-!
-! !DESCRIPTION:
-!  De-allocates memory allocated in init\_tridiagonal.
-!
-! !USES:
-!
-! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding
-!
-!EOP
-!-----------------------------------------------------------------------
-!EOC
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Tridiagonal (Thomas algorithm) solver — translation of ``mtridiagonal.F90``.
+
+Provides a Numba-JIT Thomas algorithm solver for tridiagonal linear systems,
+used by the diffusion, turbulence-closure, and momentum routines throughout
+pyGOTM.
+
+The main diagonal is stored in ``bu``, the upper diagonal in ``au``, the lower
+diagonal in ``cu``, and the right-hand side in ``du``.  Work arrays ``ru`` and
+``qu`` hold intermediate values during forward substitution and back
+substitution respectively.
+
+Public interface: :func:`init_tridiagonal`, :func:`tridiagonal`,
+:func:`clean_tridiagonal`, :class:`TridiagonalWorkspace`,
+:class:`TridiagonalBatchWorkspace`.
+
+Original authors: Hans Burchard, Karsten Bolding.
 """
 
 import numba
@@ -175,14 +85,12 @@ def tridiagonal(
     fi: int,
     lt: int,
 ) -> None:
-    r"""! !IROUTINE: Simplified Gaussian elimination
-    !
-    ! !DESCRIPTION:
-    ! A linear equation with tridiagonal matrix structure is solved here. The main
-    ! diagonal is stored on {\tt bu}, the upper diagonal on {\tt au}, and the
-    ! lower diagonal on {\tt cu}, the right hand side is stored on {\tt du}.
-    ! The method used here is the simplified Gauss elimination, also called
-    ! \emph{Thomas algorithm}.
+    """Solve a tridiagonal system with the Thomas algorithm (simplified Gaussian elimination).
+
+    A linear equation with tridiagonal matrix structure is solved here.  The main
+    diagonal is stored in ``bu``, the upper diagonal in ``au``, the lower diagonal
+    in ``cu``, and the right-hand side in ``du``.  Indices run from ``fi`` to ``lt``
+    inclusive.
     """
 
     if fi == lt:

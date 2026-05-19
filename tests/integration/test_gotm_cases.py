@@ -6,8 +6,14 @@ import xarray as xr
 
 from pygotm.config import load_config
 from pygotm.driver import GotmDriver
-from pygotm.gotm.gotm import initialize_gotm_from_settings, integrate_gotm_compiled
-from pygotm.gotm.runtime_builder import runtime_output_to_dataset
+from pygotm.gotm.gotm import (
+    initialize_gotm_from_settings,
+    integrate_gotm_compiled,
+)
+from pygotm.gotm.runtime_builder import (
+    build_runtime_from_run,
+    runtime_output_to_dataset,
+)
 from pygotm.validate import (
     REFERENCE_CASE_NAMES,
     ValidationCase,
@@ -151,6 +157,31 @@ def test_couette_driver_advances_velocity_and_turbulence() -> None:
         assert float(np.max(dataset["num"].values[1])) > 0.0
     finally:
         dataset.close()
+
+
+@pytest.mark.parametrize(
+    ("case_name", "expected_zeta"),
+    (("plume", -338.5714 * 910.0 / 1027.0), ("resolute", -910.0 / 1027.0)),
+)
+def test_ice_cases_initialize_grid_with_ice_displacement(
+    case_name: str,
+    expected_zeta: float,
+) -> None:
+    case = resolve_reference_case(case_name)
+    cfg = load_config(case.yaml_path)
+
+    run = initialize_gotm_from_settings(
+        cfg.resolved_settings(),
+        yaml_path=case.yaml_path,
+        document=cfg.resolved_document(),
+    )
+    bundle = build_runtime_from_run(run, max_steps=1, output=True)
+
+    assert run.meanflow.zeta == pytest.approx(expected_zeta)
+    assert run.meanflow.depth == pytest.approx(run.depth + expected_zeta)
+    assert run.meanflow.zi[run.nlev] == pytest.approx(expected_zeta)
+    assert bundle.forcing.zeta[0] == pytest.approx(expected_zeta)
+    assert bundle.forcing.zeta[1] == pytest.approx(expected_zeta)
 
 
 @pytest.mark.slow

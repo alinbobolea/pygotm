@@ -1,42 +1,21 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE:  time --- keep control of time \label{sec:time}
-!
-! !INTERFACE:
-!   MODULE time
-!
-! !DESCRIPTION:
-!  This module provides a number of routines/functions and variables
-!  related to the mode time in GOTM.
-!  The basic concept used in this module is that time is expressed
-!  as two integers --- one is the true Julian day and the other is
-!  seconds since midnight. All calculations with time then become
-!  very simple operations on integers.
-!
-! !USES:
-!   IMPLICIT NONE
-!
-! !PUBLIC MEMBER FUNCTIONS:
-!   public                              :: init_time, calendar_date
-!   public                              :: julian_day, update_time
-!   public                              :: read_time_string
-!   public                              :: write_time_string
-!   public                              :: time_diff
-!   public                              :: sunrise_sunset
-!   public                              :: in_time_interval
-!
-! !PUBLIC DATA MEMBERS:
-!   character(len=19), public           :: timestr
-!   character(len=19), public           :: start
-!   character(len=19), public           :: stop
-!   REALTYPE,          public           :: timestep
-!
-! Original author(s): Karsten Bolding & Hans Burchard
-!
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!EOP
-!-----------------------------------------------------------------------
+"""
+Time management — translation of ``time.F90``.
+
+Time is represented as a pair of integers: true Julian day and integer seconds
+since midnight.  This makes all time arithmetic simple integer operations.
+
+Three ``timefmt`` modes control how start/stop/MaxN are resolved:
+
+* ``1`` — ``MaxN`` given directly; a fake start date of 2000-01-01 is used.
+* ``2`` — ``start`` and ``stop`` strings given; ``MaxN`` is computed from the
+  total duration divided by ``timestep``.
+* ``3`` — ``start`` string and ``MaxN`` given; ``stop`` is computed.
+
+Original authors: Karsten Bolding, Hans Burchard.
+
+Public interface: :class:`GotmTime`, :func:`calendar_date`, :func:`julian_day`,
+:func:`time_diff`, :func:`sunrise_sunset`, :func:`in_time_interval`,
+:func:`read_time_string`, :func:`write_time_string`.
 """
 
 import math

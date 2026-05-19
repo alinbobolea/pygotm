@@ -57,6 +57,7 @@ def _run_step(
     t_adv=False,
     w_adv_active=False,
     w_adv_discr=4,
+    apply_simple_ice_correction=False,
 ):
     temperature(
         state,
@@ -77,6 +78,7 @@ def _run_step(
         w_adv_active=w_adv_active,
         w_adv_discr=w_adv_discr,
         t_adv=t_adv,
+        apply_simple_ice_correction=apply_simple_ice_correction,
     )
 
 
@@ -187,6 +189,7 @@ def test_upper_neumann_bc_surface_heating():
         hflux=-500.0,
         nuh=_zeros(nlev),
         gamh=_zeros(nlev),
+        apply_simple_ice_correction=True,
     )
     assert float(state.T[nlev]) > top_before
 
@@ -259,6 +262,7 @@ def test_ice_correction_suppresses_warming_flux():
         hflux=-200.0,
         nuh=_zeros(nlev),
         gamh=_zeros(nlev),
+        apply_simple_ice_correction=True,
     )
     np.testing.assert_allclose(state.T[1:], T_before[1:], atol=1.0e-14)
 
@@ -358,6 +362,7 @@ def test_multicol_parity():
         tau_r_b,
         i_0_b,
         diff_t_up_b,
+        0,
         dtdx_b,
         dtdy_b,
         avh_b,

@@ -1,33 +1,29 @@
 """
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: input
-!
-! !INTERFACE:
-!   module input
-!
-! !DESCRIPTION:
-!
-! !USES:
-!   implicit none
-!
-!  default: all is private.
-!   private
-!
-! !PUBLIC MEMBER FUNCTIONS:
-!   public init_input, do_input, close_input, register_input
-!   public read_obs
-!   public type_input, type_scalar_input, type_profile_input
-!   public type_scalar_input_list
-!
-!   integer, parameter, public :: method_unsupported = huge(1)
-!
-! !REVISION HISTORY:
-!  Original author(s): Jorn Bruggeman
-!
-!EOP
-!-----------------------------------------------------------------------
+Observation input — translation of ``input.F90``.
+
+Reads time-series and profile observations from text files and interpolates
+them linearly to the current simulation time.  Two input modes are supported:
+
+* ``method_constant`` (0) — constant value supplied at configuration time.
+* ``method_file`` (2) — ASCII text file with one or more time-stamped records;
+  values are linearly interpolated between bracketing records.
+
+The Fortran constant ``method_unsupported = huge(1)`` is mapped to
+:data:`method_unsupported` ``= math.inf``.
+
+Fortran types are mapped to Python classes:
+
+* ``type_input`` → :class:`InputBase`
+* ``type_scalar_input`` → :class:`ScalarInput`
+* ``type_profile_input`` → :class:`ProfileInput`
+* ``type_scalar_input_list`` → ``list[ScalarInput]`` (via :class:`InputManager`)
+
+Public interface: :func:`init_input`, :func:`do_input`, :func:`close_input`,
+:func:`register_input`, :func:`register_scalar_input`,
+:func:`register_profile_input`, :func:`read_obs`, :func:`read_profiles`,
+:class:`InputManager`, :class:`ScalarInput`, :class:`ProfileInput`.
+
+Original authors: Jorn Bruggeman.
 """
 
 from __future__ import annotations

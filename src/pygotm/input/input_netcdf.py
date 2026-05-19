@@ -1,26 +1,18 @@
 """
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: input_netcdf
-!
-! !INTERFACE:
-!   module input_netcdf
-!
-! !DESCRIPTION:
-!
-! !USES:
-!   use time, only: julianday, secondsofday
-!   use time, only: read_time_string, write_time_string
-!
-! !PUBLIC MEMBER FUNCTIONS:
-!   public open_restart, close_restart, check_restart_time, read_restart_data
-!
-! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding and Jorn Bruggeman
-!
-!EOP
-!-----------------------------------------------------------------------
+NetCDF restart input — translation of ``input_netcdf.F90``.
+
+Opens, validates, and reads GOTM restart (NetCDF) files.  Verifies that the
+restart file's time metadata matches the requested simulation start time, then
+reads scalar or 1-D profile variables into NumPy arrays.
+
+Depends on :mod:`pygotm.util.time` for :func:`~pygotm.util.time.read_time_string`
+and :func:`~pygotm.util.time.write_time_string` (Fortran:
+``use time, only: read_time_string, write_time_string``).
+
+Public interface: :func:`open_restart`, :func:`close_restart`,
+:func:`check_restart_time`, :func:`read_restart_data`.
+
+Original authors: Karsten Bolding, Jorn Bruggeman.
 """
 
 from __future__ import annotations

@@ -1,21 +1,30 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: gotm_fabm
-!
-! !DESCRIPTION:
-!  Python interface layer for coupling GOTM with a FABM model. The Fortran
-!  source delegates biogeochemistry to the external FABM library; this module
-!  mirrors that boundary and keeps pyGOTM physics independent of any specific
-!  pyfabm installation.
-!
-! !REVISION HISTORY:
-!  Original author(s): Jorn Bruggeman
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+GOTM–FABM coupling layer — translation of ``gotm_fabm.F90``.
+
+Provides the interface between the General Ocean Turbulence Model (GOTM) and
+the Framework for Aquatic Biogeochemical Models (FABM).  The Fortran source
+delegates biogeochemistry to the external FABM library (``use fabm``,
+``use fabm_types``, ``use fabm_config``, ``use field_manager``); this module
+mirrors that boundary and keeps pyGOTM physics independent of any specific
+``pyfabm`` installation.
+
+Fortran state arrays (``cc``, ``cc_diag``, ``rhs``) and observation records
+are held in :class:`FabmState` and :class:`FabmObservation` respectively.
+
+Public interface: :func:`configure_gotm_fabm`, :func:`gotm_fabm_create_model`,
+:func:`init_gotm_fabm`, :func:`init_var_gotm_fabm`,
+:func:`init_gotm_fabm_state`, :func:`start_gotm_fabm`,
+:func:`set_env_gotm_fabm`, :func:`do_gotm_fabm`, :func:`clean_gotm_fabm`,
+:func:`register_observation`, :func:`register_scalar_observation`,
+:func:`register_bulk_observation`, :func:`register_horizontal_observation`,
+:func:`register_field`, :func:`calculate_derived_input`,
+:func:`calculate_conserved_quantities`, :func:`right_hand_side_rhs`,
+:func:`right_hand_side_ppdd`, :func:`do_repair_state`, :func:`light`,
+:func:`save_diagnostics`, :func:`calendar_date_interface`,
+:class:`FabmState`, :class:`FabmObservation`.
+
+Original authors: Jorn Bruggeman.
 """
 
 from collections.abc import Callable

@@ -1,22 +1,18 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: seagrass --- sea grass dynamics
-!
-! !DESCRIPTION:
-! In this module, seagrass canopies are treated as Lagrangian tracers,
-! which either advect passively with the horizontal current speed or
-! rest at their excursion limits and thus exert friction on the mean flow,
-! see Verduin and Backhaus (2000). Turbulence generation due to seagrass
-! friction is possible.
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Seagrass canopy parameterisation — translation of ``seagrass.F90``.
+
+Treats seagrass canopies as Lagrangian tracers that either advect passively
+with the horizontal current speed or rest at their excursion limits and
+thereby exert friction on the mean flow (Verduin and Backhaus, 2000).
+Turbulence generation due to seagrass friction is included as an extra
+production term in the TKE balance.
+
+Public interface: :func:`init_seagrass`, :func:`post_init_seagrass`,
+:func:`do_seagrass`, :func:`end_seagrass`, :class:`SeagrassState`,
+:data:`MISS_VALUE`.
+
+Original authors: Hans Burchard, Karsten Bolding.
 """
 
 from dataclasses import dataclass

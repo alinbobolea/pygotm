@@ -10,7 +10,7 @@ def test_winton_optics_open_water_and_ice() -> None:
     trans = np.zeros(1, dtype=np.float64)
 
     ice_optics(0.0, 0.0, -2.0, albedo, trans)
-    assert albedo[0] == 0.06
+    assert albedo[0] == 0.0
     assert trans[0] == 1.0
 
     ice_optics(1.0, 0.0, -2.0, albedo, trans)
@@ -21,6 +21,7 @@ def test_winton_optics_open_water_and_ice() -> None:
 def test_winton_step_keeps_state_bounded() -> None:
     hice = np.array([1.0], dtype=np.float64)
     hsnow = np.zeros(1, dtype=np.float64)
+    hfrazil = np.zeros(1, dtype=np.float64)
     t1 = np.array([-2.0], dtype=np.float64)
     t2 = np.array([-2.0], dtype=np.float64)
     ts = np.array([-5.0], dtype=np.float64)
@@ -44,8 +45,11 @@ def test_winton_step_keeps_state_bounded() -> None:
         -10.0,
         -5.0,
         0.0,
+        0.0,
+        0.0,
         hice,
         hsnow,
+        hfrazil,
         t1,
         t2,
         ts,

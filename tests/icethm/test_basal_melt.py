@@ -17,24 +17,29 @@ def test_basal_melt_zero_near_interface_freezing_point() -> None:
     melt, tm, sm, qh, qs, tf = _state()
     S = 34.5
     H = 338.0
+    h = 0.25
     T = basal_freezing_temperature(S, H)
+    tf[0] = -0.0575 * S
 
-    step_basal_melt(T, S, H, 0.01, melt, tm, sm, qh, qs, tf)
+    step_basal_melt(T, S, h, H, 0.01, melt, tm, sm, qh, qs, tf)
 
     assert abs(melt[0]) < 1.0e-8
     assert sm[0] == pytest.approx(S, rel=1.0e-5)
-    assert tf[0] == pytest.approx(T)
+    assert tf[0] == pytest.approx(-0.0575 * S)
 
 
 def test_basal_melt_positive_when_water_is_warm() -> None:
     melt, tm, sm, qh, qs, tf = _state()
     S = 34.5
     H = 338.0
+    h = 0.25
     T = basal_freezing_temperature(S, H) + 0.25
+    tf[0] = -0.0575 * S
 
-    step_basal_melt(T, S, H, 0.01, melt, tm, sm, qh, qs, tf)
+    step_basal_melt(T, S, h, H, 0.01, melt, tm, sm, qh, qs, tf)
 
     assert melt[0] > 0.0
     assert qh[0] > 0.0
     assert 0.0 < sm[0] < S
-    assert qs[0] < 0.0
+    assert abs(qs[0]) < 1.0e-12
+    assert tf[0] == pytest.approx(-0.0575 * S)

@@ -1,25 +1,21 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: stokes_drift_theory
-!
-! !DESCRIPTION:
-!   Calculate the Stokes drift profile from surface wind using the 'theory-wave'
-!    approximation described in Li et al., 2017.
-!
-! !IROUTINE: stokes_drift_theory_srf
-!
-! !DESCRIPTION:
-!   Return the Stokes drift averaged over the surface layer.
-!
-! !REVISION HISTORY:
-!  Original author(s): Qing Li
-!  (Re)added to GOTM: Brandon Reichl
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Theory-wave Stokes drift — translation of ``stokes_drift_theory.F90``.
+
+Calculates Stokes drift profiles from surface wind speed using the empirical
+'theory-wave' approximation of Li et al. (2017).  Two Numba kernels are
+provided:
+
+* :func:`stokes_drift_theory_srf` — Stokes drift averaged over the surface
+  layer at a single depth.
+* :func:`stokes_drift_theory` — full vertical profile plus surface values
+  ``us0``, ``vs0``, and Stokes depth ``ds``.
+
+A parallel batch variant :func:`stokes_drift_theory_batch` is also provided
+for ensemble use.  The constant :data:`US0_TO_U10` = 0.0162 is the ratio of
+surface Stokes drift to 10-m wind speed.
+
+Original authors: Qing Li; re-added to GOTM by Brandon Reichl.
 """
 
 import math

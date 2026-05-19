@@ -1,57 +1,78 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: General ODE solver \label{sec:ode-solver}
-!
-! !INTERFACE:
-!    subroutine ode_solver(solver,numc,nlev,dt,cc,right_hand_side_rhs,
-!                          right_hand_side_ppdd)
-!
-! !DESCRIPTION:
-! Here, 10 different numerical solvers for the right hand sides of the
-! biogeochemical models are implemented for computing the ordinary
-! differential equations (ODEs) which are calculated as the second
-! step of the operational split method for the complete biogeochemical
-! models. The remaining ODE is
-!   partial_t c_i = P_i(vec{c}) - D_i(vec{c}),  i = 1,...,I,
-! with c_i denoting the concentrations of state variables.
-! The right hand side denotes the reaction terms,
-! which are composed of contributions
-! d_{i,j}(vec{c}), which represent reactive fluxes from
-! c_i to c_j, and in turn, p_{i,j}(vec{c}) are reactive fluxes from
-! c_j received by c_i, see Burchard et al. (2003).
-!
-! These methods are:
-!
-! 1. First-order explicit (not unconditionally positive)
-! 2. Second order explicit Runge-Kutta (not unconditionally positive)
-! 3. Fourth-order explicit Runge-Kutta (not unconditionally positive)
-! 4. First-order Patankar (not conservative)
-! 5. Second-order Patankar-Runge-Kutta (not conservative)
-! 6. Fourth-order Patankar-Runge-Kutta (does not work, not conservative)
-! 7. First-order Modified Patankar (conservative and positive)
-! 8. Second-order Modified Patankar-Runge-Kutta (conservative and positive)
-! 9. Fourth-order Modified Patankar-Runge-Kutta
-!    (does not work, conservative and positive)
-! 10. First-order Extended Modified Patankar
-!     (stoichiometrically conservative and positive)
-! 11. Second-order Extended Modified Patankar-Runge-Kutta
-!     (stoichiometrically conservative and positive)
-!
-! The schemes 1 - 5 and 7 - 8 have been described in detail by
-! Burchard et al. (2003). Later, Bruggeman et al. (2005) could
-! show that the Modified Patankar schemes 7 - 8 are only conservative
-! for one limiting nutrient and therefore they developed the
-! Extended Modified Patankar (EMP) schemes 10 and 11 which are also
-! stoichiometrically conservative. Patankar and Modified Patankar
-! schemes of fourth order have not yet been developed, such that
-! choices 6 and 9 do not work yet.
-!
-! !REVISION HISTORY:
-!  Original author(s): Hans Burchard, Karsten Bolding
-!
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+ODE solvers for biogeochemical models — translation of ``ode_solvers.F90``.
+
+Provides 11 numerical solvers for the reaction-term ODEs that arise in
+biogeochemical models:
+
+.. math::
+
+   \\partial_t c_i = P_i(\\mathbf{c}) - D_i(\\mathbf{c}), \\quad i = 1, \\ldots, I
+
+where :math:`c_i` are species concentrations and :math:`P_i`, :math:`D_i` are
+the production and destruction terms (Burchard et al. 2003).
+
+.. list-table:: Available solvers
+   :header-rows: 1
+   :widths: 10 55 20 15
+
+   * - Code
+     - Method
+     - Conservative
+     - Positive
+   * - 1
+     - First-order explicit (Euler)
+     - No
+     - No
+   * - 2
+     - Second-order explicit Runge-Kutta
+     - No
+     - No
+   * - 3
+     - Fourth-order explicit Runge-Kutta
+     - No
+     - No
+   * - 4
+     - First-order Patankar
+     - No
+     - Yes
+   * - 5
+     - Second-order Patankar-Runge-Kutta
+     - No
+     - Yes
+   * - 6
+     - Fourth-order Patankar-Runge-Kutta (**non-functional**)
+     - —
+     - —
+   * - 7
+     - First-order Modified Patankar
+     - Yes
+     - Yes
+   * - 8
+     - Second-order Modified Patankar-Runge-Kutta
+     - Yes
+     - Yes
+   * - 9
+     - Fourth-order Modified Patankar-Runge-Kutta (**non-functional**)
+     - —
+     - —
+   * - 10
+     - First-order Extended Modified Patankar (EMP)
+     - Stoichiometric
+     - Yes
+   * - 11
+     - Second-order Extended Modified Patankar-Runge-Kutta (EMP)
+     - Stoichiometric
+     - Yes
+
+Schemes 6 and 9 are not yet developed in Fortran GOTM and are non-functional
+here.  EMP schemes (10–11) — developed by Bruggeman et al. (2005) — extend
+Modified Patankar to full stoichiometric conservation with multiple limiting
+nutrients.
+
+Original authors: Hans Burchard, Karsten Bolding.
+
+Public interface: :func:`ode_solver`, :class:`RhsCallback`,
+:class:`PpddCallback`.
 """
 
 from __future__ import annotations
@@ -89,14 +110,8 @@ PpddCallback = Callable[[bool, int, int, np.ndarray], tuple[np.ndarray, np.ndarr
 def matrix_solve(n: int, a: np.ndarray, r: np.ndarray) -> np.ndarray:
     """Gaussian forward-elimination + back-substitution solver.
 
-    Solves the n×n system A·c = r. Modifies working copies of a and r
+    Solves the n×n system A·c = r.  Modifies working copies of ``a`` and ``r``
     internally; does not alter the caller's arrays.
-
-    !DESCRIPTION:
-    ! This is a Gaussian solver for multi-dimensional linear equations.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
 
     Parameters
     ----------
@@ -143,20 +158,17 @@ def findp_bisection(
 ) -> float:
     """Find the EMP product term p via bisection.
 
-    Solves the non-linear problem
-        c^{n+1} = c^n + dt * f(t^n, c^n) * prod_{j in J} (c_j^{n+1} / c_j^n)
-    with J = {i : f_i < 0} by reducing it to a polynomial root problem and
-    applying 20 bisection iterations.  See Bruggeman et al. (2005).
+    Solves the non-linear problem:
 
-    !DESCRIPTION:
-    ! Auxiliary subroutine for finding the Extended Modified Patankar
-    ! product term p with the bisection technique.
-    !
-    ! It has been proved that there exists exactly one p for which the above is
-    ! true, see Bruggeman et al. (2005).
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Jorn Bruggeman
+    .. code-block:: text
+
+       c^{n+1} = c^n + dt * f(t^n, c^n) * prod_{j in J} (c_j^{n+1} / c_j^n)
+
+    with ``J = {i : f_i < 0}`` by reducing it to a polynomial root problem and
+    applying 20 bisection iterations.  It has been proved that there exists
+    exactly one ``p`` for which the above is true (Bruggeman et al. 2005).
+
+    Original author: Jorn Bruggeman.
 
     Parameters
     ----------
@@ -264,15 +276,13 @@ def euler_forward(
 ) -> None:
     """First-order Euler-forward (E1) scheme.
 
-    !DESCRIPTION:
-    ! Here, the first-order Euler-forward (E1) scheme is coded, with one
-    ! evaluation of the right-hand sides per time step:
-    !   c_i^{n+1} = c_i^n + dt * {P_i(c^n) - D_i(c^n)}.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    One evaluation of the right-hand side per time step:
 
-    Updates cc in-place. Level 0 (index 0) is never modified.
+    .. math::
+
+       c_i^{n+1} = c_i^n + \\Delta t\\,\\bigl(P_i(c^n) - D_i(c^n)\\bigr)
+
+    Updates ``cc`` in-place.  Level 0 (index 0) is never modified.
     """
     rhs = get_rhs(True, numc, nlev, cc)
     cc[:, 1:] += dt * rhs[:, 1:]
@@ -285,19 +295,17 @@ def runge_kutta_2(
     cc: np.ndarray,
     get_rhs: RhsCallback,
 ) -> None:
-    """Second-order Runge-Kutta (Heun's method / explicit trapezoidal).
+    """Second-order Runge-Kutta — Heun's method (explicit trapezoidal).
 
-    !DESCRIPTION:
-    ! Here, the second-order Runge-Kutta (RK2) scheme is coded, with two
-    ! evaluations of the right hand side per time step:
-    !   c_i^{(1)} = c_i^n + dt * {P_i(c^n) - D_i(c^n)}
-    !   c_i^{n+1} = c_i^n + dt/2 * {P_i(c^n) + P_i(c^{(1)})
-    !                                - D_i(c^n) - D_i(c^{(1)})}
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Two evaluations of the right-hand side per time step:
 
-    Updates cc in-place. Level 0 is never modified.
+    .. math::
+
+       c_i^{(1)} &= c_i^n + \\Delta t\\,f_i(c^n) \\\\
+       c_i^{n+1} &= c_i^n + \\tfrac{\\Delta t}{2}\\bigl(f_i(c^n) + f_i(c^{(1)})\\bigr)
+
+    where :math:`f_i = P_i - D_i`.  Updates ``cc`` in-place.  Level 0 is
+    never modified.
     """
     rhs = get_rhs(True, numc, nlev, cc)
 
@@ -316,23 +324,21 @@ def runge_kutta_4(
     cc: np.ndarray,
     get_rhs: RhsCallback,
 ) -> None:
-    """Fourth-order Runge-Kutta scheme (ode_solvers.F90 variant).
+    """Fourth-order Runge-Kutta scheme (ode_solvers.F90 variant — full-dt steps).
 
-    !DESCRIPTION:
-    ! Here, the fourth-order Runge-Kutta (RK4) scheme is coded,
-    ! with four evaluations of the right hand sides per time step.
-    ! NOTE: This variant uses full-dt intermediate steps, differing from the
-    ! standard RK4 half-step intermediates in ode_solvers_template.F90.
-    !
-    !   c^{(1)} = c^n + dt * f(c^n)
-    !   c^{(2)} = c^n + dt * f(c^{(1)})
-    !   c^{(3)} = c^n + dt * f(c^{(2)})
-    !   c^{n+1} = c^n + dt/3 * (f(c^n)/2 + f(c^{(1)}) + f(c^{(2)}) + f(c^{(3)})/2)
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Four evaluations of the right-hand side per time step using full-:math:`\\Delta t`
+    intermediates (differs from the standard half-step RK4 in
+    :mod:`~pygotm.util.ode_solvers_template`):
 
-    Updates cc in-place. Level 0 is never modified.
+    .. math::
+
+       c^{(1)} &= c^n + \\Delta t\\,f(c^n) \\\\
+       c^{(2)} &= c^n + \\Delta t\\,f(c^{(1)}) \\\\
+       c^{(3)} &= c^n + \\Delta t\\,f(c^{(2)}) \\\\
+       c^{n+1} &= c^n + \\tfrac{\\Delta t}{3}\\bigl(
+           \\tfrac{1}{2}f(c^n) + f(c^{(1)}) + f(c^{(2)}) + \\tfrac{1}{2}f(c^{(3)})\\bigr)
+
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     rhs = get_rhs(True, numc, nlev, cc)
 
@@ -367,16 +373,14 @@ def patankar(
 ) -> None:
     """First-order Patankar-Euler (PE1) scheme.
 
-    !DESCRIPTION:
-    ! Here, the first-order Patankar-Euler scheme (PE1) scheme is coded,
-    ! with one evaluation of the right hand sides per time step:
-    !   c_i^{n+1} = (c_i^n + dt*P_i(c^n)) / (1 + dt*D_i(c^n)/c_i^n)
-    ! Not conservative; unconditionally positive.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    One evaluation of the production/destruction terms per time step.
+    Not conservative; unconditionally positive:
 
-    Updates cc in-place. Level 0 is never modified.
+    .. math::
+
+       c_i^{n+1} = \\frac{c_i^n + \\Delta t\\,P_i(c^n)}{1 + \\Delta t\\,D_i(c^n)/c_i^n}
+
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     pp, dd = get_ppdd(True, numc, nlev, cc)
 
@@ -396,22 +400,23 @@ def patankar_runge_kutta_2(
 ) -> None:
     """Second-order Patankar-Runge-Kutta (PRK2) scheme.
 
-    !DESCRIPTION:
-    ! Here, the second-order Patankar-Runge-Kutta (PRK2) scheme is coded,
-    ! with two evaluations of the right hand sides per time step.
-    ! Not conservative; unconditionally positive.
-    !
-    ! Stage 1 (Patankar-Euler):
-    !   c_i^{(1)} = (c_i^n + dt*P_i(c^n)) / (1 + dt*D_i(c^n)/c_i^n)
-    !
-    ! Stage 2:
-    !   c_i^{n+1} = (c_i^n + dt/2*(P_i(c^n)+P_i(c^{(1)}))) /
-    !               (1 + dt/2*(D_i(c^n)+D_i(c^{(1)}))/c_i^{(1)})
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Two evaluations of the production/destruction terms per time step.
+    Not conservative; unconditionally positive (Burchard et al. 2003).
 
-    Updates cc in-place. Level 0 is never modified.
+    Stage 1 — Patankar-Euler predictor:
+
+    .. math::
+
+       c_i^{(1)} = \\frac{c_i^n + \\Delta t\\,P_i(c^n)}{1 + \\Delta t\\,D_i(c^n)/c_i^n}
+
+    Stage 2 — second-order corrector:
+
+    .. math::
+
+       c_i^{n+1} = \\frac{c_i^n + \\tfrac{\\Delta t}{2}(P_i(c^n)+P_i(c^{(1)}))}
+                        {1 + \\tfrac{\\Delta t}{2}(D_i(c^n)+D_i(c^{(1)}))/c_i^{(1)}}
+
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     pp, dd = get_ppdd(True, numc, nlev, cc)
 
@@ -445,16 +450,11 @@ def patankar_runge_kutta_4(
     cc: np.ndarray,
     get_ppdd: PpddCallback,
 ) -> None:
-    """Fourth-order Patankar-Runge-Kutta (PRK4) scheme — does not work.
+    """Fourth-order Patankar-Runge-Kutta (PRK4) scheme — **does not work**.
 
-    !DESCRIPTION:
-    ! This subroutine should become the fourth-order Patankar Runge-Kutta
-    ! scheme, but it does not yet work.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
-
-    Updates cc in-place. Level 0 is never modified.
+    This scheme has not yet been developed in GOTM Fortran or here; the
+    implementation is a placeholder.  Updates ``cc`` in-place.  Level 0 is
+    never modified.
     """
     pp, dd = get_ppdd(True, numc, nlev, cc)
 
@@ -531,19 +531,19 @@ def modified_patankar(
 ) -> None:
     """First-order Modified Patankar-Euler (MPE1) scheme.
 
-    !DESCRIPTION:
-    ! Here, the first-order Modified Patankar-Euler scheme (MPE1) scheme is
-    ! coded, with one evaluation of the right hand side per time step:
-    !   c_i^{n+1} = c_i^n
-    !     + dt * { sum_{j!=i} p_{i,j}(c^n) * c_j^{n+1}/c_j^n
-    !             + p_{i,i}(c^n)
-    !             - sum_j d_{i,j}(c^n) * c_i^{n+1}/c_i^n }
-    ! Conservative and unconditionally positive (Burchard et al. 2003).
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    One evaluation of the production/destruction terms per time step.
+    Conservative and unconditionally positive (Burchard et al. 2003):
 
-    Updates cc in-place. Level 0 is never modified.
+    .. math::
+
+       c_i^{n+1} = c_i^n + \\Delta t\\left[
+           \\sum_{j \\neq i} p_{ij}(c^n)\\,\\frac{c_j^{n+1}}{c_j^n}
+           + p_{ii}(c^n)
+           - \\sum_j d_{ij}(c^n)\\,\\frac{c_i^{n+1}}{c_i^n}
+       \\right]
+
+    Solved as a linear system per vertical level using :func:`matrix_solve`.
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     pp, dd = get_ppdd(True, numc, nlev, cc)
 
@@ -561,18 +561,17 @@ def modified_patankar_2(
 ) -> None:
     """Second-order Modified Patankar-Runge-Kutta (MPRK2) scheme.
 
-    !DESCRIPTION:
-    ! Here, the second-order Modified Patankar-Runge-Kutta (MPRK2) scheme is
-    ! coded, with two evaluations of the right hand sides per time step.
-    ! Conservative and unconditionally positive (Burchard et al. 2003).
-    !
-    ! Stage 1: Modified Patankar-Euler step → c^{(1)}
-    ! Stage 2: second-order correction using averaged pp, dd
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Two evaluations of the production/destruction terms per time step.
+    Conservative and unconditionally positive (Burchard et al. 2003).
 
-    Updates cc in-place. Level 0 is never modified.
+    Stage 1: Modified Patankar-Euler step to obtain the predictor
+    :math:`c^{(1)}` (same system as :func:`modified_patankar`).
+
+    Stage 2: second-order corrector using averaged production/destruction
+    terms :math:`\\frac{1}{2}(pp + pp^{(1)})` and :math:`\\frac{1}{2}(dd + dd^{(1)})`,
+    with :math:`c^{(1)}` as the denominator state.
+
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     pp, dd = get_ppdd(True, numc, nlev, cc)
     cc1 = np.zeros((numc, nlev + 1))
@@ -600,16 +599,11 @@ def modified_patankar_4(
     cc: np.ndarray,
     get_ppdd: PpddCallback,
 ) -> None:
-    """Fourth-order Modified Patankar-Runge-Kutta (MPRK4) — does not work.
+    """Fourth-order Modified Patankar-Runge-Kutta (MPRK4) — **does not work**.
 
-    !DESCRIPTION:
-    ! This subroutine should become the fourth-order Modified Patankar
-    ! Runge-Kutta scheme, but it does not yet work.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
-
-    Updates cc in-place. Level 0 is never modified.
+    This scheme has not yet been developed in GOTM Fortran or here; the
+    implementation is a placeholder.  Updates ``cc`` in-place.  Level 0 is
+    never modified.
     """
     pp, dd = get_ppdd(True, numc, nlev, cc)
     cc1 = np.zeros((numc, nlev + 1))
@@ -654,18 +648,17 @@ def emp_1(
 ) -> None:
     """First-order Extended Modified Patankar (EMP-1) scheme.
 
-    !DESCRIPTION:
-    ! Here, the first-order Extended Modified Patankar scheme for
-    ! biogeochemical models is coded, with one evaluation of the right-hand
-    ! side per time step:
-    !   c^{n+1} = c^n + dt * f(t^n, c^n) * prod_{j in J^n} (c_j^{n+1}/c_j^n)
-    !   with J^n = {i : f_i(t^n, c^n) < 0}
-    ! Stoichiometrically conservative and positive (Bruggeman et al. 2005).
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Jorn Bruggeman
+    One evaluation of the right-hand side per time step.
+    Stoichiometrically conservative and positive (Bruggeman et al. 2005):
 
-    Updates cc in-place. Level 0 is never modified.
+    .. math::
+
+       c^{n+1} = c^n + \\Delta t\\,f(t^n, c^n)\\prod_{j \\in J^n}
+           \\frac{c_j^{n+1}}{c_j^n},
+       \\quad J^n = \\{i : f_i(t^n, c^n) < 0\\}
+
+    The product term :math:`p` is found via :func:`findp_bisection`.
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     derivative = get_rhs(True, numc, nlev, cc)
 
@@ -683,17 +676,17 @@ def emp_2(
 ) -> None:
     """Second-order Extended Modified Patankar (EMP-2) scheme.
 
-    !DESCRIPTION:
-    ! Here, the second-order Extended Modified Patankar scheme for
-    ! biogeochemical models is coded, with two evaluations of the right-hand
-    ! side per time step.  The first step is identical to EMP-1.  The second
-    ! step uses the averaged RHS corrected for stoichiometric conservation.
-    ! Stoichiometrically conservative and positive (Bruggeman et al. 2005).
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Jorn Bruggeman
+    Two evaluations of the right-hand side per time step.
+    Stoichiometrically conservative and positive (Bruggeman et al. 2005).
 
-    Updates cc in-place. Level 0 is never modified.
+    Step 1: identical to EMP-1 — advance ``cc`` to a midpoint ``cc_med``
+    using the product term from :func:`findp_bisection`.
+
+    Step 2: average :math:`f(c^n)` and :math:`f(c^{\\mathrm{med}})`, correct
+    for state variables in the negative-flux set :math:`J`, then apply a
+    second :func:`findp_bisection` step to update ``cc``.
+
+    Updates ``cc`` in-place.  Level 0 is never modified.
     """
     rhs = get_rhs(True, numc, nlev, cc)
     cc_med = cc.copy()
@@ -733,24 +726,8 @@ def ode_solver(
 ) -> None:
     """Dispatch to one of 11 ODE solvers for biogeochemical reaction equations.
 
-    !DESCRIPTION:
-    ! General ODE solver dispatcher. solver selects the integration method:
-    !   1 = Euler-forward (E1)
-    !   2 = Runge-Kutta 2 (Heun)
-    !   3 = Runge-Kutta 4
-    !   4 = Patankar-Euler (PE1)
-    !   5 = Patankar-Runge-Kutta 2 (PRK2)
-    !   6 = Patankar-Runge-Kutta 4 (PRK4, does not work)
-    !   7 = Modified Patankar-Euler (MPE1)
-    !   8 = Modified Patankar-Runge-Kutta 2 (MPRK2)
-    !   9 = Modified Patankar-Runge-Kutta 4 (MPRK4, does not work)
-    !  10 = Extended Modified Patankar 1 (EMP-1)
-    !  11 = Extended Modified Patankar 2 (EMP-2)
-    !
-    ! Solvers 1-3, 10-11 require get_rhs; solvers 4-9 require get_ppdd.
-    !
-    ! !REVISION HISTORY:
-    !  Original author(s): Hans Burchard, Karsten Bolding
+    Solvers 1–3 and 10–11 require ``get_rhs``; solvers 4–9 require
+    ``get_ppdd``.  See the module docstring for the full solver table.
 
     Parameters
     ----------

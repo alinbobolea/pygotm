@@ -80,12 +80,14 @@ from pygotm.gotm.runtime_builder import (
 )
 from pygotm.gotm.time_loop import run_compiled_time_loop
 from pygotm.icethm import (
+    IceModelEnum,
     IceParams,
     IceState,
     init_ice,
     make_ice_params_from_mapping,
     step_ice,
 )
+from pygotm.icethm.constants import RHO_ICE
 from pygotm.input.input import (
     ProfileInput,
     ScalarInput,
@@ -278,6 +280,7 @@ _MY_LENGTH = {"parabolic": 1, "triangular": 2, "linear": 3}
 _IW_MODEL = {"off": 0, "mellor": 1, "large": 2}
 _KB_METHOD = {"algebraic": kb_algebraic, "prognostic": kb_dynamic}
 _EPSB_METHOD = {"algebraic": epsb_algebraic, "prognostic": epsb_dynamic}
+_GOTM_ICE_ZETA_RHO0 = 1027.0
 
 
 @dataclass
@@ -357,6 +360,14 @@ def _surface_value(input_: ScalarInput | None, default: float = 0.0) -> float:
     if input_ is None:
         return default
     return float(input_.value)
+
+
+def _ice_initial_zeta(ice_params: IceParams) -> float:
+    """Return GOTM's initial ice-displaced sea-surface elevation."""
+
+    if ice_params.model == IceModelEnum.NO_ICE or ice_params.Hice_init <= 0.0:
+        return 0.0
+    return -ice_params.Hice_init * RHO_ICE / _GOTM_ICE_ZETA_RHO0
 
 
 def _maybe_register_scalar(
@@ -1044,16 +1055,24 @@ def initialize_gotm_from_settings(
 
     init_input(nlev)
 
+    airsea = AirSeaDriverState()
+    surface_inputs, ice_params = _configure_airsea_from_document(
+        airsea,
+        resolved_document,
+    )
+    initial_zeta = _ice_initial_zeta(ice_params)
+
     meanflow = MeanflowState()
     init_meanflow(meanflow)
     _configure_meanflow_from_document(meanflow, resolved_document)
     meanflow.depth = depth
+    meanflow.zeta = initial_zeta
     meanflow.grid_method = _GRID_METHOD[settings.grid.method]
     meanflow.ddu = settings.grid.ddu
     meanflow.ddl = settings.grid.ddl
     meanflow.grid_file = settings.grid.file
     post_init_meanflow(meanflow, nlev, settings.location.latitude)
-    updategrid(meanflow, nlev, settings.time.dt, zeta=0.0)
+    updategrid(meanflow, nlev, settings.time.dt, zeta=meanflow.zeta)
 
     density = DensityState()
     custom_cp = _configure_density_from_document(density, resolved_document)
@@ -1077,11 +1096,6 @@ def initialize_gotm_from_settings(
         density,
     )
 
-    airsea = AirSeaDriverState()
-    surface_inputs, ice_params = _configure_airsea_from_document(
-        airsea,
-        resolved_document,
-    )
     post_init_airsea(airsea, settings.location.latitude, settings.location.longitude)
 
     stokes = StokesDriftState()
@@ -1104,7 +1118,10 @@ def initialize_gotm_from_settings(
         meanflow.z,
         fsecs=time_state.fsecs,
     )
-    meanflow.zeta = float(observations.zeta_input.value)
+    if ice_params.model == IceModelEnum.NO_ICE:
+        meanflow.zeta = float(observations.zeta_input.value)
+    else:
+        meanflow.zeta = initial_zeta
     updategrid(meanflow, nlev, settings.time.dt, zeta=meanflow.zeta)
 
     turbulence = TurbulenceState()
@@ -1143,7 +1160,7 @@ def initialize_gotm_from_settings(
     assert meanflow.T is not None
     ice_state = init_ice(
         ice_params,
-        T_air_init=0.0,
+        T_air_init=_surface_value(surface_inputs.airt),
         S_sfc_init=float(meanflow.S[nlev]),
     )
 
@@ -1418,6 +1435,8 @@ def _integrate_gotm_python(
                 airsea.qe,
                 airsea.precip,
                 float(meanflow.u_taus),
+                0.0,
+                0.0,
                 ice_state.Hice,
                 ice_state.Hsnow,
                 ice_state.Hfrazil,

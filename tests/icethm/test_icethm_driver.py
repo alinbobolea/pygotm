@@ -6,7 +6,7 @@ from pygotm.icethm.driver import init_ice, outputs_to_buffers, step_ice
 from pygotm.icethm.params import IceModelEnum, make_ice_params
 
 
-def test_init_ice_sets_winton_layers_to_freezing_point() -> None:
+def test_init_ice_sets_winton_layers_from_air_and_freezing_point() -> None:
     state = init_ice(
         make_ice_params(model=IceModelEnum.WINTON, Hice_init=1.0),
         T_air_init=-10.0,
@@ -15,8 +15,9 @@ def test_init_ice_sets_winton_layers_to_freezing_point() -> None:
 
     assert state.Hice[0] == 1.0
     assert state.ice_cover[0] == 2
-    assert state.T1[0] == state.Tf[0]
+    assert state.T1[0] == -10.0
     assert state.T2[0] == state.Tf[0]
+    assert state.Tice_surface[0] == -10.0
 
 
 def test_step_ice_dispatches_simple() -> None:
@@ -34,6 +35,8 @@ def test_step_ice_dispatches_simple() -> None:
         1.0,
         60.0,
         1.0e-5,
+        0.0,
+        0.0,
         0.0,
         0.0,
         0.0,

@@ -1,19 +1,23 @@
-# ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: gotm_fabm_input
-!
-! !DESCRIPTION:
-!  This module contains routines for initializing and reading one or more
-!  data files containing observed profiles for FABM state variables.
-!
-! !REVISION HISTORY:
-!  Original author(s): Jorn Bruggeman
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+FABM observed-variable input — translation of ``gotm_fabm_input.F90``.
+
+Initialises and reads one or more data files containing observed profiles for
+a subset of FABM state variables, then registers those observations with the
+GOTM–FABM coupling layer for relaxation.
+
+Fortran types and list structures are mapped to Python dataclasses:
+
+* ``type_input_variable`` → :class:`InputVariable`
+* ``first_input_variable`` (linked list) → :class:`FabmInputState` ``(variables list)``
+
+Fortran dependencies ``use input`` and ``use gotm_fabm`` are satisfied by
+:mod:`pygotm.input.input` and :mod:`pygotm.fabm.gotm_fabm` respectively.
+
+Public interface: :func:`configure_gotm_fabm_input`, :func:`init_gotm_fabm_input`,
+:func:`fabm_input_create`, :func:`append_input`,
+:class:`FabmInputState`, :class:`InputVariable`.
+
+Original authors: Jorn Bruggeman.
 """
 
 from dataclasses import dataclass

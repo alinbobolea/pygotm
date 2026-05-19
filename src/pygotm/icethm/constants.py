@@ -11,10 +11,10 @@ Values in this module come from the model papers bundled in
   Algorithms for Potential Temperature and Density of Seawater", for the
   potential-temperature freezing polynomial used by the basal-melt closure.
 
-The sign convention used by pyGOTM is documented in
-``.superpowers/known-gotm-sign-conventions.md``: positive atmospheric heat flux
-means heat leaves the ocean, while the ice modules report positive
-``ocean_ice_heat_flux`` when ice extracts heat from the ocean.
+Sign convention: positive atmospheric heat flux means heat leaves the ocean;
+the ice modules report positive ``ocean_ice_heat_flux`` when ice extracts heat
+from the ocean.  See :doc:`/physics/ice_thermodynamics` for the full sign
+convention description.
 """
 
 from __future__ import annotations

@@ -25,9 +25,11 @@ def init_ice(params: IceParams, *, T_air_init: float, S_sfc_init: float) -> IceS
     state.ocean_ice_flux[0] = params.ocean_ice_flux_init
     state.Tf[0] = freezing_temperature(float(S_sfc_init))
     if params.model == IceModelEnum.WINTON:
-        state.T1[0] = state.Tf[0]
+        state.T1[0] = float(T_air_init)
         state.T2[0] = state.Tf[0]
-        state.Tice_surface[0] = min(float(T_air_init), 0.0)
+        state.Tice_surface[0] = float(T_air_init)
+    elif params.model == IceModelEnum.BASAL_MELT:
+        state.Tice_surface[0] = 0.0
     else:
         state.Tice_surface[0] = state.Tf[0]
     if state.Hice[0] > 0.0:
@@ -51,6 +53,8 @@ def step_ice(
     Qe: float,
     precip: float,
     ustar: float,
+    winton_surface_flux_a: float,
+    winton_surface_flux_b: float,
     Hice: np.ndarray,
     Hsnow: np.ndarray,
     Hfrazil: np.ndarray,
@@ -79,9 +83,13 @@ def step_ice(
     if model == 1:
         return float(step_simple(T_w, S_w, diff_t_up, Tf, Hice, ice_cover))
     if model == 2:
+        basal_melt_cache_version = 1
+        if basal_melt_cache_version < 0:
+            return diff_t_up
         step_basal_melt(
             T_w,
             S_w,
+            h_sfc,
             Hice[0],
             ustar,
             melt_rate,
@@ -129,6 +137,9 @@ def step_ice(
         )
         return float(diff_t_up - ocean_ice_heat_flux[0] / C_WATER_VOL)
 
+    winton_cache_version = 1
+    if winton_cache_version < 0:
+        return diff_t_up
     step_winton(
         T_w,
         S_w,
@@ -139,8 +150,11 @@ def step_ice(
         Qh,
         Qe,
         precip,
+        winton_surface_flux_a,
+        winton_surface_flux_b,
         Hice,
         Hsnow,
+        Hfrazil,
         T1,
         T2,
         Tice_surface,

@@ -1,35 +1,17 @@
 """
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: analytical_profile
-!
-! !INTERFACE:
-!   subroutine analytical_profile(nlev,z,z1,v1,z2,v2,prof)
-!
-! !DESCRIPTION:
-! This routine creates a vertical profile {\tt prof} with value
-! {\tt v1} in a surface layer down to depth {\tt z1} and a bottom
-! layer of value {\tt v2} reaching from depth {\tt z2} down to the bottom.
-! Both layers are connected by an intermediate layer reaching from {\tt z1}
-! to {\tt z2} with values linearly varying from {\tt v1} to {\tt v2}.
-!
-! !USES:
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!   integer,  intent(in)                :: nlev
-!   REALTYPE, intent(in)                :: z(0:nlev)
-!   REALTYPE, intent(in)                :: z1,v1,z2,v2
-!
-! !OUTPUT PARAMETERS:
-!   REALTYPE, intent(out)               :: prof(0:nlev)
-!
-! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding
-!
-!EOP
-!-----------------------------------------------------------------------
+Analytical two-layer vertical profile — translation of ``analytical_profile.F90``.
+
+Creates a piecewise-linear vertical profile ``prof`` with:
+
+* value ``v1`` in a surface layer from the surface down to depth ``z1``;
+* value ``v2`` in a bottom layer from depth ``z2`` to the sea floor;
+* values linearly interpolated between ``v1`` and ``v2`` in the intermediate
+  layer from ``z1`` to ``z2``.
+
+Used to initialise temperature or salinity when the GOTM YAML method is set to
+``two_layer``.
+
+Original author: Karsten Bolding.
 """
 
 from __future__ import annotations

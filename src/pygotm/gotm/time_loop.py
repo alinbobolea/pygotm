@@ -1125,6 +1125,10 @@ def time_loop_compiled(
 ) -> int:
     """Run profile-forced cases through the compiled timestep loop."""
 
+    basal_melt_cache_version = 4
+    if basal_melt_cache_version < 0:
+        return -2
+
     if nlev < 1 or nt < 0 or dt <= 0.0 or output_every < 1 or step_offset < 0:
         return -2
 
@@ -1542,6 +1546,9 @@ def time_loop_compiled(
         qe = 0.0
         ql = 0.0
         shortwave = forcing_swr[step]
+        ice_qsw = shortwave
+        winton_surface_flux_a = 0.0
+        winton_surface_flux_b = 0.0
         sst_value = _output_sst_value(
             0.0,
             forcing_sst_obs[step],
@@ -1551,12 +1558,15 @@ def time_loop_compiled(
         if airsea_fluxes_method == 1:
             wind_u = forcing_u10[step]
             wind_v = forcing_v10[step]
-            if airsea_ssuv_method != 0:
+            model_sst = _gsw_t_from_ct_surface_compiled(S[nlev], T[nlev])
+            flux_sst = model_sst
+            if ice_cover[0] != 0.0:
+                flux_sst = Tice_surface[0]
+            elif airsea_ssuv_method != 0:
                 wind_u -= u[nlev]
                 wind_v -= v[nlev]
-            model_sst = _gsw_t_from_ct_surface_compiled(S[nlev], T[nlev])
             sst_value = _output_sst_value(
-                model_sst,
+                flux_sst,
                 forcing_sst_obs[step],
                 airsea_sst_obs_method,
             )
@@ -1589,7 +1599,7 @@ def time_loop_compiled(
                 airsea_shortwave_scale_factor,
                 airsea_heat_scale_factor,
                 airsea_const_albedo,
-                model_sst,
+                flux_sst,
                 forcing_airp[step],
                 forcing_airt[step],
                 forcing_hum[step],
@@ -1610,15 +1620,86 @@ def time_loop_compiled(
                 shortwave,
                 albedo,
             )
+            ice_qsw = current_i0
+            if ice_model == 5 and ice_cover[0] != 0.0:
+                (
+                    evap_probe,
+                    tx_probe,
+                    ty_probe,
+                    heat_probe,
+                    shortwave_probe,
+                    albedo_probe,
+                    es_probe,
+                    ea_probe,
+                    qs_probe,
+                    qa_probe,
+                    rhoa_probe,
+                    qh_probe,
+                    qe_probe,
+                    ql_probe,
+                ) = _airsea_kondo_compiled(
+                    forcing_yearday[step],
+                    forcing_secondsofday[step],
+                    latitude,
+                    longitude,
+                    airsea_hum_method,
+                    airsea_shortwave_method,
+                    airsea_shortwave_type,
+                    airsea_longwave_method,
+                    airsea_longwave_type,
+                    airsea_albedo_method,
+                    airsea_shortwave_scale_factor,
+                    airsea_heat_scale_factor,
+                    airsea_const_albedo,
+                    flux_sst + 0.01,
+                    forcing_airp[step],
+                    forcing_airt[step],
+                    forcing_hum[step],
+                    forcing_cloud[step],
+                    wind_u,
+                    wind_v,
+                    forcing_precip[step],
+                    forcing_longwave[step],
+                    forcing_swr[step],
+                )
+                _ = (
+                    tx_probe,
+                    ty_probe,
+                    shortwave_probe,
+                    albedo_probe,
+                )
+                evap = evap_probe
+                heat = heat_probe
+                shf = -heat
+                swf = forcing_precip[step] + evap
+                es = es_probe
+                ea = ea_probe
+                qs = qs_probe
+                qa = qa_probe
+                rhoa = rhoa_probe
+                winton_surface_flux_a = -(qh + qe + ql)
+                winton_surface_flux_b = (
+                    -(qh_probe + qe_probe + ql_probe) - winton_surface_flux_a
+                ) / 0.01
+                qh = qh_probe
+                qe = qe_probe
+                ql = ql_probe
+                sst_value = flux_sst + 0.01
+                albedo = albedo_ice[0]
+                current_i0 = shortwave * (1.0 - albedo)
+                ice_qsw = current_i0
         elif airsea_fluxes_method == 2:
             wind_u = forcing_u10[step]
             wind_v = forcing_v10[step]
-            if airsea_ssuv_method != 0:
+            model_sst = _gsw_t_from_ct_surface_compiled(S[nlev], T[nlev])
+            flux_sst = model_sst
+            if ice_cover[0] != 0.0:
+                flux_sst = Tice_surface[0]
+            elif airsea_ssuv_method != 0:
                 wind_u -= u[nlev]
                 wind_v -= v[nlev]
-            model_sst = _gsw_t_from_ct_surface_compiled(S[nlev], T[nlev])
             sst_value = _output_sst_value(
-                model_sst,
+                flux_sst,
                 forcing_sst_obs[step],
                 airsea_sst_obs_method,
             )
@@ -1651,7 +1732,7 @@ def time_loop_compiled(
                 airsea_shortwave_scale_factor,
                 airsea_heat_scale_factor,
                 airsea_const_albedo,
-                model_sst,
+                flux_sst,
                 forcing_airp[step],
                 forcing_airt[step],
                 forcing_hum[step],
@@ -1672,6 +1753,74 @@ def time_loop_compiled(
                 shortwave,
                 albedo,
             )
+            ice_qsw = current_i0
+            if ice_model == 5 and ice_cover[0] != 0.0:
+                (
+                    evap_probe,
+                    tx_probe,
+                    ty_probe,
+                    heat_probe,
+                    shortwave_probe,
+                    albedo_probe,
+                    es_probe,
+                    ea_probe,
+                    qs_probe,
+                    qa_probe,
+                    rhoa_probe,
+                    qh_probe,
+                    qe_probe,
+                    ql_probe,
+                ) = _airsea_fairall_compiled(
+                    forcing_yearday[step],
+                    forcing_secondsofday[step],
+                    latitude,
+                    longitude,
+                    airsea_hum_method,
+                    airsea_shortwave_method,
+                    airsea_shortwave_type,
+                    airsea_longwave_method,
+                    airsea_longwave_type,
+                    airsea_albedo_method,
+                    airsea_shortwave_scale_factor,
+                    airsea_heat_scale_factor,
+                    airsea_const_albedo,
+                    flux_sst + 0.01,
+                    forcing_airp[step],
+                    forcing_airt[step],
+                    forcing_hum[step],
+                    forcing_cloud[step],
+                    wind_u,
+                    wind_v,
+                    forcing_precip[step],
+                    forcing_longwave[step],
+                    forcing_swr[step],
+                )
+                _ = (
+                    tx_probe,
+                    ty_probe,
+                    shortwave_probe,
+                    albedo_probe,
+                )
+                evap = evap_probe
+                heat = heat_probe
+                shf = -heat
+                swf = forcing_precip[step] + evap
+                es = es_probe
+                ea = ea_probe
+                qs = qs_probe
+                qa = qa_probe
+                rhoa = rhoa_probe
+                winton_surface_flux_a = -(qh + qe + ql)
+                winton_surface_flux_b = (
+                    -(qh_probe + qe_probe + ql_probe) - winton_surface_flux_a
+                ) / 0.01
+                qh = qh_probe
+                qe = qe_probe
+                ql = ql_probe
+                sst_value = flux_sst + 0.01
+                albedo = albedo_ice[0]
+                current_i0 = shortwave * (1.0 - albedo)
+                ice_qsw = current_i0
         else:
             tx_surface = forcing_tx[step]
             ty_surface = forcing_ty[step]
@@ -1681,6 +1830,10 @@ def time_loop_compiled(
             current_i0 = forcing_swr[step]
             swf = forcing_precip[step]
             shf = -heat
+            if ice_model == 5 and ice_cover[0] != 0.0:
+                albedo = albedo_ice[0]
+                current_i0 = shortwave * (1.0 - albedo)
+                ice_qsw = current_i0
 
         tx[0] = tx_value
         ty[0] = ty_value
@@ -1695,12 +1848,14 @@ def time_loop_compiled(
                 h[nlev],
                 dt,
                 diff_t_up,
-                shortwave,
+                ice_qsw,
                 ql,
                 qh,
                 qe,
                 forcing_precip[step],
                 u_taus[0],
+                winton_surface_flux_a,
+                winton_surface_flux_b,
                 Hice,
                 Hsnow,
                 Hfrazil,
@@ -1724,12 +1879,27 @@ def time_loop_compiled(
             shf = -diff_t_up * rho0 * cp
             ssf -= ocean_ice_salt_flux[0]
             if ice_cover[0] == 2.0:
-                current_i0 = shortwave * (1.0 - albedo_ice[0]) * transmissivity[0]
+                heat = 0.0
+                tx_surface = 0.0
+                ty_surface = 0.0
+                tx_value = 0.0
+                ty_value = 0.0
+                tx[0] = 0.0
+                ty[0] = 0.0
+                swf = melt_rate[0]
+                shf = ocean_ice_heat_flux[0] + rho0 * cp * T[nlev] * swf
+                ssf = ocean_ice_salt_flux[0] + S[nlev] * swf
+                if ice_model == 5:
+                    current_i0 = ice_qsw * transmissivity[0]
+                else:
+                    current_i0 = (
+                        shortwave * (1.0 - albedo_ice[0]) * transmissivity[0]
+                    )
         int_precip += forcing_precip[step] * dt
         int_evap += evap * dt
         int_swr += current_i0 * dt
         int_heat += heat * dt
-        int_total += (heat + current_i0) * dt
+        int_total = int_swr + int_heat
 
         step_updategrid_single(
             nlev,
@@ -2003,6 +2173,7 @@ def time_loop_compiled(
                 t_relax_tau,
                 current_i0,
                 -shf / (rho0 * cp),
+                0,
                 forcing_dtdx[step],
                 forcing_dtdy[step],
                 work_avh,

@@ -132,6 +132,7 @@ def _step_temperature(
     tau_r: np.ndarray,
     i_0: float,
     diff_t_up: float,
+    apply_freezing_correction: int,
     dtdx: np.ndarray,
     dtdy: np.ndarray,
     avh: np.ndarray,
@@ -145,8 +146,8 @@ def _step_temperature(
     qu: np.ndarray,
     adv_cu: np.ndarray,
 ) -> None:
-    # sea ice correction: suppress warming flux (diff_t_up > 0) when SST <= freezing T
-    if T[nlev] <= -_FREEZE_SLOPE * S[nlev]:
+    # GOTM only applies this legacy simple-ice clamp in non-ice builds.
+    if apply_freezing_correction != 0 and T[nlev] <= -_FREEZE_SLOPE * S[nlev]:
         if diff_t_up > 0.0:
             diff_t_up = 0.0
 
@@ -247,6 +248,7 @@ def step_temperature(
     tau_r: np.ndarray,
     i_0: np.ndarray,
     diff_t_up: np.ndarray,
+    apply_freezing_correction: int,
     dtdx: np.ndarray,
     dtdy: np.ndarray,
     avh: np.ndarray,
@@ -289,6 +291,7 @@ def step_temperature(
             tau_r[b],
             i_0[b],
             diff_t_up[b],
+            apply_freezing_correction,
             dtdx[b],
             dtdy[b],
             avh[b],
@@ -327,6 +330,7 @@ def temperature(
     w_adv_active: bool = False,
     w_adv_discr: int = 4,
     t_adv: bool = False,
+    apply_simple_ice_correction: bool = False,
 ) -> None:
     """Advance the temperature equation for one column.
 
@@ -422,6 +426,7 @@ def temperature(
         _tau_r,
         I_0,
         diff_t_up,
+        int(apply_simple_ice_correction),
         _dtdx,
         _dtdy,
         state.avh,

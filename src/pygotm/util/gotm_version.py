@@ -1,8 +1,11 @@
 """
-module gotm_version
-   character(len=*),parameter :: git_commit_id = "4.1.0"
-   character(len=*),parameter :: git_branch_name = "master"
-end module
+GOTM version constants — translation of ``gotm_version.F90``.
+
+Exposes the GOTM source version identifiers that were embedded at compile time
+in the original Fortran build.  Values are fixed strings matching the GOTM
+release this Python translation targets.
+
+Public interface: :data:`git_commit_id`, :data:`git_branch_name`.
 """
 
 __all__ = ["git_commit_id", "git_branch_name"]

@@ -1,35 +1,30 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: stokes_drift --- Stokes drift
-!
-! !DESCRIPTION:
-!  This module provides subroutines to compute Stokes drift from
-!  various input.
-!
-!  Stokes drift profile - x component
-!  Stokes drift profile - y component
-!  Stokes drift shear - x component
-!  Stokes drift shear - y component
-!  Surface Stokes drift x and y components, Stokes depth
-!  Surface wind for computing Stokes drift
-!  Turbulent Langmuir number (McWilliams et al., 1997)
-!  Surface layer averaged Langmuir number (Harcourt and D'Asaro, 2008)
-!  Surface layer averaged and projected Langmuir number
-!  (Van Roekel et al., 2012)
-!  Surface layer averaged and projected Langmuir number
-!  (Reichl et al., 2016)
-!  Enhancement factor for Langmuir mixing (Li et al., 2016)
-!  Enhancement factor for Langmuir mixing (Reichl et al., 2016)
-!  Angles between wind and waves and between wind and Langmuir cells
-!
-! !REVISION HISTORY:
-!  Original author(s): Qing Li
-!
-!EOP
-!-----------------------------------------------------------------------
+"""
+Stokes drift — translation of ``stokes_drift.F90``.
+
+Provides subroutines to compute Stokes drift profiles from various input
+sources.  The active method is selected per-component via integer flags:
+
+* ``NOTHING`` (0) — Stokes drift disabled.
+* ``CONSTANT`` (1) — constant surface Stokes drift ``us0``/``vs0``.
+* ``FROMFILE`` (2) — profile or scalar read from file.
+* ``EXPONENTIAL`` (3) — exponential profile from surface Stokes drift and
+  penetration depth ``ds`` (calls :func:`~pygotm.stokes_drift.stokes_drift_exp.stokes_drift_exp`).
+* ``THEORYWAVE`` (4) — Li et al. (2017) empirical theory-wave spectrum
+  (calls :func:`~pygotm.stokes_drift.stokes_drift_theory.stokes_drift_theory`).
+
+Fortran public data members — ``usprof``, ``vsprof``, ``dusdz``, ``dvsdz``
+(profile inputs), ``us0``, ``vs0``, ``ds``, ``uwnd``, ``vwnd`` (scalar inputs),
+``La_Turb`` (McWilliams et al., 1997), ``La_SL`` (Harcourt and D'Asaro, 2008),
+``La_SLP_VR12`` (Van Roekel et al., 2012), ``La_SLP_RWH16`` (Reichl et al.,
+2016), ``EFactor_LWF16`` (Li et al., 2016), ``EFactor_RWH16`` (Reichl et al.,
+2016), ``theta_WW``, ``theta_WL`` — are consolidated in :class:`StokesDriftState`.
+
+Public interface: :func:`init_stokes_drift`, :func:`init_stokes_drift_yaml`,
+:func:`post_init_stokes_drift`, :func:`do_stokes_drift`,
+:func:`langmuir_number`, :func:`clean_stokes_drift`, :class:`StokesDriftState`.
+
+Original authors: Qing Li.
 """
 
 import math

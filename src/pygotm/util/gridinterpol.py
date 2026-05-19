@@ -1,36 +1,16 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-! !ROUTINE: Interpolate from observation space to model grid
-!
-! !INTERFACE:
-!    subroutine gridinterpol(N,cols,obs_z,obs_prof,nlev,model_z,model_prof)
-!
-! !DESCRIPTION:
-!
-!  This is a utility subroutine in which observational data, which might
-!  be given on an arbitrary, but structured grid, are linearly interpolated and
-!  extrapolated to the actual (moving) model grid.
-!
-! !USES:
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!   integer,  intent(in)                :: N,cols
-!   REALTYPE, intent(in)                :: obs_z(0:N),obs_prof(0:N,cols)
-!   integer,  intent(in)                :: nlev
-!   REALTYPE, intent(in)                :: model_z(0:nlev)
-!
-! !OUTPUT PARAMETERS:
-!   REALTYPE, intent(out)               :: model_prof(0:nlev,cols)
-!
-! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding & Hans Burchard
-!
-!EOP
-!-----------------------------------------------------------------------
-!
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Grid interpolation from observation space to model grid — translation of
+``gridinterpol.F90``.
+
+Linearly interpolates (and extrapolates) observational data defined on an
+arbitrary structured depth grid to the (potentially moving) GOTM model grid.
+Extrapolation clamps values: model levels above the topmost observation receive
+the topmost observed value; model levels below the deepest observation receive
+the deepest observed value.
+
+Original authors: Karsten Bolding, Hans Burchard.
+
+Public interface: :func:`gridinterpol`.
 """
 
 from __future__ import annotations
@@ -53,12 +33,6 @@ def gridinterpol(
     outside the observational range: surface levels above obs_z[N] receive the
     topmost observed value, and bottom levels below obs_z[1] receive the lowest
     observed value.
-
-    !BOC
-    !  Set surface values to uppermost input value
-    !  Set bottom values to lowest input value
-    !  Interpolate inner values linearly
-    !EOC
 
     Parameters
     ----------

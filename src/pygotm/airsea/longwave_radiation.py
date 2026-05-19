@@ -1,47 +1,24 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Calculate the net longwave radiation \label{sec:back-rad}
-!
-! !INTERFACE:
-!   subroutine longwave_radiation(method,dlat,tw,ta,cloud,ql)
-!
-! !DESCRIPTION:
-!
-! Here, the net longwave radiation is calculated by means of one out
-! of six methods, which depend on the value given to the parameter
-! {\tt method}:
-! {\tt method}=3: \cite{Clarketal74},
-! {\tt method}=4: \cite{HastenrathLamb78},
-! {\tt method}=5: \cite{Bignamietal95},
-! {\tt method}=6: \cite{BerliandBerliand52}.
-! {\tt method}=7: \cite{Joseyetal2003} - (J1,9).
-! {\tt method}=8: \cite{Joseyetal2003} - (J2,14).
-! It should be noted that the latitude must here be given in degrees.
-!
-! !USES:
-!   use airsea_variables, only: emiss,bolz
-!   use airsea_variables, only: ea,qa
-!   use airsea_variables, only: CLARK, HASTENRATH_LAMB, BIGNAMI, BERLIAND_BERLIAND, JOSEY1, JOSEY2
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!   integer, intent(in)                 :: method
-!   REALTYPE, intent(in)                :: dlat,tw,ta,cloud
-!
-! !OUTPUT PARAMETERS:
-!   REALTYPE, intent(inout)               :: ql
-!
-! !REVISION HISTORY:
-!  Original author(s): Adolf Stips, Hans Burchard & Karsten Bolding
-!EOP
-!-----------------------------------------------------------------------
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Net longwave (back) radiation — translation of ``longwave_radiation.F90``.
+
+Computes the net outgoing longwave radiation at the sea surface [W m⁻²] using
+one of six parameterisation methods, selected by an integer constant:
+
+* ``CLARK`` (3) — Clark et al. (1974)
+* ``HASTENRATH_LAMB`` (4) — Hastenrath & Lamb (1978)
+* ``BIGNAMI`` (5) — Bignami et al. (1995)
+* ``BERLIAND_BERLIAND`` (6) — Berliand & Berliand (1952)
+* ``JOSEY1`` (7) — Josey et al. (2003), equation J1 (eq. 9)
+* ``JOSEY2`` (8) — Josey et al. (2003), equation J2 (eq. 14)
+
+The latitude must be provided in degrees.  A 91-element cloud correction
+factor table indexed by integer absolute latitude is used by the Clark,
+Hastenrath–Lamb, and Berliand–Berliand methods.  The vapour pressure ``ea``
+(or specific humidity ``qa``) must be set in the ``AirSeaState`` object by a
+prior call to :func:`~pygotm.airsea.humidity.humidity`.
+
+Original authors: Adolf Stips, Hans Burchard, Karsten Bolding.
 """
 
 from __future__ import annotations

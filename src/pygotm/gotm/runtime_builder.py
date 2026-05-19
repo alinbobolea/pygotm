@@ -268,6 +268,11 @@ def _input_method(input_: Any | None) -> int:
     return int(getattr(input_, "method", 0))
 
 
+def _run_uses_ice_zeta(run: Any) -> bool:
+    ice_params = getattr(run, "ice_params", None)
+    return ice_params is not None and int(getattr(ice_params, "model", 0)) != 0
+
+
 def _stokes_runtime_active(stokes: Any) -> bool:
     return any(
         getattr(stokes, name) != 0
@@ -529,7 +534,11 @@ def _record_forcing_step(run: Any, forcing: RuntimeForcing, step: int) -> None:
     forcing.yearday[step] = int(run.time.yearday)
     forcing.time[step] = float(step) * float(run.dt)
     forcing.secondsofday[step] = float(run.time.fsecondsofday)
-    forcing.zeta[step] = _surface_input_value(observations.zeta_input)
+    forcing.zeta[step] = (
+        float(run.meanflow.zeta)
+        if _run_uses_ice_zeta(run)
+        else _surface_input_value(observations.zeta_input)
+    )
     forcing.dpdx[step] = _surface_input_value(observations.dpdx_input)
     forcing.dpdy[step] = _surface_input_value(observations.dpdy_input)
     forcing.h_press[step] = _surface_input_value(observations.h_press_input)
@@ -635,7 +644,8 @@ def _populate_runtime_forcing_from_run(
                         else 0.0
                     ),
                 )
-            meanflow.zeta = float(run.observations.zeta_input.value)
+            if not _run_uses_ice_zeta(run):
+                meanflow.zeta = float(run.observations.zeta_input.value)
             updategrid(meanflow, run.nlev, run.dt, meanflow.zeta)
             _update_runtime_relaxation_targets(run)
             _record_forcing_step(run, forcing, step)

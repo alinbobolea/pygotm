@@ -97,7 +97,7 @@ trade-off:
 * **Smaller chunks** — lower memory for the hydrodynamic state buffers, but
   more Python overhead.
 * **Larger chunks** — less Python overhead, but larger scratch arrays (shape
-  ``(N_\mathrm{chunk}+1) \times (N_\mathrm{lev}+1)``).  Memory grows as
+  :math:`(N_\mathrm{chunk}+1) \times (N_\mathrm{lev}+1)`).  Memory grows as
   approximately :math:`7 N_\mathrm{chunk} N_\mathrm{lev}` doubles (``float64``
   arrays for T, S, ρ, h, nuh, radiation, and bottom stress).
 * **One-day default** — balances memory and overhead across typical
@@ -111,31 +111,39 @@ hydrodynamic snapshots are refreshed.
 Per-chunk execution sequence
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Each chunk proceeds as follows:
+Each chunk k covers timesteps :math:`k \cdot C \ldots k \cdot C + C - 1` and
+executes two sequential passes.
 
-.. code-block:: text
+.. mermaid::
 
-    ┌─────────────────────────────────────────────────────────────┐
-    │  CHUNK k  (timesteps i = k·C … k·C + C − 1)                │
-    │                                                             │
-    │  1.  PHYSICS PASS (Numba JIT)                               │
-    │      ─────────────────────────                              │
-    │      run_compiled_time_loop(nt=C, hydro_store=ON)           │
-    │      → advance T, S, U, V, k, ε by C steps                 │
-    │      → store snapshots of T, S, ρ, h, nuh, rad, τ_b        │
-    │        at every step  (hydro buffers, shape C+1×nlev+1)     │
-    │                                                             │
-    │  2.  FABM PASS (Python)                                     │
-    │      ─────────────────────────                              │
-    │      run_fabm_chunk(hydro_T, hydro_S, …, cc_in)            │
-    │      for step = 0 … C:                                      │
-    │        a. set_environment(T[step], S[step], ρ[step], …)     │
-    │        b. sinking/rising advection  (adv_center)            │
-    │        c. turbulent diffusion       (diff_center)           │
-    │        d. biogeochemical rates      (engine.get_rates)      │
-    │        e. apply source/sink rates   (cc += dt · rates)      │
-    │      → returns updated biological state cc                  │
-    └─────────────────────────────────────────────────────────────┘
+   flowchart TD
+       start(["Chunk k — timesteps k·C … k·C + C − 1"])
+
+       P["1 · Physics pass — Numba JIT\nrun_compiled_time_loop(nt=C, hydro_store=ON)"]
+       buf["Advances T, S, U, V, k, ε by C steps\nStores T, S, ρ, h, nuh, rad, τ_b at every step\n(hydro buffers · shape C+1 × nlev+1)"]
+
+       loop["2 · FABM pass — Python  (for step = 0 … C)"]
+       fa["a.  set_environment(T[step], S[step], ρ[step], …)"]
+       fb["b.  sinking / rising advection  (adv_center)"]
+       fc["c.  turbulent diffusion  (diff_center)"]
+       fd["d.  biogeochemical rates  (engine.get_rates)"]
+       fe["e.  apply source/sink rates:  cc += dt · rates"]
+
+       done(["cc — updated biological state passed to chunk k+1"])
+
+       start --> P --> buf
+       buf   -->|"hydro snapshots"| loop
+       loop  --> fa --> fb --> fc --> fd --> fe --> done
+
+       style start fill:#e8f4e8,stroke:#4a8f4a,color:#1a4a1a
+       style P     fill:#dce8f7,stroke:#3a78b5,color:#1a4a7a
+       style buf   fill:#dce8f7,stroke:#3a78b5,color:#1a4a7a
+       style loop  fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+       style fa    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+       style fb    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+       style fc    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+       style fd    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+       style fe    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
 
 The biological state ``cc`` (shape ``n_vars × nlev``) is passed from one chunk
 to the next as a direct argument, providing continuity.

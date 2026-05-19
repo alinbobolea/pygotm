@@ -1,69 +1,25 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Calculate the solar zenith angle \label{sec:swr}
-!
-! !INTERFACE:
-!   REALTYPE function solar_zenith_angle(yday,hh,dlon,dlat)
-!
-! !DESCRIPTION:
-!  This subroutine calculates the solar zenith angle as being used both
-!  in albedo_water() and shortwave_radiation(). The result is in degrees.
-!
-! !USES:
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!   integer, intent(in)                 :: yday
-!   REALTYPE, intent(in)                :: hh
-!   REALTYPE, intent(in)                :: dlon,dlat
-!
-! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding
-!
-! !LOCAL VARIABLES:
-!   REALTYPE, parameter       :: pi=3.14159265358979323846
-!   REALTYPE, parameter       :: deg2rad=pi/180.
-!   REALTYPE, parameter       :: rad2deg=180./pi
-!
-!   REALTYPE                  :: rlon,rlat
-!   REALTYPE                  :: yrdays
-!   REALTYPE                  :: th0,th02,th03,sundec
-!   REALTYPE                  :: thsun,coszen
-!EOP
-!-----------------------------------------------------------------------
-!BOC
-!  from now on everything in radians
-!   rlon = deg2rad*dlon
-!   rlat = deg2rad*dlat
-!
-!   yrdays=365.25
-!
-!   th0 = 2.*pi*yday/yrdays
-!   th02 = 2.*th0
-!   th03 = 3.*th0
-!  sun declination :
-!   sundec = 0.006918 - 0.399912*cos(th0) + 0.070257*sin(th0)         &
-!           - 0.006758*cos(th02) + 0.000907*sin(th02)                 &
-!           - 0.002697*cos(th03) + 0.001480*sin(th03)
-!  sun hour angle :
-!   thsun = (hh-12.)*15.*deg2rad + rlon
-!
-!  cosine of the solar zenith angle :
-!   coszen =sin(rlat)*sin(sundec)+cos(rlat)*cos(sundec)*cos(thsun)
-!   if (coszen .lt. _ZERO_) coszen = _ZERO_
-!
-!   solar_zenith_angle = rad2deg*acos(coszen)
-!
-!   return
-!   end function solar_zenith_angle
-!EOC
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Solar zenith angle — translation of the corresponding function in ``shortwave_radiation.F90``.
+
+Returns the solar zenith angle in degrees from day-of-year, decimal UTC hour,
+longitude, and latitude.  Used by both
+:func:`~pygotm.airsea.shortwave_radiation.shortwave_radiation` and
+:func:`~pygotm.airsea.albedo_water.albedo_water`.
+
+Solar declination is computed from a four-term Fourier series (Spencer 1971):
+
+.. math::
+
+   \\delta = 0.006918 - 0.399912\\cos\\theta_0 + 0.070257\\sin\\theta_0
+           - 0.006758\\cos 2\\theta_0 + 0.000907\\sin 2\\theta_0
+           - 0.002697\\cos 3\\theta_0 + 0.001480\\sin 3\\theta_0
+
+where :math:`\\theta_0 = 2\\pi\\,d / 365.25`.  The hour angle accounts for
+the observer's longitude.  :math:`\\cos\\zeta` is clamped to zero below the
+horizon before the arc-cosine is taken.
+
+Original author: Karsten Bolding.
 """
 
 from __future__ import annotations

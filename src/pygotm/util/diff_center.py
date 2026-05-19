@@ -1,118 +1,32 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Diffusion schemes --- grid centers\label{sec:diffusionMean}
-!
-! !INTERFACE:
-!
-! !DESCRIPTION:
-! This subroutine solves the one-dimensional diffusion equation
-! including source terms,
-!  \begin{equation}
-!   \label{YdiffCenter}
-!    \partder{Y}{t}
-!    = \partder{}{z} \left( \nu_Y \partder{Y}{z} \right)
-!    - \frac{1}{\tau_R}(Y-Y_{obs})
-!    + Y L_{\text{sour}} + Q_{\text{sour}}
-!    \comma
-!  \end{equation}
-! for al variables defined at the centers of the grid cells, and
-! a diffusion coefficient $\nu_Y$ defined at the faces.
-! Relaxation with time scale $\tau_R$ towards observed values
-! $Y_{\text{obs}}$ is possible. $L_{\text{sour}}$ specifies a
-! linear source term, and $Q_{\text{sour}}$ a constant source term.
-! Central differences are used to discretize the problem
-! as discussed in \sect{SectionNumericsMean}. The diffusion term,
-! the linear source term, and the linear part arising from the
-! relaxation term are treated
-! with an implicit method, whereas the constant source term is treated
-! fully explicit.
-!
-! The input parameters {\tt Bcup} and {\tt Bcdw} specify the type
-! of the upper and lower boundary conditions, which can be either
-! Dirichlet or Neumann-type. {\tt Bcup} and {\tt Bcdw} must have integer
-! values corresponding to the parameters {\tt Dirichlet} and {\tt Neumann}
-! defined in the module {\tt util}, see \sect{sec:utils}.
-! {\tt Yup} and {\tt Ydw} are the values of the boundary conditions at
-! the surface and the bottom. Depending on the values of {\tt Bcup} and
-! {\tt Bcdw}, they represent either fluxes or prescribed values.
-! The integer {\tt posconc} indicates if a quantity is
-! non-negative by definition ({\tt posconc}=1, such as for concentrations)
-! or not ({\tt posconc}=0). For {\tt posconc}=1 and negative
-! boundary fluxes, the source term linearisation according to
-! \cite{Patankar80} is applied.
-!
-! Note that fluxes \emph{entering} a boundary cell are counted positive
-! by convention. The lower and upper position for prescribing these fluxes
-! are located at the lowest und uppermost grid faces with index "0" and
-! index "N", respectively. If values are prescribed, they are located at
-! the centers with index "1" and index "N", respectively.
-!
-! !USES:
-!
-! !INPUT PARAMETERS:
-!
-!  number of vertical layers
-!   integer,  intent(in)                :: N
-!
-!  time step (s)
-!   REALTYPE, intent(in)                :: dt
-!
-!  "implicitness" parameter
-!   REALTYPE, intent(in)                :: cnpar
-!
-!  1: non-negative concentration, 0: else
-!   integer, intent(in)                 :: posconc
-!
-!  layer thickness (m)
-!   REALTYPE, intent(in)                :: h(0:N)
-!
-!  type of upper BC
-!   integer,  intent(in)                :: Bcup
-!
-!  type of lower BC
-!   integer,  intent(in)                :: Bcdw
-!
-!  value of upper BC
-!   REALTYPE, intent(in)                :: Yup
-!
-!  value of lower BC
-!   REALTYPE, intent(in)                :: Ydw
-!
-!  diffusivity of Y
-!   REALTYPE, intent(in)                :: nuY(0:N)
-!
-!  linear source term
-!  (treated implicitly)
-!   REALTYPE, intent(in)                :: Lsour(0:N)
-!
-!  constant source term
-!  (treated explicitly)
-!   REALTYPE, intent(in)                :: Qsour(0:N)
-!
-!  relaxation time (s)
-!   REALTYPE, intent(in)                :: Taur(0:N)
-!
-!  observed value of Y
-!   REALTYPE, intent(in)                :: Yobs(0:N)
-!
-! !INPUT/OUTPUT PARAMETERS:
-!   REALTYPE, intent(inout)             :: Y(0:N)
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!
-! !LOCAL VARIABLES:
-!   integer                   :: i
-!   REALTYPE                  :: a,c,l
-!
-!-----------------------------------------------------------------------
-!EOC
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Vertical diffusion for cell-centred variables — translation of ``diff_center.F90``.
+
+Solves the one-dimensional diffusion equation with optional source terms and
+relaxation toward observed values:
+
+.. math::
+
+   \\frac{\\partial Y}{\\partial t}
+   = \\frac{\\partial}{\\partial z}\\!\\left(\\nu_Y \\frac{\\partial Y}{\\partial z}\\right)
+   - \\frac{Y - Y_{\\mathrm{obs}}}{\\tau_R}
+   + Y\\,L_{\\mathrm{sour}} + Q_{\\mathrm{sour}}
+
+The diffusivity :math:`\\nu_Y` is defined at cell faces.  The diffusion term,
+linear source :math:`L_{\\mathrm{sour}}`, and relaxation term are treated
+implicitly with Crank–Nicolson implicitness ``cnpar``; the constant source
+:math:`Q_{\\mathrm{sour}}` is explicit.  Relaxation is only applied where
+``tau_r[i] < 1e10``.
+
+Boundary conditions (``bc_up``, ``bc_down``) are Dirichlet (``Dirichlet = 0``,
+prescribes the value) or Neumann (``Neumann = 1``, prescribes the flux).
+Fluxes *entering* a boundary cell are positive by convention.  For
+non-negative concentrations (``posconc = 1``), negative Neumann boundary fluxes
+are linearised following Patankar (1980) to preserve positivity.
+
+The Thomas algorithm (:func:`~pygotm.util.tridiagonal.tridiagonal`) solves the
+resulting banded system.
+
+Original author: Lars Umlauf.
 """
 
 import numba
@@ -154,11 +68,12 @@ def diff_center(
     ru: np.ndarray,
     qu: np.ndarray,
 ) -> None:
-    r"""! !ROUTINE: Diffusion schemes --- grid centers
-    !
-    ! !DESCRIPTION:
-    ! This subroutine solves the one-dimensional diffusion equation including
-    ! source terms for all variables defined at the centers of the grid cells.
+    """Solve diffusion for a cell-centred variable using Crank–Nicolson.
+
+    Advances ``y`` at cell centres (indices 1 to nlev) one time step.  Solves
+    the one-dimensional diffusion equation including linear and explicit source
+    terms, optional relaxation toward observed values, and Dirichlet or Neumann
+    boundary conditions.
     """
 
     for i in range(2, nlev):

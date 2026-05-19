@@ -1,25 +1,12 @@
 # ruff: noqa: E501
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Wrapper for air-sea fluxes calculations \label{sec:airsea-fluxes}
-!
-! !INTERFACE:
-!   subroutine airsea_fluxes(method,sst,airt,u10,v10,precip, &
-!                            evap,taux,tauy,qe,qh)
-!
-! !DESCRIPTION:
-!  A wrapper around the different methods for calculating momentum
-!  fluxes and sensible and latent heat fluxes at the air-sea interface.
-!  To have a complete air-sea exchange also the short wave radiation
-!  and longwave-wave radiation must be calculated.
-!EOP
-!-----------------------------------------------------------------------
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Dispatcher for air-sea bulk flux calculations — translation of ``airsea_fluxes.F90``.
+
+Routes to either the Kondo (1975) or Fairall et al. (1996) bulk-flux routine
+based on the integer ``method`` selector.  Returns evaporation rate, wind
+stress components ``(taux, tauy)``, latent heat flux ``qe``, and sensible heat
+flux ``qh``.  Shortwave and longwave radiation are handled separately by their
+own modules.
 """
 
 from __future__ import annotations

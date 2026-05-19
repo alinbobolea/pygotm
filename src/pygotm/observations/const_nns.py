@@ -1,38 +1,16 @@
 """
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: const_NNS
-!
-! !INTERFACE:
-!   subroutine const_NNS(nlev,z,zi,S_top,T_const,NN,gravity,S)
-!
-! !DESCRIPTION:
-! This routine creates a vertical profile {\tt prof} with value
-! {\tt v1}
-!
-! !USES:
-!   use density, only: get_beta
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!   integer,  intent(in)                :: nlev
-!   REALTYPE, intent(in)                :: z(0:nlev)
-!   REALTYPE, intent(in)                :: zi(0:nlev)
-!   REALTYPE, intent(in)                :: S_top,T_const,NN
-!   REALTYPE, intent(in)                :: gravity
-!
-! !INOUT PARAMETERS:
-!   REALTYPE, intent(inout)             :: S(0:nlev)
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-! !LOCAL VARIABLES:
-!   integer                               :: i
-!    REALTYPE                             :: lbeta
-!EOP
-!-----------------------------------------------------------------------
+Constant-buoyancy-frequency salinity profile — translation of ``const_NNS.F90``.
+
+Constructs a salinity profile such that the squared buoyancy frequency
+:math:`N^2` equals a prescribed constant value ``NN`` [s⁻²] throughout the
+water column, given a uniform background temperature ``T_const``.  The haline
+contraction coefficient :math:`\\beta` is evaluated at each grid interface via
+:func:`~pygotm.util.density.get_beta`, and iterated once per level for
+accuracy.
+
+Used to initialise salinity when the GOTM YAML method is set to ``buoyancy``.
+
+Original author: Lars Umlauf.
 """
 
 from __future__ import annotations

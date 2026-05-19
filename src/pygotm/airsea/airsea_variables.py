@@ -1,39 +1,14 @@
-r"""
-!-----------------------------------------------------------------------
-!BOP
-!
-! !MODULE: airsea_variables\label{sec:airsea-variables}
-!
-! !INTERFACE:
-!   module airsea_variables
-!
-! !DESCRIPTION:
-!
-!  Here, number of public variables in the airsea module is declared.
-!
-! !USES:
-!   IMPLICIT NONE
-!
-!  default: all is private.
-!   private
-!
-! !PUBLIC DATA MEMBERS:
-!
-! !PUBLIC DEFINED PARAMETERS:
-!
-!   ! Albedo
-!
-!   ! Longwave radiation
-!
-! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding, Hans Burchard
-!
-!EOP
-!-----------------------------------------------------------------------
-!
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Shared constants and state for the air-sea module — translation of ``airsea_variables.F90``.
+
+Declares the public physical constants (``cpa``, ``cpw``, ``emiss``, ``bolz``,
+``kelvin``, ``const06``, ``rgas``, ``g``, ``rho_0``, ``kappa``), integer
+method selectors for albedo (``CONST``, ``PAYNE``, ``COGLEY``) and longwave
+radiation (``CLARK``, ``HASTENRATH_LAMB``, ``BIGNAMI``, ``BERLIAND_BERLIAND``,
+``JOSEY1``, ``JOSEY2``), and the mutable :class:`AirSeaState` object that
+carries intermediate humidity and vapour-pressure values between routines.
+
+Original authors: Karsten Bolding, Hans Burchard.
 """
 
 from __future__ import annotations

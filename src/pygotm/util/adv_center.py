@@ -1,66 +1,52 @@
-r"""!-----------------------------------------------------------------------
-!BOP
-!
-! !ROUTINE: Advection schemes --- grid centers\label{sec:advectionMean}
-!
-! !INTERFACE:
-!
-! !DESCRIPTION:
-!
-!     This subroutine solves a one-dimensional advection equation. There are two
-!     options, depending whether the advection should be conservative or not.
-!     Conservative advection has to be applied when settling of sediment or
-!     rising of phytoplankton is considered. In this case the advection is of
-!     the form
-!      \begin{equation}
-!       \label{Yadvection_cons}
-!        \partder{Y}{t} = - \partder{F}{z}
-!        \comma
-!      \end{equation}
-!     where $F=wY$ is the flux caused by the advective velocity, $w$.
-!
-!     Non-conservative advective transport has to be applied, when the water
-!     has a non-zero vertical velocity. In three-dimensional applications,
-!     this transport would be conservative, since vertical divergence would be
-!     compensated by horizontal convergence and vice versa. However, the
-!     key assumption of one-dimensional modelling is horizontal homogeneity,
-!     such that we indeed have to apply a vertically non-conservative method,
-!     which is of the form
-!      \begin{equation}
-!       \label{Yadvection_noncons}
-!        \partder{Y}{t} = - w\partder{Y}{z}
-!                       = - \left(\partder{F}{z} - Y\partder{w}{z} \right).
-!      \end{equation}
-!
-!     The discretized form of \eq{Yadvection_cons} is
-!      \begin{equation}
-!       \label{advDiscretized_cons}
-!       Y_i^{n+1} = Y_i^n
-!       - \dfrac{\Delta t}{h_i}
-!        \left( F^n_{i} - F^n_{i-1} \right)
-!       \comma
-!      \end{equation}
-!     where the integers $n$ and $i$ correspond to the present time and space
-!     level, respectively.
-!
-!     For the non-conservative form \eq{Yadvection_noncons},
-!     an extra term needs to be included:
-!      \begin{equation}
-!       \label{advDiscretized_noncons}
-!       Y_i^{n+1} = Y_i^n
-!       - \dfrac{\Delta t}{h_i}
-!        \left( F^n_{i} - F^n_{i-1} -Y_i^n \left(w_k-w_{k-1}  \right)\right).
-!      \end{equation}
-!
-!     See Pietrzak (1998) for the slope-limiter flux schemes.
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-!EOP
-!-----------------------------------------------------------------------
-! Copyright by the GOTM-team under the GNU Public License - www.gnu.org
-!-----------------------------------------------------------------------
+"""
+Vertical advection for cell-centred tracers — translation of ``adv_center.F90``.
+
+Solves the one-dimensional advection equation for variables defined at cell
+centres.  Two formulations are supported:
+
+* **Conservative** (``CONSERVATIVE = 1``):
+  :math:`\\partial_t Y = -\\partial_z(wY)`.
+  Used for settling or rising tracers (e.g. sediment, phytoplankton).
+* **Non-conservative** (``NON_CONSERVATIVE = 0``):
+  :math:`\\partial_t Y = -w\\partial_z Y`.
+  Used when the water column has a prescribed net vertical velocity.
+
+The advective face flux is reconstructed with one of seven slope-limiter
+schemes selected by the ``method`` integer:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 70
+
+   * - Constant
+     - Value
+     - Scheme
+   * - ``UPSTREAM``
+     - 1
+     - First-order upwind
+   * - ``P1``
+     - 2
+     - First-order upwind (P1 — same as UPSTREAM in this implementation)
+   * - ``P2``
+     - 3
+     - Second-order unbounded (may produce over/undershoots)
+   * - ``Superbee``
+     - 4
+     - Superbee limiter (Roe 1986)
+   * - ``MUSCL``
+     - 5
+     - MUSCL (van Leer 1979)
+   * - ``P2_PDM``
+     - 6
+     - P2 with Positive Definite Method limiter (Pietrzak 1998)
+   * - ``SPLMAX13``
+     - 13
+     - SPLMAX13 (Pietrzak 1998)
+
+Sub-stepping is applied when :math:`\\max(|w|\\Delta t / \\Delta z) > 1`, up to
+``_ITMAX = 100`` sub-steps per timestep.
+
+Original author: Lars Umlauf.
 """
 
 import numba

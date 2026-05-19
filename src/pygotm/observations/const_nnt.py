@@ -1,39 +1,17 @@
 """
-!-----------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: const_NNT
-!
-! !INTERFACE:
-!   subroutine const_NNT(nlev,z,zi,T_top,S_const,NN,gravity,T)
-!
-! !DESCRIPTION:
-! This routine creates a vertical profile {\tt prof} with value
-! {\tt v1}
-!
-! !USES:
-!   use density, only: get_alpha
-!   IMPLICIT NONE
-!
-! !INPUT PARAMETERS:
-!   integer,  intent(in)                :: nlev
-!   REALTYPE, intent(in)                :: z(0:nlev)
-!   REALTYPE, intent(in)                :: zi(0:nlev)
-!   REALTYPE, intent(in)                :: T_top,S_const,NN
-!   REALTYPE, intent(in)                :: gravity
-!
-! !INOUT PARAMETERS:
-!   REALTYPE, intent(inout)             :: T(0:nlev)
-!
-! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
-!
-! !LOCAL VARIABLES:
-!   integer                             :: i
-!   REALTYPE                           :: lalpha
-!
-!EOP
-!-----------------------------------------------------------------------
+Constant-buoyancy-frequency temperature profile — translation of ``const_NNT.F90``.
+
+Constructs a temperature profile such that the squared buoyancy frequency
+:math:`N^2` equals a prescribed constant value ``NN`` [s⁻²] throughout the
+water column, given a uniform background salinity ``S_const``.  The thermal
+expansion coefficient :math:`\\alpha` is evaluated at each grid interface via
+:func:`~pygotm.util.density.get_alpha`, and iterated once per level for
+accuracy.
+
+Used to initialise temperature when the GOTM YAML method is set to
+``buoyancy``.
+
+Original author: Lars Umlauf.
 """
 
 from __future__ import annotations
