@@ -26,7 +26,7 @@ are linearised following Patankar (1980) to preserve positivity.
 The Thomas algorithm (:func:`~pygotm.util.tridiagonal.tridiagonal`) solves the
 resulting banded system.
 
-Original author: Lars Umlauf.
+Original FORTRAN author: Lars Umlauf.
 """
 
 import numba

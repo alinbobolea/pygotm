@@ -11,7 +11,7 @@ accuracy.
 Used to initialise temperature when the GOTM YAML method is set to
 ``buoyancy``.
 
-Original author: Lars Umlauf.
+Original FORTRAN author: Lars Umlauf.
 """
 
 from __future__ import annotations

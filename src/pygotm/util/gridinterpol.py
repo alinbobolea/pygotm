@@ -8,7 +8,7 @@ Extrapolation clamps values: model levels above the topmost observation receive
 the topmost observed value; model levels below the deepest observation receive
 the deepest observed value.
 
-Original authors: Karsten Bolding, Hans Burchard.
+Original FORTRAN authors: Karsten Bolding, Hans Burchard.
 
 Public interface: :func:`gridinterpol`.
 """

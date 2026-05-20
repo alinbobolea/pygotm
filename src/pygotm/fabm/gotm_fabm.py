@@ -24,7 +24,7 @@ Public interface: :func:`configure_gotm_fabm`, :func:`gotm_fabm_create_model`,
 :func:`save_diagnostics`, :func:`calendar_date_interface`,
 :class:`FabmState`, :class:`FabmObservation`.
 
-Original authors: Jorn Bruggeman.
+Original FORTRAN authors: Jorn Bruggeman.
 """
 
 from collections.abc import Callable

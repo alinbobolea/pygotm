@@ -28,7 +28,7 @@ r"""
 !   REALTYPE, intent(in)            :: c1,c2,Ri
 !
 ! !REVISION HISTORY:
-!  Original author(s): Hans Burchard, Lars Umlauf
+!  Original FORTRAN author(s): Hans Burchard, Lars Umlauf
 !
 !EOP
 !-----------------------------------------------------------------------

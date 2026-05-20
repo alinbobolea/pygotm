@@ -20,7 +20,7 @@
 !   type (type_field_manager), public, target :: fm
 !
 ! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding & Jorn Bruggeman
+!  Original FORTRAN author(s): Karsten Bolding & Jorn Bruggeman
 !
 !EOP
 !-----------------------------------------------------------------------

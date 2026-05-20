@@ -8,7 +8,7 @@ radiation (``CLARK``, ``HASTENRATH_LAMB``, ``BIGNAMI``, ``BERLIAND_BERLIAND``,
 ``JOSEY1``, ``JOSEY2``), and the mutable :class:`AirSeaState` object that
 carries intermediate humidity and vapour-pressure values between routines.
 
-Original authors: Karsten Bolding, Hans Burchard.
+Original FORTRAN authors: Karsten Bolding, Hans Burchard.
 """
 
 from __future__ import annotations

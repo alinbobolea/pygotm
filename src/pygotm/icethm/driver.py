@@ -30,6 +30,10 @@ def init_ice(params: IceParams, *, T_air_init: float, S_sfc_init: float) -> IceS
         state.Tice_surface[0] = float(T_air_init)
     elif params.model == IceModelEnum.BASAL_MELT:
         state.Tice_surface[0] = 0.0
+    elif params.model == IceModelEnum.SIMPLE:
+        # Simple limiter has no prognostic ice surface temperature; match
+        # Fortran reference which leaves Tice_surface at its allocated zero.
+        state.Tice_surface[0] = 0.0
     else:
         state.Tice_surface[0] = state.Tf[0]
     if state.Hice[0] > 0.0:

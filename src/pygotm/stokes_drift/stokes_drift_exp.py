@@ -9,7 +9,7 @@ vertical profile.  The profile is averaged analytically over each grid cell.
 Provides a single-column Numba kernel :func:`stokes_drift_exp` and a
 parallel batch variant :func:`stokes_drift_exp_batch` for ensemble use.
 
-Original authors: Qing Li.
+Original FORTRAN authors: Qing Li.
 """
 
 import math

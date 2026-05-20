@@ -19,7 +19,7 @@ where :math:`\\theta_0 = 2\\pi\\,d / 365.25`.  The hour angle accounts for
 the observer's longitude.  :math:`\\cos\\zeta` is clamped to zero below the
 horizon before the arc-cosine is taken.
 
-Original author: Karsten Bolding.
+Original FORTRAN author: Karsten Bolding.
 """
 
 from __future__ import annotations

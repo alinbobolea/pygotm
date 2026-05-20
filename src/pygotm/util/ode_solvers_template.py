@@ -25,7 +25,7 @@ differ from :mod:`~pygotm.util.ode_solvers`:
 All other solvers (Euler, Patankar, Modified Patankar, EMP — codes 1, 4–11)
 are re-exported unchanged from :mod:`~pygotm.util.ode_solvers`.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 """
 
 from __future__ import annotations

@@ -20,7 +20,7 @@ random-walk variance ``RND_VAR = 1/3``.  Semi-implicit viscosity correction
 (``visc_corr``) is disabled, matching the Fortran default.  Reflective
 boundary conditions are applied at the surface and bottom.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 
 Public interface: :func:`lagrange`, :data:`VISC_BACK`, :data:`RND_VAR`.
 """

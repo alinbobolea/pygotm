@@ -20,7 +20,7 @@ the clear-sky total radiation, :math:`C` is fractional cloud cover, and
 atmospheric transmittance :math:`\\tau = 0.7`, ozone absorption
 :math:`A_{\\mathrm{oz}} = 0.09`.
 
-Original authors: Karsten Bolding, Hans Burchard.
+Original FORTRAN authors: Karsten Bolding, Hans Burchard.
 """
 
 from __future__ import annotations

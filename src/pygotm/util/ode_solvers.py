@@ -69,7 +69,7 @@ here.  EMP schemes (10–11) — developed by Bruggeman et al. (2005) — extend
 Modified Patankar to full stoichiometric conservation with multiple limiting
 nutrients.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 
 Public interface: :func:`ode_solver`, :class:`RhsCallback`,
 :class:`PpddCallback`.
@@ -168,7 +168,7 @@ def findp_bisection(
     applying 20 bisection iterations.  It has been proved that there exists
     exactly one ``p`` for which the above is true (Bruggeman et al. 2005).
 
-    Original author: Jorn Bruggeman.
+    Original FORTRAN author: Jorn Bruggeman.
 
     Parameters
     ----------

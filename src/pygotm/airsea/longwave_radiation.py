@@ -18,7 +18,7 @@ Hastenrath–Lamb, and Berliand–Berliand methods.  The vapour pressure ``ea``
 (or specific humidity ``qa``) must be set in the ``AirSeaState`` object by a
 prior call to :func:`~pygotm.airsea.humidity.humidity`.
 
-Original authors: Adolf Stips, Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Adolf Stips, Hans Burchard, Karsten Bolding.
 """
 
 from __future__ import annotations

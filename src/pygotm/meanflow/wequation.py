@@ -28,7 +28,7 @@ r"""
 !   REALTYPE, intent(in)                :: dt
 !
 ! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
+!  Original FORTRAN author(s): Hans Burchard & Karsten Bolding
 !
 !EOP
 !

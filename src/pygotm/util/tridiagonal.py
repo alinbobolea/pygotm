@@ -14,7 +14,7 @@ Public interface: :func:`init_tridiagonal`, :func:`tridiagonal`,
 :func:`clean_tridiagonal`, :class:`TridiagonalWorkspace`,
 :class:`TridiagonalBatchWorkspace`.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 """
 
 import numba

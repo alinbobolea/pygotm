@@ -109,7 +109,7 @@
 !   REALTYPE, public          :: runtimeu, runtimev
 !
 ! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding & Hans Burchard
+!  Original FORTRAN author(s): Karsten Bolding & Hans Burchard
 !
 !EOP
 !-----------------------------------------------------------------------
@@ -312,7 +312,7 @@ def init_meanflow(
     !  to the `meanflow' component of GOTM.
     !
     ! !REVISION HISTORY:
-    !  Original author(s): Karsten Bolding & Hans Burchard
+    !  Original FORTRAN author(s): Karsten Bolding & Hans Burchard
 
     Parameters
     ----------
@@ -376,7 +376,7 @@ def post_init_meanflow(
     !   REALTYPE, parameter  :: pi=3.141592654
     !
     ! !REVISION HISTORY:
-    !  Original author(s): Karsten Bolding & Hans Burchard
+    !  Original FORTRAN author(s): Karsten Bolding & Hans Burchard
 
     Parameters
     ----------
@@ -495,7 +495,7 @@ def clean_meanflow(state: MeanflowState) -> None:
     !  De-allocates all memory allocated via init_meanflow()
     !
     ! !REVISION HISTORY:
-    !  Original author(s): Karsten Bolding & Hans Burchard
+    !  Original FORTRAN author(s): Karsten Bolding & Hans Burchard
     """
     state.ga = None
     state.z = None

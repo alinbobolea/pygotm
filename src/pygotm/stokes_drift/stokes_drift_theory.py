@@ -15,7 +15,7 @@ A parallel batch variant :func:`stokes_drift_theory_batch` is also provided
 for ensemble use.  The constant :data:`US0_TO_U10` = 0.0162 is the ratio of
 surface Stokes drift to 10-m wind speed.
 
-Original authors: Qing Li; re-added to GOTM by Brandon Reichl.
+Original FORTRAN authors: Qing Li; re-added to GOTM by Brandon Reichl.
 """
 
 import math

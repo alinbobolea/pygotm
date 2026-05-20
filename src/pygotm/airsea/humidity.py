@@ -25,7 +25,7 @@ key ``hum_method``):
 
 Temperature inputs > 100 are treated as Kelvin; values ≤ 100 as Celsius.
 
-Original authors: Adolf Stips, Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Adolf Stips, Hans Burchard, Karsten Bolding.
 """
 
 from __future__ import annotations

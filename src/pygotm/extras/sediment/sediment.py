@@ -27,7 +27,7 @@ Public interface: :func:`init_sediment`, :func:`do_sediment`,
 :func:`settling_velocity_zanke`, :func:`save_sediment`, :func:`end_sediment`,
 :class:`SedimentState`, :data:`NoFlux`, :data:`SmithMcLean`.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 """
 
 from dataclasses import dataclass

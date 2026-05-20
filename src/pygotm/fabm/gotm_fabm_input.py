@@ -17,7 +17,7 @@ Public interface: :func:`configure_gotm_fabm_input`, :func:`init_gotm_fabm_input
 :func:`fabm_input_create`, :func:`append_input`,
 :class:`FabmInputState`, :class:`InputVariable`.
 
-Original authors: Jorn Bruggeman.
+Original FORTRAN authors: Jorn Bruggeman.
 """
 
 from dataclasses import dataclass

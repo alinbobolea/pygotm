@@ -11,7 +11,7 @@ Creates a piecewise-linear vertical profile ``prof`` with:
 Used to initialise temperature or salinity when the GOTM YAML method is set to
 ``two_layer``.
 
-Original author: Karsten Bolding.
+Original FORTRAN author: Karsten Bolding.
 """
 
 from __future__ import annotations

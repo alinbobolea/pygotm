@@ -11,7 +11,7 @@ Three ``timefmt`` modes control how start/stop/MaxN are resolved:
   total duration divided by ``timestep``.
 * ``3`` — ``start`` string and ``MaxN`` given; ``stop`` is computed.
 
-Original authors: Karsten Bolding, Hans Burchard.
+Original FORTRAN authors: Karsten Bolding, Hans Burchard.
 
 Public interface: :class:`GotmTime`, :func:`calendar_date`, :func:`julian_day`,
 :func:`time_diff`, :func:`sunrise_sunset`, :func:`in_time_interval`,

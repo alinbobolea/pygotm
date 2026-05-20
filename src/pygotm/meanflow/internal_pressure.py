@@ -166,7 +166,7 @@ r"""
 !   integer, intent(in)                 :: nlev
 !
 ! !REVISION HISTORY:
-!  Original author(s): Hans Burchard & Karsten Bolding
+!  Original FORTRAN author(s): Hans Burchard & Karsten Bolding
 !
 !EOP
 !

@@ -19,7 +19,7 @@ r"""
    integer, intent(in)                 :: unit
 !
 ! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding & Hans Burchard
+!  Original FORTRAN author(s): Karsten Bolding & Hans Burchard
 !
 !EOP
 !-------------------------------------------------------------------------

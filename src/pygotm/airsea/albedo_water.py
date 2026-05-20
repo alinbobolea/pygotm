@@ -12,7 +12,7 @@ and year-day.  Three methods are available, selected by an integer constant:
 * ``COGLEY`` (2) — Cogley (1979) table with bilinear interpolation in zenith
   angle (10° bins) and month-of-year (12 monthly midpoints).
 
-Original authors: Karsten Bolding, Hans Burchard.
+Original FORTRAN authors: Karsten Bolding, Hans Burchard.
 """
 
 from __future__ import annotations

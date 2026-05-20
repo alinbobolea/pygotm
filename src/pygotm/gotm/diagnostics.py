@@ -29,7 +29,7 @@
 !   REALTYPE                            :: Ri_crit = 0.5
 !
 ! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding, Jorn Bruggeman and Hans Burchard
+!  Original FORTRAN author(s): Karsten Bolding, Jorn Bruggeman and Hans Burchard
 !
 !EOP
 !-----------------------------------------------------------------------

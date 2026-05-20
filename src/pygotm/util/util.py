@@ -11,7 +11,7 @@ in a subroutine for advection methods tells you more than reading only
 
     if (method == 1) then ...
 
-Original author(s): Lars Umlauf
+Original FORTRAN author(s): Lars Umlauf
 
 Copyright by the GOTM-team under the GNU Public License - www.gnu.org
 """

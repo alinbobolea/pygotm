@@ -107,7 +107,7 @@ r"""
 !   REALTYPE, intent(in)                :: NN(0:nlev),SS(0:nlev)
 !
 ! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
+!  Original FORTRAN author(s): Lars Umlauf
 !                     (re-write after first version of
 !                      H. Burchard and K. Bolding
 !EOP

@@ -10,7 +10,7 @@ r"""
 ! {\tt time\_loop()} to manage the time-stepping of all fields.
 !
 ! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding & Hans Burchard
+!  Original FORTRAN author(s): Karsten Bolding & Hans Burchard
 !
 !EOP
 !-----------------------------------------------------------------------
@@ -885,6 +885,12 @@ def _apply_initial_profiles(run: GotmRun) -> None:
     z = meanflow.z[1 : run.nlev + 1]
     pressure = -z
 
+    # Match Fortran gotm.F90 ordering: set raw Sp/S (or Ti/Tp/T) from the
+    # profile inputs, capture Sobs/Tobs from S/T while still un-converted, and
+    # only then perform the practical↔absolute conversions. For
+    # ``initial_salinity_type == 1`` (practical), this means Sobs starts at 0
+    # for one timestep, matching the Fortran reference behaviour. Without this,
+    # pyGOTM and Fortran disagree on the first salinity relaxation pull.
     if observations.initial_salinity_type == 1:
         meanflow.Sp[1 : run.nlev + 1] = observations.sprof_input.data[1 : run.nlev + 1]
     else:

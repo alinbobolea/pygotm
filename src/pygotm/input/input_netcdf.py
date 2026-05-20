@@ -12,7 +12,7 @@ and :func:`~pygotm.util.time.write_time_string` (Fortran:
 Public interface: :func:`open_restart`, :func:`close_restart`,
 :func:`check_restart_time`, :func:`read_restart_data`.
 
-Original authors: Karsten Bolding, Jorn Bruggeman.
+Original FORTRAN authors: Karsten Bolding, Jorn Bruggeman.
 """
 
 from __future__ import annotations

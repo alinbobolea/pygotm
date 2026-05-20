@@ -142,7 +142,7 @@ r"""
 !        the next version.
 !
 ! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding, Hans Burchard,
+!  Original FORTRAN author(s): Karsten Bolding, Hans Burchard,
 !                      Manuel Ruiz Villarreal,
 !                      Lars Umlauf
 !
@@ -496,7 +496,7 @@ class TurbulenceState:
         self.klimiw: float = 1.0e-6
         self.rich_cr: float = 0.7
         self.numiw: float = 1.0e-4
-        self.nuhiw: float = 5.0e-5
+        self.nuhiw: float = 1.0e-5
         self.numshear: float = 5.0e-3
 
         # Lazily allocated NumPy workspaces reused across time steps.
@@ -526,7 +526,7 @@ def init_turbulence(
     ! function does the inverse.
     !
     ! !REVISION HISTORY:
-    !  Original author(s): Karsten Bolding, Hans Burchard,
+    !  Original FORTRAN author(s): Karsten Bolding, Hans Burchard,
     !                      Manuel Ruiz Villarreal,
     !                      Lars Umlauf
 
@@ -574,7 +574,7 @@ def post_init_turbulence(state: TurbulenceState, nlev: int) -> None:
     !   integer, intent(in)        :: nlev
     !
     ! !REVISION HISTORY:
-    !  Original author(s): Karsten Bolding, Hans Burchard,
+    !  Original FORTRAN author(s): Karsten Bolding, Hans Burchard,
     !                      Manuel Ruiz Villarreal,
     !                      Lars Umlauf
     """
@@ -2817,7 +2817,7 @@ def clean_turbulence(state: TurbulenceState) -> None:
     !  De-allocate all memory allocated in init\_turbulence().
     !
     ! !REVISION HISTORY:
-    !  Original author(s): Karsten Bolding
+    !  Original FORTRAN author(s): Karsten Bolding
     """
     for name in _ARRAY_FIELD_NAMES:
         setattr(state, name, None)

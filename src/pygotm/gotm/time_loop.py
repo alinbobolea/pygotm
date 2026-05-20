@@ -1123,7 +1123,26 @@ def time_loop_compiled(
     hydro_rad: np.ndarray,
     hydro_taub: np.ndarray,
 ) -> int:
-    """Run profile-forced cases through the compiled timestep loop."""
+    """Run profile-forced cases through the compiled timestep loop.
+
+    Fortran-parity notes (seagrass validation case):
+
+    **cmue1/cmue2 pre-population removed** — an earlier version initialised
+    ``cmue1``/``cmue2`` across all levels before the step-0 NetCDF write by
+    re-running the stability-function kernel (Munk-Anderson, Schumann-Gerz, or
+    Constant) for ``turb_method == 2``.  This was incorrect: Fortran GOTM's
+    ``init_turbulence`` seeds only level 1 via the ``compute_cpsi3`` probe; all
+    other levels are zero in the reference NetCDF at t=0.  Pre-populating
+    overwrote those zeros with ``cm0_fix``-derived values and broke parity for
+    ``cmue1``/``cmue2``.  The block has been removed; the stability kernels run
+    at the start of every proper timestep, which is correct.
+
+    **kb passed to step_turbulence_first_order_single** — previously the
+    ``kb`` (buoyancy variance) array was passed as a ``tke`` placeholder in
+    the first-order path.  Because ``alpha_mnb`` reads ``kb`` to compute the
+    ``at`` stability parameter, this produced a wrong ``at`` value whenever
+    ``kb > kb_min``.  ``kb`` is now forwarded correctly as a read-only input.
+    """
 
     basal_melt_cache_version = 4
     if basal_melt_cache_version < 0:
@@ -1136,25 +1155,11 @@ def time_loop_compiled(
         idpdx[k] = 0.0
         idpdy[k] = 0.0
 
-    if turb_method == 2:  # first_order — init stability functions before step-0 output
-        for k in range(nlev + 1):
-            cmue3[k] = 0.0
-        if stab_method == 1:  # Constant
-            for k in range(nlev + 1):
-                cmue1[k] = cm0
-                cmue2[k] = cm0 / prandtl0_fix
-        elif stab_method == 2:  # Munk_Anderson
-            _step_cmue_ma_single(nlev, cm0, prandtl0_fix, as_, an, cmue1, cmue2)
-            cmue1[0] = cmue1[1]
-            cmue1[nlev] = cmue1[nlev - 1]
-            cmue2[0] = cmue2[1]
-            cmue2[nlev] = cmue2[nlev - 1]
-        else:  # Schumann_Gerz
-            _step_cmue_sg_single(nlev, cm0, prandtl0_fix, as_, an, cmue1, cmue2)
-            cmue1[0] = cmue1[1]
-            cmue1[nlev] = cmue1[nlev - 1]
-            cmue2[0] = cmue2[1]
-            cmue2[nlev] = cmue2[nlev - 1]
+    # Fortran parity: do NOT pre-populate cmue1/cmue2 at every level before the
+    # step-0 output. ``init_turbulence`` only seeds level 1 via the
+    # ``compute_cpsi3`` probe; all other levels remain zero in the reference
+    # NetCDF at t=0. Re-running the Munk-Anderson kernel here would overwrite
+    # those zeros with cm0_fix and break parity for cmue1/cmue2.
 
     int_precip = init_int_precip
     int_evap = init_int_evap
@@ -2455,6 +2460,7 @@ def time_loop_compiled(
                 uu,
                 vv,
                 ww,
+                kb,
                 u_taus[0],
                 u_taub[0],
                 z0s[0],
@@ -2756,11 +2762,11 @@ def _populate_simple_ice_reference_scalars(
 
     top = params.nlev
     count = min(written, output.nout)
+    # Match Fortran: Tf for the simple ice limiter is initialised once from the
+    # initial surface salinity and is then held constant for the run.
+    tf_constant = _simple_freezing_temperature(float(output.S[0, top]))
     for slot in range(count):
-        salinity = (
-            output.Sp[slot, top] if output.Sp[slot, top] != 0.0 else output.S[slot, top]
-        )
-        tf[slot] = _simple_freezing_temperature(float(salinity))
+        tf[slot] = tf_constant
 
 
 def _populate_observation_reference_profiles(
@@ -4600,6 +4606,7 @@ def step_turbulence_first_order_single(
     uu: np.ndarray,
     vv: np.ndarray,
     ww: np.ndarray,
+    kb: np.ndarray,
     u_taus: float,
     u_taub: float,
     z0s: float,
@@ -4619,7 +4626,9 @@ def step_turbulence_first_order_single(
 
     Equivalent to GOTM turb_method=first_order. Uses algebraic stability
     functions (cmue1, cmue2) rather than second-order moment equations.
-    No kb/epsb algebraic steps; no second alpha-MNB call.
+    No kb/epsb algebraic steps; no second alpha-MNB call. ``kb`` is read-only
+    here (initialised to ``kb_min`` and never updated in first_order mode), but
+    it is required so that ``alpha_mnb`` produces the correct ``at`` parameter.
     """
     step_production_single(
         nlev,
@@ -4648,13 +4657,13 @@ def step_turbulence_first_order_single(
         0,
         tke,
         eps,
-        tke,  # kb placeholder — first_order doesn't track kb
+        kb,
         NN,
         SS,
         SSCSTK,  # unused (has_sscstk=0)
         SSSTK,  # unused (has_ssstk=0)
-        as_,  # correct output array
-        an,  # correct output array
+        as_,
+        an,
         at,
         av,
         aw,

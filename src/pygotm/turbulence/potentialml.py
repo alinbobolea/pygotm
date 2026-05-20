@@ -64,7 +64,7 @@ r"""
    REALTYPE, intent(in)                :: NN(0:nlev)
 !
 ! !REVISION HISTORY:
-!  Original author(s):  Manuel Ruiz Villarreal, Hans Burchard
+!  Original FORTRAN author(s):  Manuel Ruiz Villarreal, Hans Burchard
 !
 !EOP
 !-------------------------------------------------------------------------

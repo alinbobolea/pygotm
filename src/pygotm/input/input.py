@@ -23,7 +23,7 @@ Public interface: :func:`init_input`, :func:`do_input`, :func:`close_input`,
 :func:`register_profile_input`, :func:`read_obs`, :func:`read_profiles`,
 :class:`InputManager`, :class:`ScalarInput`, :class:`ProfileInput`.
 
-Original authors: Jorn Bruggeman.
+Original FORTRAN authors: Jorn Bruggeman.
 """
 
 from __future__ import annotations

@@ -26,7 +26,7 @@ Public interface: :func:`init_density`, :func:`do_density`, :func:`get_rho`,
 :func:`get_alpha`, :func:`get_beta`, :func:`clean_density`,
 :class:`DensityState`.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 """
 
 from __future__ import annotations

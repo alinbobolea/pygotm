@@ -46,7 +46,7 @@ schemes selected by the ``method`` integer:
 Sub-stepping is applied when :math:`\\max(|w|\\Delta t / \\Delta z) > 1`, up to
 ``_ITMAX = 100`` sub-steps per timestep.
 
-Original author: Lars Umlauf.
+Original FORTRAN author: Lars Umlauf.
 """
 
 import numba

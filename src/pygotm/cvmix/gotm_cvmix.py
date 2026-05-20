@@ -25,7 +25,7 @@ Public interface: :func:`init_cvmix`, :func:`init_cvmix_yaml`,
 :func:`surface_layer`, :func:`bottom_layer`, :func:`interior_nonconv`,
 :func:`interior_conv`, :class:`CVMixState`.
 
-Original authors: Lars Umlauf; adapted for CVMix by Qing Li.
+Original FORTRAN authors: Lars Umlauf; adapted for CVMix by Qing Li.
 """
 
 from dataclasses import dataclass

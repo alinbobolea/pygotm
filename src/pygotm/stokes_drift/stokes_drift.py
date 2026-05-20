@@ -24,7 +24,7 @@ Public interface: :func:`init_stokes_drift`, :func:`init_stokes_drift_yaml`,
 :func:`post_init_stokes_drift`, :func:`do_stokes_drift`,
 :func:`langmuir_number`, :func:`clean_stokes_drift`, :class:`StokesDriftState`.
 
-Original authors: Qing Li.
+Original FORTRAN authors: Qing Li.
 """
 
 import math

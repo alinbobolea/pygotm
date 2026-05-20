@@ -27,7 +27,7 @@ r"""
    REALTYPE, intent(in)                :: eta
 !
 ! !REVISION HISTORY:
-!  Original author(s): Lars Umlauf
+!  Original FORTRAN author(s): Lars Umlauf
 !
 !EOP
 !-----------------------------------------------------------------------

@@ -12,7 +12,7 @@ Public interface: :func:`init_seagrass`, :func:`post_init_seagrass`,
 :func:`do_seagrass`, :func:`end_seagrass`, :class:`SeagrassState`,
 :data:`MISS_VALUE`.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 """
 
 from dataclasses import dataclass
@@ -60,12 +60,26 @@ def init_seagrass(
     grassfile: str = "seagrass.dat",
     alpha: float = 0.0,
 ) -> None:
-    """Read seagrass configuration from a YAML-equivalent mapping."""
+    """Read seagrass configuration from a YAML-equivalent mapping.
+
+    Fortran-parity note: ``seagrass.F90``'s ``init_seagrass`` contains a long-
+    standing bug — the activation check uses an uninitialized local variable
+    ``i`` instead of the freshly read ``method``::
+
+        if (i .ne. 0) seagrass_calc = .true.
+
+    Under typical gfortran builds the stack value of ``i`` is zero, so
+    ``seagrass_calc`` is never enabled regardless of YAML configuration, and the
+    seagrass kernel becomes a no-op. The reference NetCDFs were produced with
+    that behaviour, so for bit-for-bit parity we mirror it here by leaving
+    ``state.seagrass_calc`` at its initial value (``False``).
+    """
 
     state.method = int(method)
     state.grassfile = grassfile
     state.alpha = float(alpha)
-    state.seagrass_calc = state.method != 0
+    # Fortran parity: keep seagrass_calc False to mirror seagrass.F90's bug;
+    # see docstring above. Do not set ``state.seagrass_calc = state.method != 0``.
 
 
 def _read_grass_file(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

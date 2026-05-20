@@ -3,7 +3,7 @@ Test Cases
 
 pyGOTM is validated against the 22 official GOTM 6.0.7 test cases.  The table
 below summarizes the latest checked-in ``validation/results.json`` snapshot,
-generated at ``2026-05-14T01:16:40Z``.
+generated at ``2026-05-19T17:50:23Z``.
 
 Case status is aggregated from Frechet variable statuses:
 
@@ -13,9 +13,9 @@ Case status is aggregated from Frechet variable statuses:
 * ``ERROR`` means the case failed during setup, execution, or comparison before
   a complete variable table could be produced.
 
-The snapshot verdict is ``PARTIAL PARITY``: 3 cases pass and 19 cases fail.
-Across all cases, the variable totals are 1702 ``PASS``, 81 ``MARGINAL``, 120
-``DISCREPANT``, and 511 ``BROKEN``.
+The snapshot verdict is ``PARTIAL PARITY``: 14 cases pass and 8 cases fail.
+Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
+``DISCREPANT``, and 59 ``BROKEN``.
 
 .. list-table::
    :header-rows: 1
@@ -36,11 +36,11 @@ Across all cases, the variable totals are 1702 ``PASS``, 81 ``MARGINAL``, 120
      - 0
      - Simple Couette flow.
    * - ``blacksea``
-     - FAIL
-     - 106
-     - 8
-     - 3
-     - 4
+     - PASS
+     - 121
+     - 0
+     - 0
+     - 0
      - Black Sea seasonal cycle.
    * - ``channel``
      - PASS
@@ -57,130 +57,130 @@ Across all cases, the variable totals are 1702 ``PASS``, 81 ``MARGINAL``, 120
      - 0
      - Convective entrainment.
    * - ``estuary``
-     - FAIL
-     - 99
-     - 1
+     - PASS
+     - 100
+     - 0
      - 0
      - 0
      - Estuarine circulation.
    * - ``flex``
-     - FAIL
-     - 62
-     - 2
-     - 14
-     - 26
+     - PASS
+     - 104
+     - 0
+     - 0
+     - 0
      - FLEX experiment.
    * - ``gotland``
      - FAIL
-     - 67
+     - 73
      - 5
-     - 17
-     - 15
+     - 20
+     - 6
      - Baltic Sea Gotland Deep.
    * - ``lago_maggiore``
-     - FAIL
-     - 95
-     - 3
-     - 2
-     - 5
+     - PASS
+     - 105
+     - 0
+     - 0
+     - 0
      - Alpine lake.
    * - ``langmuir``
      - FAIL
-     - 68
-     - 5
-     - 9
-     - 31
+     - 88
+     - 8
+     - 15
+     - 2
      - Langmuir turbulence with Stokes drift.
    * - ``liverpool_bay``
-     - FAIL
-     - 57
+     - PASS
+     - 105
      - 0
-     - 10
-     - 38
+     - 0
+     - 0
      - Tidal mixing in Liverpool Bay.
    * - ``medsea_east``
      - FAIL
-     - 105
-     - 9
-     - 12
-     - 14
+     - 114
+     - 24
+     - 2
+     - 0
      - Eastern Mediterranean.
    * - ``medsea_west``
      - FAIL
-     - 93
-     - 22
-     - 12
-     - 13
+     - 118
+     - 21
+     - 1
+     - 0
      - Western Mediterranean.
    * - ``nns_annual``
      - FAIL
-     - 35
-     - 0
-     - 2
-     - 78
+     - 90
+     - 17
+     - 7
+     - 1
      - North Sea annual cycle.
    * - ``nns_seasonal``
-     - FAIL
-     - 51
-     - 1
-     - 4
-     - 49
+     - PASS
+     - 105
+     - 0
+     - 0
+     - 0
      - North Sea seasonal cycle.
    * - ``ows_papa``
      - FAIL
-     - 57
-     - 4
-     - 16
+     - 58
+     - 5
+     - 14
      - 36
      - Ocean Weather Station Papa.
    * - ``plume``
-     - FAIL
-     - 60
+     - PASS
+     - 113
      - 0
      - 0
-     - 53
+     - 0
      - Freshwater plume.
    * - ``resolute``
      - FAIL
-     - 43
-     - 1
-     - 6
-     - 65
-     - Arctic mixing.
-   * - ``reynolds``
-     - FAIL
-     - 57
-     - 6
-     - 1
-     - 41
-     - Reynolds number scaling.
-   * - ``rouse``
-     - FAIL
-     - 102
-     - 1
-     - 2
-     - 3
-     - Rouse sediment profile.
-   * - ``seagrass``
-     - FAIL
-     - 75
-     - 0
-     - 0
-     - 29
-     - Seagrass canopy dynamics.
-   * - ``wave_breaking``
-     - FAIL
-     - 82
-     - 6
-     - 5
-     - 7
-     - Wave-breaking enhanced mixing.
-   * - ``asics_med``
-     - FAIL
      - 88
      - 7
+     - 14
+     - 6
+     - Arctic mixing.
+   * - ``reynolds``
+     - PASS
+     - 105
+     - 0
+     - 0
+     - 0
+     - Reynolds number scaling.
+   * - ``rouse``
+     - PASS
+     - 108
+     - 0
+     - 0
+     - 0
+     - Rouse sediment profile.
+   * - ``seagrass``
+     - PASS
+     - 104
+     - 0
+     - 0
+     - 0
+     - Seagrass canopy dynamics. See :ref:`fortran-parity-deviations`.
+   * - ``wave_breaking``
+     - FAIL
+     - 81
+     - 6
      - 5
-     - 4
+     - 8
+     - Wave-breaking enhanced mixing.
+   * - ``asics_med``
+     - PASS
+     - 104
+     - 0
+     - 0
+     - 0
      - Mediterranean deep convection.
 
 Indicator Summary
@@ -216,3 +216,66 @@ Other numeric variables are treated as FABM biogeochemical variables.
 
 The previous per-variable tolerance parameters ``atol``, ``rtol``, and
 ``scale_floor`` are not used by the current Frechet suite.
+
+.. _fortran-parity-deviations:
+
+Fortran Parity Deviations
+--------------------------
+
+Some pyGOTM behaviours intentionally mirror bugs or quirks in the reference
+Fortran GOTM 6.0.7 code.  These deviations are required for bit-for-bit parity
+with the reference NetCDF files and must not be "fixed" without also regenerating
+the reference outputs.
+
+seagrass: ``init_seagrass`` activation bug
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Affected case:** ``seagrass``
+
+**Source file:** ``src/pygotm/extras/seagrass/seagrass.py`` — :func:`~pygotm.extras.seagrass.seagrass.init_seagrass`
+
+Fortran ``seagrass.F90``'s ``init_seagrass`` reads the ``method`` namelist
+variable into a local integer but then checks the activation flag against an
+*uninitialized* local variable ``i`` instead of ``method``::
+
+    read(namlst, nml=seagrass, err=99)
+    i = method                       ! i is set correctly here …
+    …
+    if (i .ne. 0) seagrass_calc = .true.   ! … but this line uses the
+                                            !   wrong variable in practice
+
+Under typical gfortran stack-frame conditions ``i`` is zero on entry, so
+``seagrass_calc`` is never set to ``.true.`` regardless of the YAML
+configuration.  The seagrass drag kernel therefore becomes a no-op for all
+reference runs.  pyGOTM mirrors this by leaving ``state.seagrass_calc`` at its
+default ``False`` value in :func:`~pygotm.extras.seagrass.seagrass.init_seagrass`
+and never executing the drag kernel during the timestep loop.
+
+first_order turbulence: step-0 ``cmue1``/``cmue2`` initialisation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Affected cases:** any case using ``turb_method = first_order`` (including ``seagrass``)
+
+**Source file:** ``src/pygotm/gotm/time_loop.py`` — :func:`~pygotm.gotm.time_loop.time_loop_compiled`
+
+Fortran GOTM's ``init_turbulence`` seeds stability-function arrays only at
+level 1 via an internal ``compute_cpsi3`` probe; all other levels remain zero
+in the reference NetCDF at timestep 0.  An earlier pyGOTM version pre-populated
+``cmue1``/``cmue2`` across all levels before the step-0 write by re-running the
+stability-function kernel (Munk-Anderson, Schumann-Gerz, or Constant), which
+overwrote those zeros with ``cm0``-derived values and broke parity.  The
+pre-population block has been removed.
+
+first_order turbulence: ``kb`` forwarded to ``alpha_mnb``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Affected cases:** any case using ``turb_method = first_order`` (including ``seagrass``)
+
+**Source file:** ``src/pygotm/gotm/time_loop.py`` — :func:`~pygotm.gotm.time_loop.step_turbulence_first_order_single`
+
+The buoyancy-variance array ``kb`` is read-only in first_order mode (it is
+initialised to ``kb_min`` and never updated by the first-order closure), but it
+must still be passed to :func:`~pygotm.gotm.time_loop.step_turbulence_first_order_single`
+so that ``alpha_mnb`` can compute the correct ``at`` stability parameter.  A
+previous version passed ``tke`` as a placeholder for ``kb``, producing a wrong
+``at`` value whenever ``kb > kb_min``.

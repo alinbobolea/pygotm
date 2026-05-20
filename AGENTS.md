@@ -61,10 +61,42 @@ conda env update -f pygotm-conda-env.yml --prune
 ## Shell Command Policy
 
 Claude Code and Codex may execute shell commands directly. Keep command usage
-targeted and keep output in the main conversation concise.
+targeted and keep output in the main conversation concise. The goal is to minimize irrelevant output, reduce token usage, and use fast, precise tools.
 
-Use `rg`, `sed`, `nl`, `head`, `tail`, `git status`, `git diff`, and other
-focused commands for repository inspection. Avoid broad directory dumps, full
+Use `rg` for text search.
+
+- Use `rg -n "pattern"` for source, docs, tests, configs, logs, and scripts.
+- Use globs to narrow scope, for example `rg -n "pattern" -g "*.py"`.
+- Use limited context only when needed, for example `rg -n -C 2 "pattern"`.
+
+Use `fdfind` for file and directory discovery.
+
+- Use `fdfind <name>` to locate files.
+- Use `fdfind -e py` to find Python files.
+- Use `fdfind -t d` to find directories.
+- Prefer targeted searches over broad recursive listings.
+
+Use `jq` for JSON.
+
+- Use `jq` for `package.json`, lock files, JSON config, logs, and command output.
+- Do not parse JSON with `grep`, `sed`, `awk`, or ad hoc scripts when `jq` is practical.
+
+Use `tree` for compact project layout.
+
+- Use `tree -L 2` or `tree -L 3`.
+- Avoid deep unrestricted `tree` output.
+- Exclude noisy directories when needed.
+
+Use `git` for repository state and changes.
+
+- Use `git status --short`.
+- Use `git diff --stat` before full diffs.
+- Use `git diff -- <path>` for targeted diffs.
+- Use `git ls-files` when only tracked files matter.
+
+Use `batcat --paging=never -n` for readable file excerpts with line numbers.
+
+Avoid broad directory dumps, full
 logs, full test output, full diffs, long benchmark tables, repeated warning
 blocks, and irrelevant stdout/stderr noise unless the user explicitly asks for
 full output.

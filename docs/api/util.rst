@@ -404,7 +404,7 @@ to the (potentially moving) GOTM model grid:
 * Interior levels are interpolated linearly between the two nearest
   observations.
 
-Original authors: Karsten Bolding, Hans Burchard.
+Original FORTRAN authors: Karsten Bolding, Hans Burchard.
 
 .. automodule:: pygotm.util.gridinterpol
    :members:
@@ -437,7 +437,7 @@ Reflective boundary conditions are applied at the surface (:math:`z = 0`) and
 the bottom (:math:`z = -\mathrm{depth}`).  Pass a seeded
 ``np.random.Generator`` for reproducible results.
 
-Original authors: Hans Burchard, Karsten Bolding.
+Original FORTRAN authors: Hans Burchard, Karsten Bolding.
 
 .. automodule:: pygotm.util.lagrange
    :members:

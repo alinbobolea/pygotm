@@ -11,7 +11,7 @@ r"""
 ! This is the main program of GOTM.
 !
 ! !REVISION HISTORY:
-!  Original author(s): Karsten Bolding & Hans Burchard
+!  Original FORTRAN author(s): Karsten Bolding & Hans Burchard
 !
 !EOP
 !-----------------------------------------------------------------------

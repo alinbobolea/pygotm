@@ -13,7 +13,7 @@ Three surface contributions are handled:
 Only called when the KPP turbulence model is active.  Callers outside GOTM
 must supply fluxes consistent with their own equation of state.
 
-Original author: Lars Umlauf.
+Original FORTRAN author: Lars Umlauf.
 
 Public interface: :func:`convert_fluxes`.
 """

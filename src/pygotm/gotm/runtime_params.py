@@ -327,7 +327,7 @@ def make_runtime_params(
     klimiw: float = 1.0e-6,
     rich_cr: float = 0.7,
     numiw: float = 1.0e-4,
-    nuhiw: float = 5.0e-5,
+    nuhiw: float = 1.0e-5,
     numshear: float = 5.0e-3,
     light_A: float = 0.58,
     light_g1: float = 0.35,
