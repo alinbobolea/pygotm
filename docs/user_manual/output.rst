@@ -271,6 +271,32 @@ Seagrass canopy drag parameterisation.
 
 Path to the seagrass specification file.  *Default*: ``"seagrass.dat"``.
 
+The seagrass file is a **static** (non-timeseries) ASCII file that describes
+the canopy geometry.  Unlike the input files used by forcing fields, it
+contains no timestamps.  The format is:
+
+.. code-block:: text
+
+   N                        ← integer: number of canopy levels
+   z_1   excursion_1   friction_1
+   z_2   excursion_2   friction_2
+   ...
+   z_N   excursion_N   friction_N
+
+* **Column 1 — z** (m): height above the bottom of this canopy element
+  (positive upward).
+* **Column 2 — excursion** (m): maximum lateral displacement of the
+  Lagrangian leaf tip.  When the leaf displacement exceeds this limit, drag
+  is applied to the current.  Set to ``0.0`` for a rigid element.
+* **Column 3 — friction**: canopy drag coefficient (leaf friction
+  coefficient) applied to the current when the excursion limit is reached.
+
+Blank lines and lines beginning with ``#`` or ``!`` are treated as comments
+and skipped.  Extra columns beyond column 3 are ignored.
+
+.. seealso:: :ref:`fmt-seagrass` for the complete file format specification
+   and reference case example.
+
 ``seagrass.alpha``
 ~~~~~~~~~~~~~~~~~~
 

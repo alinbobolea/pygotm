@@ -98,17 +98,30 @@ def _store_probe_values(
     as_value: float,
     cmue1_value: float,
     cmue2_value: float,
+    fill_cmue: bool = False,
 ) -> None:
-    """Mirror the Fortran probe-point side effects when arrays are allocated."""
+    """Mirror the Fortran probe-point side effects when arrays are allocated.
+
+    When ``fill_cmue`` is True, the entire ``cmue1``/``cmue2`` arrays are set to
+    the probe values. The Fortran code does this only for the ``Constant``
+    stability path (``cmue1=cm0_fix`` is a whole-array assignment); other paths
+    update level 1 only.
+    """
 
     if state.an is not None and state.an.size > _PROBE_INDEX:
         state.an[_PROBE_INDEX] = an_value
     if state.as_ is not None and state.as_.size > _PROBE_INDEX:
         state.as_[_PROBE_INDEX] = as_value
     if state.cmue1 is not None and state.cmue1.size > _PROBE_INDEX:
-        state.cmue1[_PROBE_INDEX] = cmue1_value
+        if fill_cmue:
+            state.cmue1[:] = cmue1_value
+        else:
+            state.cmue1[_PROBE_INDEX] = cmue1_value
     if state.cmue2 is not None and state.cmue2.size > _PROBE_INDEX:
-        state.cmue2[_PROBE_INDEX] = cmue2_value
+        if fill_cmue:
+            state.cmue2[:] = cmue2_value
+        else:
+            state.cmue2[_PROBE_INDEX] = cmue2_value
 
 
 def _cmue_d_scalar(
@@ -278,12 +291,17 @@ def _evaluate_stability(
             an_value=an_value,
         )
 
+    # Fortran's compute_cpsi3 uses whole-array assignments for the Constant
+    # stab_method (cmue1=cm0_fix), so the t=0 NetCDF reference shows uniform
+    # values across all levels. Other stab paths update level 1 only.
+    fill_cmue = state.turb_method == first_order and state.stab_method == Constant
     _store_probe_values(
         state,
         an_value=an_value,
         as_value=as_value,
         cmue1_value=cmue1_value,
         cmue2_value=cmue2_value,
+        fill_cmue=fill_cmue,
     )
     return an_value, as_value, cmue1_value, cmue2_value
 

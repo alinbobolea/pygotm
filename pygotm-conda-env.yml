@@ -10,6 +10,9 @@ dependencies:
 
   # Project build backend
   - hatchling
+  # Local editable package registration only:
+  # conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
+  - pip
 
   # Core numerical/scientific stack
   - numba>=0.59
@@ -50,6 +53,7 @@ dependencies:
   - ruff>=0.3
   - mypy>=1.9
   - pre-commit>=3.7
+  - git-filter-repo
 
   # Documentation dependencies
   - sphinx>=8.0

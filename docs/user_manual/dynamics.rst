@@ -5,6 +5,11 @@ These sections provide 3-D-effect forcing for the inherently 1-D column
 model: external and internal pressure gradients, prescribed velocity profiles,
 wave–current interactions, and vertical advection.
 
+All scalar forcing fields in this section that use ``method: file`` read
+the :ref:`fmt-timeseries` format.  Velocity profiles (``velocities.u``,
+``velocities.v``) use the :ref:`fmt-profile` format.  See
+:ref:`input-file-formats` for complete specifications.
+
 .. _yaml-mimic3d:
 
 ``mimic_3d``
@@ -79,6 +84,16 @@ How the external pressure gradient is specified.
 External pressure gradient in the West–East direction.
 
 Follows the extended ``InputSetting`` pattern (``method: constant | tidal | file``).
+When ``method: file``: timeseries file (see :ref:`fmt-timeseries`).  The
+conventional layout stores ``dpdx`` and ``dpdy`` as columns 2 and 3 of a
+shared three-column file (column 1 is often a placeholder or a third
+gradient quantity):
+
+.. code-block:: text
+
+   # Columns: placeholder   dpdx [m/m]   dpdy [m/m]
+   1976/04/06 06:00:00    0.00  -3.2010771E-06  -1.6297247E-06
+   1976/04/06 06:15:00    0.00  -2.9533401E-06  -2.1274509E-06
 
 .. list-table::
    :widths: 20 80
@@ -241,7 +256,28 @@ Follows the ``InputSetting`` pattern (``method: off | constant | file``).
 
 When ``method: file``, a time series of full-depth profiles is read.  These
 are used to nudge the model velocities via ``relax.tau``, or to initialise
-the velocity field.
+the velocity field.  The file uses the :ref:`fmt-profile` format.  Both
+components can share one file using ``column: 1`` for ``u`` and
+``column: 2`` for ``v``:
+
+.. code-block:: text
+
+   # Horizontal velocity profiles [m/s]: col1=u (W-E), col2=v (S-N)
+   # Header: timestamp   N_levels   up_down
+   2001/08/30 07:00:00   22   2
+      -6.00000   0.00000   0.12000
+      -8.00000   0.01000   0.11000
+     -10.00000   0.02000   0.09000
+     ...
+     -50.00000  -0.14000  -0.14000
+
+YAML reference:
+
+.. code-block:: yaml
+
+   velocities:
+     u: { method: file, file: velprof.dat, column: 1 }
+     v: { method: file, file: velprof.dat, column: 2 }
 
 ``velocities.relax.tau``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -388,6 +424,23 @@ Follows the ``InputSetting`` pattern (``method: off | constant | file``).
 When active, a vertical velocity profile is imposed following a Gaussian
 distribution centred at ``w.height``.  The vertical velocity drives
 temperature and salinity advection via the scheme selected by ``adv_discr``.
+
+When ``method: file``, ``w.max`` and ``w.height`` can share a single
+two-column timeseries file (see :ref:`fmt-timeseries`):
+
+.. code-block:: text
+
+   # Columns: w_max [m/s]   height_above_bottom [m]
+   2001/08/30 16:24:09   -0.268241e+02   -0.277951e-04
+   2001/08/30 16:34:09   -0.268404e+02   -0.265529e-04
+
+YAML reference:
+
+.. code-block:: yaml
+
+   w:
+     max:    { method: file, file: vertvel.dat, column: 1 }
+     height: { method: file, file: vertvel.dat, column: 2 }
 
 ``w.height``
 ~~~~~~~~~~~~~

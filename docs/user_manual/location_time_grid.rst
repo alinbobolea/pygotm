@@ -308,3 +308,7 @@ Path to the file containing prescribed layer thicknesses or sigma fractions.
 Required when ``grid.method`` is ``file_sigma`` or ``file_h``; ignored
 otherwise.  Relative paths are resolved relative to the directory containing
 ``gotm.yaml``.
+
+.. seealso:: :ref:`fmt-grid` for the complete file format specification,
+   including exact column layout, layer ordering, and sum-constraint
+   requirements.

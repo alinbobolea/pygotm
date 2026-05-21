@@ -43,6 +43,7 @@ conda environment named `pygotm`. Do not activate or deactivate environments in
 the shell.
 
 ```bash
+conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
 conda run -n pygotm python -m pytest -W error::RuntimeWarning
 conda run -n pygotm ruff format .
 conda run -n pygotm mypy src/
@@ -50,12 +51,17 @@ conda run -n pygotm python script.py
 ```
 
 Do not rely on any active shell environment. Do not use `.venv`. Do not use `uv`.
+Do not use `pip` for dependency management. The only permitted `pip` command is
+the no-dependency editable install above, which registers the local checkout so
+`import pygotm` and the `pygotm` console script work from a fresh conda
+environment.
 
 Canonical environment commands:
 
 ```bash
 conda env create -f pygotm-conda-env.yml
 conda env update -f pygotm-conda-env.yml --prune
+conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
 ```
 
 ## Shell Command Policy

@@ -65,7 +65,7 @@ Key differences from the Fortran GOTM:
      - NetCDF (CF conventions, xarray-compatible)
    * - Deployment
      - Compile from source
-     - ``conda activate pygotm``; browser SaaS planned
+     - Conda environment plus editable local install; browser SaaS planned
 
 **Scientific parity:** pyGOTM must pass every official GOTM test case using a
 discrete Fréchet distance comparison against Fortran GOTM 6.0.7 reference

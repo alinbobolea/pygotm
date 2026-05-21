@@ -7,7 +7,7 @@ official GOTM 6.0.7 test case YAML file can be used directly.
 For a full reference of all configuration keys, see the official
 `GOTM documentation <https://gotm.net/portfolio/documentation/>`__.
 
-The 22 official test cases are located in ``gotm-model/cases-runs/``:
+The 22 official test cases are located in ``validation/reference/``:
 
 .. code-block:: text
 

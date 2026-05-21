@@ -105,12 +105,18 @@ methods.
    * - **Default**
      - ``""``
 
-Path to an ASCII profile file.  The file format is a time series of depth–
-value columns: each block begins with a date-time header line followed by
-``nlev + 1`` lines of ``depth [m]   temperature [°C]``.  Relative paths are
-resolved from the directory containing ``gotm.yaml``.
+Path to an ASCII profile file containing a time series of full-depth
+temperature profiles.  Each profile block begins with a header line
+(``YYYY-MM-DD HH:MM:SS   N   up_down``) followed by ``N`` rows of
+``depth_m   value`` pairs; the model grid spacing need not match the file
+spacing.  Relative paths are resolved from the directory containing
+``gotm.yaml``.
 
 Required when ``method: file``; ignored otherwise.
+
+.. seealso:: :ref:`fmt-profile` for the complete profile file format
+   specification, including header syntax, depth ordering (``up_down``),
+   multi-column layouts, and interpolation behaviour.
 
 ``temperature.column``
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -272,6 +278,10 @@ unless noted below.
 
 Same as ``temperature.method``.  The ``buoyancy`` option reconstructs
 salinity from a specified :math:`N^2` together with the temperature profile.
+
+When ``method: file``, the salinity profile file uses the same format as
+the temperature profile file.  Both can share one multi-column file (see
+:ref:`fmt-profile`).
 
 ``salinity.constant_value``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

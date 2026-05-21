@@ -16,7 +16,7 @@ marked **[not implemented]**.
 
    pyGOTM reads GOTM-compatible ``gotm.yaml`` files (format version 7).
    Any official GOTM 6.0.7 test-case YAML can be loaded directly.  The 22
-   reference cases live under ``gotm-model/cases-runs/``.
+   reference cases live under ``validation/reference/``.
 
 .. rubric:: Input source pattern
 
@@ -36,6 +36,10 @@ When ``method: constant`` the ``constant_value`` is used for the entire
 simulation.  When ``method: file`` values are read from a column-separated
 ASCII data file and interpolated to each model time step.
 
+For a complete specification of every file format accepted by pyGOTM —
+including exact column layouts, timestamp syntax, ordering requirements,
+and annotated examples — see :ref:`input-file-formats`.
+
 .. toctree::
    :maxdepth: 2
    :caption: Reference
@@ -49,3 +53,4 @@ ASCII data file and interpolated to each model time step.
    dynamics
    equation_of_state
    output
+   input_file_formats

@@ -167,6 +167,27 @@ Larger ``g2`` values represent clearer water.  For clear open-ocean water
    blooms or changing turbidity.  Use ``column`` to select the appropriate
    column from a shared extinction data file.
 
+   The conventional three-column extinction file layout used in the reference
+   cases is:
+
+   .. code-block:: text
+
+      # Columns: A [-]   g1 [m]   g2 [m]
+      1976/04/06 06:00:00    0.6200000    0.6000000    22.47189
+      1976/04/06 12:00:00    0.6200000    0.6000000    22.35083
+
+   YAML reference:
+
+   .. code-block:: yaml
+
+      light_extinction:
+        method: custom
+        A:  { method: file, file: extinction.dat, column: 1 }
+        g1: { method: file, file: extinction.dat, column: 2 }
+        g2: { method: file, file: extinction.dat, column: 3 }
+
+   See :ref:`fmt-timeseries` for the complete timeseries file format specification.
+
 .. rubric:: References
 
 Jerlov, N. G. (1968). *Optical Oceanography*. Elsevier.

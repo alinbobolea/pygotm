@@ -107,7 +107,7 @@ def _project_root() -> Path:
 
 
 def _cases_root(cases_root: Path | None = None) -> Path:
-    return (cases_root or _project_root() / "gotm-model" / "cases-runs").resolve()
+    return (cases_root or _project_root() / "validation" / "reference").resolve()
 
 
 def _select_reference_output(case_dir: Path) -> Path:

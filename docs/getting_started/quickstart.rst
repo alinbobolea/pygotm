@@ -1,17 +1,34 @@
 Quickstart
 ==========
 
+Setup
+-----
+
+Create the conda environment and register this checkout as the importable
+``pygotm`` package:
+
+.. code-block:: bash
+
+   conda env create -f pygotm-conda-env.yml
+   conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
+
+Before running the bundled reference cases, download the validation reference
+data release and unpack it so ``validation/reference/couette/gotm.yaml`` exists.
+Top-level ``validation/`` data is intentionally not tracked in normal Git
+history.
+
 Run a Single-Column Simulation
 -------------------------------
 
 The simplest way to run pyGOTM is with a GOTM-compatible YAML configuration
-file. The official GOTM test cases are included in the repository:
+file. The official GOTM test cases are available in the external validation
+reference-data bundle:
 
 .. code-block:: python
 
    from pygotm.driver import GotmDriver
 
-   driver = GotmDriver("gotm-model/cases-runs/couette/gotm.yaml")
+   driver = GotmDriver("validation/reference/couette/gotm.yaml")
    ds = driver.run()
 
    print(ds)          # xarray Dataset with all model output
@@ -26,10 +43,10 @@ Run from the Command Line
 .. code-block:: bash
 
    # Run the built-in validation suite for a specific case
-   pygotm validate --case couette
+   conda run -n pygotm pygotm validate --case couette
 
    # Benchmark the compiled runtime (prints timing to the terminal)
-   pygotm benchmark --cases couette,channel
+   conda run -n pygotm pygotm benchmark --cases couette,channel
 
 Suppress Output (no-output integration)
 -----------------------------------------
@@ -40,7 +57,7 @@ For benchmarking or performance measurement, suppress NetCDF output:
 
    from pygotm.driver import GotmDriver
 
-   driver = GotmDriver("gotm-model/cases-runs/couette/gotm.yaml")
+   driver = GotmDriver("validation/reference/couette/gotm.yaml")
    ds = driver.run(output=False)   # empty Dataset — compiled loop still runs
 
 Inspect Output
@@ -62,7 +79,7 @@ Compare pyGOTM output against the official Fortran GOTM reference cases:
 
 .. code-block:: bash
 
-   python -m pygotm.validation.run_validation \
+   conda run -n pygotm python -m pygotm.validation.run_validation \
        --cases couette,channel,entrainment
 
 Output: ``validation/report.html`` and ``validation/results.json``

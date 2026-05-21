@@ -18,9 +18,9 @@ from pygotm.gotm.gotm import (
 )
 from pygotm.icethm import IceModelEnum
 
-_COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
-_NNS_SEASONAL_CONFIG = Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml")
-_REYNOLDS_CONFIG = Path("gotm-model/cases-runs/reynolds/gotm.yaml")
+_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
+_NNS_SEASONAL_CONFIG = Path("validation/reference/nns_seasonal/gotm.yaml")
+_REYNOLDS_CONFIG = Path("validation/reference/reynolds/gotm.yaml")
 
 
 def _write_config(path: Path) -> None:

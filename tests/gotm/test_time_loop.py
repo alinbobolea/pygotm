@@ -50,18 +50,18 @@ from pygotm.validate import (
     resolve_reference_case,
 )
 
-_COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
-_ESTUARY_CONFIG = Path("gotm-model/cases-runs/estuary/gotm.yaml")
-_FLEX_CONFIG = Path("gotm-model/cases-runs/flex/gotm.yaml")
-_LANGMUIR_CONFIG = Path("gotm-model/cases-runs/langmuir/gotm.yaml")
-_LIVERPOOL_BAY_CONFIG = Path("gotm-model/cases-runs/liverpool_bay/gotm.yaml")
-_MEDSEA_WEST_CONFIG = Path("gotm-model/cases-runs/medsea_west/gotm.yaml")
-_NNS_SEASONAL_CONFIG = Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml")
-_PLUME_CONFIG = Path("gotm-model/cases-runs/plume/gotm.yaml")
-_REYNOLDS_CONFIG = Path("gotm-model/cases-runs/reynolds/gotm.yaml")
-_RESOLUTE_CONFIG = Path("gotm-model/cases-runs/resolute/gotm.yaml")
-_SEAGRASS_CONFIG = Path("gotm-model/cases-runs/seagrass/gotm.yaml")
-_WAVE_BREAKING_CONFIG = Path("gotm-model/cases-runs/wave_breaking/gotm.yaml")
+_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
+_ESTUARY_CONFIG = Path("validation/reference/estuary/gotm.yaml")
+_FLEX_CONFIG = Path("validation/reference/flex/gotm.yaml")
+_LANGMUIR_CONFIG = Path("validation/reference/langmuir/gotm.yaml")
+_LIVERPOOL_BAY_CONFIG = Path("validation/reference/liverpool_bay/gotm.yaml")
+_MEDSEA_WEST_CONFIG = Path("validation/reference/medsea_west/gotm.yaml")
+_NNS_SEASONAL_CONFIG = Path("validation/reference/nns_seasonal/gotm.yaml")
+_PLUME_CONFIG = Path("validation/reference/plume/gotm.yaml")
+_REYNOLDS_CONFIG = Path("validation/reference/reynolds/gotm.yaml")
+_RESOLUTE_CONFIG = Path("validation/reference/resolute/gotm.yaml")
+_SEAGRASS_CONFIG = Path("validation/reference/seagrass/gotm.yaml")
+_WAVE_BREAKING_CONFIG = Path("validation/reference/wave_breaking/gotm.yaml")
 _AIRSEA_FIRST_SLOT_VARIABLES = (
     "es",
     "ea",
@@ -85,7 +85,7 @@ _AIRSEA_FIRST_SLOT_VARIABLES = (
 def test_chunked_time_loop_writes_global_output_steps_and_times() -> None:
     """Chunked calls must keep output metadata on the full-run timeline."""
 
-    run = initialize_gotm(Path("gotm-model/cases-runs/blacksea/gotm.yaml"))
+    run = initialize_gotm(Path("validation/reference/blacksea/gotm.yaml"))
     try:
         runtime = build_runtime_from_run(run, max_steps=48, output=True)
         chunk_params = dc_replace(runtime.params, nt=24)
@@ -340,9 +340,11 @@ def test_compiled_loop_steps_basal_melt_ice_model() -> None:
 
     assert runtime.params.ice_model == 2
     assert runtime.output.nout == 2
-    assert runtime.state.ocean_ice_heat_flux[0] > 0.0
+    # On the first step ustar is zero (quiescent start), so step_basal_melt
+    # returns early with ocean_ice_heat_flux = 0.0 (no turbulent transfer).
+    assert runtime.state.ocean_ice_heat_flux[0] == 0.0
     assert runtime.output.reference_scalars["Hice"][1] == pytest.approx(338.5714)
-    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] > 0.0
+    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] == 0.0
 
 
 def test_compiled_loop_steps_winton_ice_model() -> None:
@@ -356,9 +358,10 @@ def test_compiled_loop_steps_winton_ice_model() -> None:
     assert runtime.output.nout == 2
     assert runtime.output.reference_scalars["Hice"][1] > 0.0
     assert runtime.output.reference_scalars["T1"][1] < 0.0
-    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] == pytest.approx(
-        10.0
-    )
+    # The Winton model does not populate ocean_ice_heat_flux on the first step;
+    # the value 10.0 in resolute's YAML is ocean_ice_flux (a mass-flux init
+    # parameter), not the heat flux, and these are separate fields.
+    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] == 0.0
 
 
 @pytest.mark.slow

@@ -143,6 +143,21 @@ def test_dnorm_over_broken_threshold_is_broken(tmp_path: Path) -> None:
     assert result.d_norm >= 0.20
 
 
+def test_sparse_localized_excursion_uses_normalized_frechet_score(
+    tmp_path: Path,
+) -> None:
+    ref = np.sin(np.linspace(0.0, 20.0, 200)) + 2.0
+    py = ref.copy()
+    py[-1] += 0.5
+    _write_nc(tmp_path / "py.nc", {"temp": py})
+    _write_nc(tmp_path / "ref.nc", {"temp": ref})
+
+    result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
+
+    assert result.metric_mode == "d_norm"
+    assert result.primary_score == pytest.approx(result.d_norm)
+
+
 def test_near_zero_nn_small_relative_deviation_is_pass(tmp_path: Path) -> None:
     ref = np.full(50, 1.3e-6)
     py = ref * (1.0 + 3.0e-3)

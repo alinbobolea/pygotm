@@ -67,7 +67,7 @@ def test_load_settings_parses_minimal_yaml(tmp_path: Path) -> None:
 
 
 def test_load_settings_lifts_nested_tidal_periods_from_real_case() -> None:
-    settings = load_settings(Path("gotm-model/cases-runs/seagrass/gotm.yaml"))
+    settings = load_settings(Path("validation/reference/seagrass/gotm.yaml"))
 
     assert settings.mimic_3d.zeta.method == "tidal"
     assert settings.mimic_3d.zeta.period_1 == 15.0
@@ -76,8 +76,8 @@ def test_load_settings_lifts_nested_tidal_periods_from_real_case() -> None:
 
 def test_load_settings_parses_mimic3d_vertical_velocity_from_real_cases() -> None:
     for case_path in (
-        Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml"),
-        Path("gotm-model/cases-runs/reynolds/gotm.yaml"),
+        Path("validation/reference/nns_seasonal/gotm.yaml"),
+        Path("validation/reference/reynolds/gotm.yaml"),
     ):
         settings = load_settings(case_path)
 

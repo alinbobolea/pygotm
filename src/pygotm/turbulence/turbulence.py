@@ -898,17 +898,22 @@ def _analyse_model(state: TurbulenceState) -> None:
                 state.sig_e0 = state.sig_e
 
         state.gen_d = 1.0 / (1.0 - state.ce2)
-        root_term = np.sqrt(
+        alpha_root_term = np.sqrt(state.sig_k + 24.0 * state.sig_e0 * state.ce2)
+        l_root_term = np.sqrt(
             state.sig_k * (state.sig_k + 24.0 * state.sig_e0 * state.ce2)
         )
         state.gen_alpha = (
-            4.0 * np.sqrt(state.sig_k) / (7.0 * np.sqrt(state.sig_k) - root_term)
+            4.0 * np.sqrt(state.sig_k) / (7.0 * np.sqrt(state.sig_k) - alpha_root_term)
         )
         state.gen_l = (
             state.cm0
             * np.sqrt(state.rcm)
             * np.sqrt(
-                (25.0 * state.sig_k + 12.0 * state.sig_e0 * state.ce2 - 7.0 * root_term)
+                (
+                    25.0 * state.sig_k
+                    + 12.0 * state.sig_e0 * state.ce2
+                    - 7.0 * l_root_term
+                )
                 / 12.0
             )
         )
@@ -934,17 +939,18 @@ def _analyse_model(state: TurbulenceState) -> None:
 
         state.sig_k = state.sig_kw
         state.gen_d = -1.0 / state.cw2
-        root_term = np.sqrt(
+        alpha_root_term = np.sqrt(state.sig_k + 24.0 * state.sig_w * state.cw2)
+        l_root_term = np.sqrt(
             state.sig_k * (state.sig_k + 24.0 * state.sig_w * state.cw2)
         )
         state.gen_alpha = (
-            4.0 * np.sqrt(state.sig_k) / (3.0 * np.sqrt(state.sig_k) - root_term)
+            4.0 * np.sqrt(state.sig_k) / (3.0 * np.sqrt(state.sig_k) - alpha_root_term)
         )
         state.gen_l = (
             state.cm0
             * np.sqrt(state.rcm)
             * np.sqrt(
-                (5.0 * state.sig_k + 12.0 * state.sig_w * state.cw2 - 3.0 * root_term)
+                (5.0 * state.sig_k + 12.0 * state.sig_w * state.cw2 - 3.0 * l_root_term)
                 / 12.0
             )
         )

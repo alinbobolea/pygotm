@@ -44,6 +44,11 @@ def test_known_gotm_variable_returns_pygotm_section() -> None:
         assert classify_section(name) == "pygotm", f"expected pygotm for {name!r}"
 
 
+def test_known_gotm_diagnostic_variable_returns_pygotm_section() -> None:
+    for name in ("mld_surf", "uu", "vv", "ww", "taux", "tauy", "Eturb"):
+        assert classify_section(name) == "pygotm", f"expected pygotm for {name!r}"
+
+
 def test_unknown_variable_returns_pyfabm_section() -> None:
     assert classify_section("oxygen_some_fabm_model") == "pyfabm"
 

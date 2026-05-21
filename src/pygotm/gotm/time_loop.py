@@ -1897,9 +1897,7 @@ def time_loop_compiled(
                 if ice_model == 5:
                     current_i0 = ice_qsw * transmissivity[0]
                 else:
-                    current_i0 = (
-                        shortwave * (1.0 - albedo_ice[0]) * transmissivity[0]
-                    )
+                    current_i0 = shortwave * (1.0 - albedo_ice[0]) * transmissivity[0]
         int_precip += forcing_precip[step] * dt
         int_evap += evap * dt
         int_swr += current_i0 * dt

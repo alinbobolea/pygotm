@@ -14,12 +14,28 @@ The current parity gate is the Frechet suite in
 RMSE, NRMSE, and mean/max absolute or relative errors) are not status-driving
 validation indicators for the current suite.
 
+Reference Data Distribution
+---------------------------
+
+Top-level ``validation/`` data is intentionally excluded from normal Git
+history. Generated reports and ``validation/runs`` outputs are reproducible, and
+the official Fortran reference NetCDF files are large enough that they should be
+distributed as release/data artifacts rather than committed to the source repo.
+
+Download the reference-data release asset and unpack it so the working tree has
+``validation/reference/<case>/`` directories before running validation. The
+planned public asset path is:
+
+.. code-block:: text
+
+   https://github.com/<org>/pygotm/releases/download/reference-data-v0.1.0/pygotm-validation-reference.tar.zst
+
 Validation Pipeline
 -------------------
 
 Each validation run follows the same implementation path:
 
-1. Case metadata is resolved from ``gotm-model/cases-runs``.
+1. Case metadata is resolved from ``validation/reference``.
 2. The case YAML is selected explicitly, or by trying ``gotm.yaml``,
    ``gotm.yml``, then a single non-``fabm.yaml``/``output.yaml`` YAML file.
 3. The reference NetCDF is selected as the largest ``*.nc`` file in the case

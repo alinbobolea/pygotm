@@ -140,7 +140,7 @@ def test_init_observations_handles_legacy_height_only_w_adv_file() -> None:
 
 
 def test_init_observations_uses_real_case_nested_zeta_period() -> None:
-    settings = load_settings(Path("gotm-model/cases-runs/seagrass/gotm.yaml"))
+    settings = load_settings(Path("validation/reference/seagrass/gotm.yaml"))
     state = ObservationsState()
 
     init_observations(state, settings)
@@ -150,8 +150,8 @@ def test_init_observations_uses_real_case_nested_zeta_period() -> None:
 
 def test_init_observations_uses_real_case_nested_vertical_advection() -> None:
     for case_path in (
-        Path("gotm-model/cases-runs/nns_seasonal/gotm.yaml"),
-        Path("gotm-model/cases-runs/reynolds/gotm.yaml"),
+        Path("validation/reference/nns_seasonal/gotm.yaml"),
+        Path("validation/reference/reynolds/gotm.yaml"),
     ):
         settings = load_settings(case_path)
         state = ObservationsState()

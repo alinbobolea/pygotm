@@ -16,7 +16,7 @@ from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
 
 yaml: Any = import_module("yaml")
 
-_COUETTE_CONFIG = Path("gotm-model/cases-runs/couette/gotm.yaml")
+_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
 
 
 def _minimal_config_dict() -> dict[str, object]:

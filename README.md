@@ -18,8 +18,9 @@ reference cases at the center of development.
 
 ## Why it exists
 
-Fortran GOTM requires: a Fortran compiler, CMake, NetCDF libraries, Conda environment, command-line expertise.  
-pyGOTM requires: a browser (SaaS) or `pip install pygotm` (local).
+Fortran GOTM requires: a Fortran compiler, CMake, NetCDF libraries, Conda
+environment, command-line expertise. pyGOTM requires: a browser (SaaS) or a
+reproducible Conda environment plus a local editable package install.
 
 Target users: aquaculture site engineers, limnologists, coastal ocean researchers, environmental consultancies.
 
@@ -72,13 +73,31 @@ Target users: aquaculture site engineers, limnologists, coastal ocean researcher
 git clone https://github.com/<org>/pygotm.git
 cd pygotm
 conda env create -f pygotm-conda-env.yml
-conda activate pygotm
 
+# Register this checkout as the pygotm package.
+# Conda owns dependencies; pip is used only for this no-dependency install.
+conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
+
+# Confirm the package and CLI resolve from the conda environment
+conda run -n pygotm python -c "import pygotm; print(pygotm.__file__)"
+conda run -n pygotm pygotm --help
+```
+
+Validation reference data is distributed outside normal Git history because the
+NetCDF files are large. Download the reference-data release asset and unpack it
+so `validation/reference/couette/gotm.yaml` exists before running validation
+cases. The planned release asset path is:
+
+```text
+https://github.com/<org>/pygotm/releases/download/reference-data-v0.1.0/pygotm-validation-reference.tar.zst
+```
+
+```bash
 # Run validation for a supported reference case
-pygotm validate --case couette
+conda run -n pygotm pygotm validate --case couette
 
 # Benchmark the compiled runtime
-pygotm benchmark --cases couette,channel
+conda run -n pygotm pygotm benchmark --cases couette,channel
 ```
 
 ## Example Use Cases

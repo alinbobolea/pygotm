@@ -90,15 +90,16 @@ def step_basal_melt(
 
     S_b = -0.5 * pp + math.sqrt(disc)
     T_b = LAMBDA1 * S_b + ll
-    rate = a1t * (T_w - T_b) / (
-        C_ICE_BASAL / C_WATER_BASAL * (T_b - T_ICE_CORE)
-        + L_ICE / C_WATER_BASAL
+    rate = (
+        a1t
+        * (T_w - T_b)
+        / (C_ICE_BASAL / C_WATER_BASAL * (T_b - T_ICE_CORE) + L_ICE / C_WATER_BASAL)
     )
 
     melt_rate[0] = rate
     T_melt[0] = T_b
     S_melt[0] = S_b
     ocean_ice_heat_flux[0] = (
-        a1t * (T_w - T_b) - rate * T_b
-    ) * C_WATER_BASAL * RHO_WATER_BASAL
+        (a1t * (T_w - T_b) - rate * T_b) * C_WATER_BASAL * RHO_WATER_BASAL
+    )
     ocean_ice_salt_flux[0] = a1s * (S_w - S_b) - rate * S_b

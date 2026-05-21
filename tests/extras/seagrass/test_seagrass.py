@@ -52,6 +52,10 @@ def test_post_init_loads_file_and_marks_layers_above_canopy(tmp_path: Path) -> N
     _write_grass(grass)
     state = SeagrassState()
     init_seagrass(state, method=1, grassfile=str(grass), alpha=0.5)
+    # init_seagrass mirrors the Fortran seagrass.F90 bug that leaves
+    # seagrass_calc=False regardless of method; set it here to exercise
+    # the post_init allocation path directly.
+    state.seagrass_calc = True
     h = np.ones(6)
 
     post_init_seagrass(state, 5, h)
@@ -71,6 +75,10 @@ def test_do_seagrass_clamps_excursion_and_adds_drag_and_production(
     _write_grass(grass)
     state = SeagrassState()
     init_seagrass(state, method=1, grassfile=str(grass), alpha=0.25)
+    # init_seagrass mirrors the Fortran seagrass.F90 bug that leaves
+    # seagrass_calc=False regardless of method; set it here to exercise
+    # the post_init allocation path directly.
+    state.seagrass_calc = True
     nlev = 5
     h = np.full(nlev + 1, 0.1)
     post_init_seagrass(state, nlev, h)

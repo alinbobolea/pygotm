@@ -6,6 +6,14 @@ conditions: heat and momentum fluxes, meteorological inputs, and sea-surface
 nudging.  It maps directly to the air-sea interaction layer implemented in
 :mod:`pygotm.airsea`.
 
+When any surface forcing field uses ``method: file``, the data file must
+follow the :ref:`fmt-timeseries` format.  Multiple variables can share a
+single file using different ``column:`` indices — this is the standard
+pattern for combined meteorological files (``meteo.dat``).
+
+.. seealso:: :ref:`input-file-formats` for complete specifications and
+   examples of all supported input file formats.
+
 .. code-block:: yaml
 
    surface:
@@ -78,6 +86,7 @@ Selects how heat and momentum fluxes at the sea surface are computed.
 Prescribed non-solar surface heat flux (sensible + latent + net longwave).
 
 Follows the ``InputSetting`` pattern (``method: constant | file``).
+When ``method: file``: single-column timeseries file; see :ref:`fmt-timeseries`.
 
 .. list-table::
    :widths: 20 80
@@ -114,6 +123,10 @@ Prescribed wind stress in the West–East direction.
 Used directly as the upper boundary condition for the U-momentum equation
 when ``fluxes.method: off`` or to provide a fallback when bulk methods are
 active.
+
+When ``method: file``: ``tx`` and ``ty`` can share a single two-column
+timeseries file using ``column: 1`` and ``column: 2`` respectively.
+See :ref:`fmt-timeseries` for format details.
 
 ``surface.fluxes.ty``
 ~~~~~~~~~~~~~~~~~~~~~
@@ -192,6 +205,52 @@ Meteorological Inputs
 
 These inputs are required by the Kondo and Fairall bulk algorithms.
 All follow the ``InputSetting`` pattern (``method: constant | file``).
+
+When ``method: file``, these inputs are read from a timeseries file
+(see :ref:`fmt-timeseries`).  The standard pattern is to store all
+meteorological variables in a single multi-column file and select each
+variable by its ``column:`` index.  The conventional six-column layout
+expected by most reference cases is:
+
+.. list-table:: Conventional ``meteo.dat`` column layout
+   :header-rows: 1
+   :widths: 15 25 20 40
+
+   * - Column
+     - Variable
+     - Units
+     - YAML key
+   * - 1
+     - ``u10``
+     - m s\ :sup:`−1`
+     - ``surface.u10``
+   * - 2
+     - ``v10``
+     - m s\ :sup:`−1`
+     - ``surface.v10``
+   * - 3
+     - ``airp``
+     - Pa (or hPa — see note below)
+     - ``surface.airp``
+   * - 4
+     - ``airt``
+     - °C
+     - ``surface.airt``
+   * - 5
+     - ``hum``
+     - type-dependent (see ``hum.type``)
+     - ``surface.hum``
+   * - 6
+     - ``cloud``
+     - fraction (0–1)
+     - ``surface.cloud``
+
+.. note::
+
+   The reference cases store air pressure in **hPa** (hectopascals).  The
+   GOTM bulk formulae expect Pa.  If your ``meteo.dat`` is in hPa, set
+   ``airp: { scale_factor: 100.0 }`` in ``gotm.yaml`` to convert
+   automatically.
 
 ``surface.airp``
 ~~~~~~~~~~~~~~~~
@@ -311,6 +370,9 @@ Used when ``fluxes.method: off``.  When a bulk algorithm (``kondo``,
 and added to the computed heat budget.  Penetration into the water column is
 controlled by the ``light_extinction`` section.
 
+When ``method: file``: single-column timeseries file (see :ref:`fmt-timeseries`).
+Example: ``1976-04-06 06:00:00   13.6887``.
+
 ``surface.longwave``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -341,6 +403,9 @@ Sea-surface temperature nudging target.
 Follows the ``InputSetting`` pattern.  When ``method: file``, model SST
 is nudged toward the observed values on a configurable time scale.
 
+When ``method: file``: single-column timeseries file (see :ref:`fmt-timeseries`).
+Each record is one SST observation: ``YYYY-MM-DD HH:MM:SS   temperature_celsius``.
+
 ``surface.sss``
 ~~~~~~~~~~~~~~~
 
@@ -348,6 +413,9 @@ Sea-surface salinity nudging target.
 
 Follows the ``InputSetting`` pattern.  Used to represent evaporation/
 precipitation corrections or constrain surface salinity in long simulations.
+
+When ``method: file``: single-column timeseries file; one SSS observation
+per record: ``YYYY-MM-DD HH:MM:SS   salinity_psu``.
 
 .. _yaml-surface-stokes:
 

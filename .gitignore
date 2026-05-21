@@ -50,6 +50,9 @@ Thumbs.db
 *.hdf5
 gotm-model/
 
+# Validation outputs and external reference data
+validation/
+
 # Logs
 *.log
 

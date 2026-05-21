@@ -50,6 +50,10 @@ packages = ["src/pygotm"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = [
+    # Third-party GOTM reference-case scripts — not pyGOTM source code.
+    "validation/reference",
+]
 
 [tool.black]
 line-length = 88
@@ -60,6 +64,14 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E501"]
+# LaTeX formulas in docstrings; wrapping would break mathematical readability.
+"src/pygotm/airsea/airsea_variables.py" = ["E501"]
+"src/pygotm/util/diff_center.py" = ["E501"]
+"src/pygotm/util/ode_solvers.py" = ["E501"]
+"src/pygotm/util/ode_solvers_template.py" = ["E501"]
+"src/pygotm/util/tridiagonal.py" = ["E501"]
+# Matplotlib figure code with embedded LaTeX annotation strings.
+"docs/figures/build_figures.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -79,7 +91,7 @@ disallow_subclassing_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src", "."]
 addopts = "-m 'not slow'"
 markers = [
     "slow: full-run case validation against Fortran GOTM reference (run explicitly with -m slow)",
