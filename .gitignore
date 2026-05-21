@@ -51,7 +51,7 @@ Thumbs.db
 gotm-model/
 
 # Validation outputs and external reference data
-#validation/
+validation/
 
 # Logs
 *.log
