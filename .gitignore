@@ -56,6 +56,9 @@ validation/
 # Logs
 *.log
 
+# Sphinx documentation staging for validation HTML reports
+docs/_validation_html/
+
 # Other
 todo.md
 .claude/
