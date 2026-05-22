@@ -187,9 +187,9 @@ def test_array_shapes() -> None:
     ):
         arr = getattr(state, name)
         assert arr is not None, f"{name} must not be None after post_init"
-        assert (
-            arr.shape == expected_shape
-        ), f"{name}: expected shape {expected_shape}, got {arr.shape}"
+        assert arr.shape == expected_shape, (
+            f"{name}: expected shape {expected_shape}, got {arr.shape}"
+        )
 
 
 def test_arrays_zero_initialized() -> None:

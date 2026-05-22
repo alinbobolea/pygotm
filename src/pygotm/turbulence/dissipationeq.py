@@ -96,7 +96,7 @@ __all__ = [
 ]
 
 _CNPAR: float = 1.0
-_F90_SQRT_TWO: float = math.sqrt(float(np.float32(2.0)))
+_F90_SQRT_TWO: float = float(np.float32(math.sqrt(2.0)))
 
 
 class DissipationEquationWorkspace(ColumnWorkspace):

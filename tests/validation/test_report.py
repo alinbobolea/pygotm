@@ -32,6 +32,7 @@ def _make_var(
     plot_html: str | None = None,
     metric_mode: str = "d_norm",
     score: float | None = None,
+    peak_d_norm: float | None = None,
 ) -> VarResult:
     return VarResult(
         name=name,
@@ -45,6 +46,7 @@ def _make_var(
         plot_html=plot_html,
         metric_mode=metric_mode,  # type: ignore[arg-type]
         score=score,
+        peak_d_norm=peak_d_norm,
     )
 
 
@@ -255,6 +257,7 @@ def test_render_html_contains_required_column_headers() -> None:
         "Raw Frechet",
         "Normalized Frechet",
         "d_rel",
+        "Peak-sensitive d_norm",
     ):
         assert col in html, f"missing column header: {col}"
 
@@ -288,6 +291,14 @@ def test_var_rows_html_omits_default_dnorm_metric_label() -> None:
     html = _var_rows_html([_make_var(d_norm=0.002, metric_mode="d_norm")])
     assert "2.000e-03" in html
     assert "(d_norm)" not in html
+
+
+def test_var_rows_html_shows_peak_sensitive_dnorm() -> None:
+    from pygotm.validation.report import _var_rows_html
+
+    html = _var_rows_html([_make_var(d_norm=0.002, peak_d_norm=0.08)])
+
+    assert "8.000e-02" in html
 
 
 def test_render_html_has_pygotm_and_pyfabm_sections() -> None:

@@ -11,7 +11,9 @@ import numpy as np
 import xarray as xr
 
 from pygotm.validate import ValidationCase
-from pygotm.validation.runner import validate_case
+from pygotm.validation.compare import VarResult
+from pygotm.validation.report import CaseResult
+from pygotm.validation.runner import validate_case, validate_case_to_html
 
 
 def _fake_case(
@@ -62,6 +64,48 @@ def test_validate_case_skip_run_existing_nc(tmp_path: Path) -> None:
     assert result.wall_time_s == 0.0
     assert result.n_pass >= 1
     assert result.n_broken == 0 and result.n_marginal == 0 and result.n_discrepant == 0
+
+
+def test_validate_case_to_html_writes_case_report_before_stripping_summary(
+    tmp_path: Path,
+) -> None:
+    variable = VarResult(
+        name="temp",
+        section="pygotm",
+        status="MARGINAL",
+        color="yellow",
+        reference_at_worst=1.0,
+        calculated_at_worst=1.1,
+        d_raw=0.1,
+        d_norm=0.02,
+        plot_html="<div id='plot'>plot</div>",
+    )
+    case_result = CaseResult(
+        case_name="couette",
+        status="FAIL",
+        error=None,
+        py_nc_path="validation/runs/couette/couette.nc",
+        ref_nc_path="validation/reference/couette/couette.nc",
+        wall_time_s=0.0,
+        task_name="couette-gotm",
+        variables=[variable],
+        n_marginal=1,
+    )
+
+    with patch("pygotm.validation.runner.validate_case", return_value=case_result):
+        summary = validate_case_to_html(
+            "couette",
+            tmp_path / "runs",
+            tmp_path,
+            generated_at="2026-05-22T00:00:00Z",
+            hardware={"execution_backend": "cpu"},
+            skip_run=True,
+        )
+
+    assert summary.variables == []
+    html = (tmp_path / "couette-gotm.html").read_text(encoding="utf-8")
+    assert "temp" in html
+    assert "plot" in html
 
 
 def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:

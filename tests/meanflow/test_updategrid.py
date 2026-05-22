@@ -201,9 +201,9 @@ def test_z_layer_centers_equidistant() -> None:
     h_layer = depth0 / nlev
     for i in range(1, nlev + 1):
         expected = -depth0 + (i - 0.5) * h_layer
-        assert state.z[i] == pytest.approx(
-            expected, rel=1e-12
-        ), f"z[{i}] = {state.z[i]}, expected {expected}"
+        assert state.z[i] == pytest.approx(expected, rel=1e-12), (
+            f"z[{i}] = {state.z[i]}, expected {expected}"
+        )
 
 
 def test_z_midpoint_of_layer() -> None:
@@ -704,9 +704,9 @@ def test_analytic_zi_equidistant() -> None:
     h_layer = depth0 / nlev
     for i in range(nlev + 1):
         expected = -depth0 + i * h_layer
-        assert state.zi[i] == pytest.approx(
-            expected, rel=1e-12
-        ), f"zi[{i}] = {state.zi[i]}, expected {expected}"
+        assert state.zi[i] == pytest.approx(expected, rel=1e-12), (
+            f"zi[{i}] = {state.zi[i]}, expected {expected}"
+        )
 
 
 def test_analytic_ga_equidistant() -> None:

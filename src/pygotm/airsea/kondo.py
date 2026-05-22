@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 from pygotm.airsea.airsea_variables import (
     AirSeaState,
     const06,
@@ -29,17 +31,26 @@ from pygotm.airsea.airsea_variables import (
 
 __all__ = ["kondo"]
 
-_AE_D = (0.0, 0.771, 0.867, 1.2, 0.0)
-_AE_H = (0.0, 0.927, 1.15, 1.17, 1.652)
-_AE_E = (0.0, 0.969, 1.18, 1.196, 1.68)
-_BE_D = (1.08, 0.0858, 0.0667, 0.025, 0.073)
-_BE_H = (1.185, 0.0546, 0.01, 0.0075, -0.017)
-_BE_E = (1.23, 0.0521, 0.01, 0.008, -0.016)
-_CE_H = (0.0, 0.0, 0.0, -0.00045, 0.0)
-_CE_E = (0.0, 0.0, 0.0, -0.0004, 0.0)
-_PE_D = (-0.15, 1.0, 1.0, 1.0, 1.0)
-_PE_H = (-0.157, 1.0, 1.0, 1.0, 1.0)
-_PE_E = (-0.16, 1.0, 1.0, 1.0, 1.0)
+
+def _f32(*xs: float) -> tuple[float, ...]:
+    """Round Python float64 literals to the float32-promoted value GOTM uses for
+    unsuffixed Fortran ``REALTYPE, parameter`` constants."""
+
+    return tuple(float(np.float32(x)) for x in xs)
+
+
+# Numbers from Kondo (1975) Table AI; stored as float32 in GOTM Fortran source.
+_AE_D = _f32(0.0, 0.771, 0.867, 1.2, 0.0)
+_AE_H = _f32(0.0, 0.927, 1.15, 1.17, 1.652)
+_AE_E = _f32(0.0, 0.969, 1.18, 1.196, 1.68)
+_BE_D = _f32(1.08, 0.0858, 0.0667, 0.025, 0.073)
+_BE_H = _f32(1.185, 0.0546, 0.01, 0.0075, -0.017)
+_BE_E = _f32(1.23, 0.0521, 0.01, 0.008, -0.016)
+_CE_H = _f32(0.0, 0.0, 0.0, -0.00045, 0.0)
+_CE_E = _f32(0.0, 0.0, 0.0, -0.0004, 0.0)
+_PE_D = _f32(-0.15, 1.0, 1.0, 1.0, 1.0)
+_PE_H = _f32(-0.157, 1.0, 1.0, 1.0, 1.0)
+_PE_E = _f32(-0.16, 1.0, 1.0, 1.0, 1.0)
 _EPS = 1.0e-12
 
 

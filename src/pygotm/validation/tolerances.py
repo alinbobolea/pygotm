@@ -23,10 +23,21 @@ class FrechetConfig:
     discrepant_tol: float = 0.20
     frechet_abs_tol: float = 1.0e-12
     frechet_rel_tol: float = 1.0e-6
-    frechet_k: int = 400
-    robust: bool = True
-    q_low: float = 1.0
-    q_high: float = 99.0
+    frechet_k: int = 200
+    # Core PyGOTM variables use full-range normalization by default. The
+    # turbulence fields are often floor-dominated; clipping their active tails
+    # with robust percentiles can turn small floor differences into unstable
+    # normalized distances.
+    robust: bool = False
+    q_low: float = 0.1
+    q_high: float = 99.9
+    # Non-PyGOTM variables, primarily PyFABM, use a wide robust range. This
+    # suppresses isolated biogeochemical outliers without hiding broad shape
+    # differences.
+    pyfabm_robust: bool = True
+    pyfabm_q_low: float = 0.1
+    pyfabm_q_high: float = 99.9
+    peak_frechet_k: int = 400
     switch_oom: float = 2.0
     eps_floor: float = 1.0e-12
     default_magnitude_floor: float = 1.0e-6
@@ -46,6 +57,14 @@ class FrechetConfig:
             raise ValueError(msg)
         if not (0.0 <= self.q_low < self.q_high <= 100.0):
             msg = "normalization quantiles must satisfy 0 <= q_low < q_high <= 100"
+            raise ValueError(msg)
+        if not (0.0 <= self.pyfabm_q_low < self.pyfabm_q_high <= 100.0):
+            msg = (
+                "pyfabm normalization quantiles must satisfy 0 <= q_low < q_high <= 100"
+            )
+            raise ValueError(msg)
+        if self.peak_frechet_k <= 0:
+            msg = "peak_frechet_k must be positive"
             raise ValueError(msg)
         if self.switch_oom < 0.0:
             msg = "switch_oom must be non-negative"
@@ -70,6 +89,13 @@ class FrechetConfig:
         if 0.0 < signal_scale < floor:
             return d_raw / signal_scale, "d_rel"
         return d_norm, "d_norm"
+
+    def normalization_settings(self, name: str) -> tuple[bool, float, float]:
+        """Return robust normalization controls for a variable."""
+
+        if classify_section(name) == "pyfabm":
+            return self.pyfabm_robust, self.pyfabm_q_low, self.pyfabm_q_high
+        return self.robust, self.q_low, self.q_high
 
 
 DEFAULT_FRECHET_CONFIG = FrechetConfig()

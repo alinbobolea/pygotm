@@ -13,6 +13,9 @@ from pygotm.turbulence.turbulence import (
 from pygotm.turbulence.variances import VariancesWorkspace, step_variances
 
 _NLEV = 8
+_F90_TWO_THIRDS = float(np.float32(2.0) / np.float32(3.0))
+_F90_FOUR_THIRDS = float(np.float32(4.0) / np.float32(3.0))
+_F90_EIGHT_THIRDS = float(np.float32(8.0) / np.float32(3.0))
 
 
 def _make_state(nlev: int = _NLEV) -> TurbulenceState:
@@ -36,19 +39,21 @@ def _reference_variances(
     SSV: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n_value = 0.5 * state.cc1
-    fac1 = 2.0 / 3.0
+    fac1 = _F90_TWO_THIRDS
     fac3 = state.a2 / 3.0 + state.a3
     fac4 = state.a2 / 3.0 - state.a3
-    fac5 = 2.0 / 3.0 * state.a2
+    fac5 = _F90_TWO_THIRDS * state.a2
     fac2 = 1.0 / (n_value * eps)
 
     uu = tke * (
-        fac1 + fac2 * (fac3 * num * SSU - fac5 * num * SSV - 4.0 / 3.0 * state.a5 * B)
+        fac1
+        + fac2 * (fac3 * num * SSU - fac5 * num * SSV - _F90_FOUR_THIRDS * state.a5 * B)
     )
     vv = tke * (
-        fac1 + fac2 * (fac3 * num * SSV - fac5 * num * SSU - 4.0 / 3.0 * state.a5 * B)
+        fac1
+        + fac2 * (fac3 * num * SSV - fac5 * num * SSU - _F90_FOUR_THIRDS * state.a5 * B)
     )
-    ww = tke * (fac1 + fac2 * (fac4 * (P + Px) + 8.0 / 3.0 * state.a5 * B))
+    ww = tke * (fac1 + fac2 * (fac4 * (P + Px) + _F90_EIGHT_THIRDS * state.a5 * B))
     return uu, vv, ww
 
 
@@ -239,7 +244,7 @@ def test_zero_eps_uses_isotropic_variance_limit() -> None:
         SSV=SSV,
     )
 
-    expected = 2.0 / 3.0 * tke[::2]
+    expected = _F90_TWO_THIRDS * tke[::2]
     np.testing.assert_allclose(workspace.uu[0, ::2], expected)
     np.testing.assert_allclose(workspace.vv[0, ::2], expected)
     np.testing.assert_allclose(workspace.ww[0, ::2], expected)

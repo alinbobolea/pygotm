@@ -2,16 +2,35 @@
 
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
 
-from pygotm.validation.report import CaseResult
+import pytest
+from click.testing import CliRunner
+
+from pygotm.validation import run_validation
+from pygotm.validation.hardware import PlatformInfo
+from pygotm.validation.report import CaseResult, Report
 from pygotm.validation.run_validation import (
     ALL_CASES,
     DEFAULT_CASES,
     NON_STIM_CASES,
     _make_on_result,
+    _run_cases,
     _select_case_list,
 )
+
+
+def _case_result(status: str = "PASS") -> CaseResult:
+    return CaseResult(
+        case_name="couette",
+        status=status,
+        error=None,
+        py_nc_path="validation/runs/couette/couette.nc",
+        ref_nc_path="validation/reference/couette/couette.nc",
+        wall_time_s=0.0,
+        task_name="couette-gotm",
+        n_pass=1 if status == "PASS" else 0,
+    )
 
 
 def test_non_stim_group_excludes_stim_cases() -> None:
@@ -85,3 +104,146 @@ def test_on_result_reports_completed_case_counts(
         "Complete case: couette-gotm [10.0s] | 1/2 cases",
         "Complete case: channel-gotm [11.0s] | 2/2 cases",
     ]
+
+
+def test_run_cases_renders_multi_case_no_run_with_dask(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run_cases_parallel(**kwargs: object) -> list[CaseResult]:
+        assert kwargs["case_names"] == ["couette", "channel"]
+        assert kwargs["runs_dir"] == tmp_path / "runs"
+        assert kwargs["arch_name"] == "cpu"
+        assert kwargs["n_workers"] == 4
+        assert kwargs["skip_run"] is True
+        assert kwargs["debug_turbulence"] is False
+        assert kwargs["report_dir"] == tmp_path
+        assert kwargs["report_generated_at"] == "2026-05-22T00:00:00Z"
+        assert kwargs["report_hardware"] == {"execution_backend": "cpu"}
+        return [_case_result(), _case_result()]
+
+    monkeypatch.setattr(
+        run_validation,
+        "run_cases_parallel",
+        fake_run_cases_parallel,
+    )
+
+    results = _run_cases(
+        case_list=["couette", "channel"],
+        runs_dir=tmp_path / "runs",
+        output_dir=tmp_path,
+        selected_arch="cpu",
+        n_workers=4,
+        dashboard_port=8787,
+        generated_at="2026-05-22T00:00:00Z",
+        hardware={"execution_backend": "cpu"},
+        skip_run=True,
+        debug_turbulence=False,
+        on_result=lambda result: None,
+    )
+
+    assert results == [_case_result(), _case_result()]
+
+
+def test_run_cases_renders_single_case_no_run_directly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fail_run_cases_parallel(**kwargs: object) -> list[CaseResult]:
+        raise AssertionError("single-case report rendering should not enter Dask")
+
+    def fake_validate_case_to_html(
+        case_name: str,
+        runs_dir: Path,
+        output_dir: Path,
+        *,
+        generated_at: str,
+        hardware: dict[str, str],
+        skip_run: bool = False,
+        debug_turbulence: bool = False,
+    ) -> CaseResult:
+        assert runs_dir == tmp_path / "runs"
+        assert output_dir == tmp_path
+        assert generated_at == "2026-05-22T00:00:00Z"
+        assert hardware == {"execution_backend": "cpu"}
+        assert skip_run
+        assert not debug_turbulence
+        calls.append(case_name)
+        return _case_result()
+
+    monkeypatch.setattr(
+        run_validation,
+        "run_cases_parallel",
+        fail_run_cases_parallel,
+    )
+    monkeypatch.setattr(
+        run_validation,
+        "validate_case_to_html",
+        fake_validate_case_to_html,
+    )
+
+    results = _run_cases(
+        case_list=["couette"],
+        runs_dir=tmp_path / "runs",
+        output_dir=tmp_path,
+        selected_arch="cpu",
+        n_workers=4,
+        dashboard_port=8787,
+        generated_at="2026-05-22T00:00:00Z",
+        hardware={"execution_backend": "cpu"},
+        skip_run=True,
+        debug_turbulence=False,
+        on_result=lambda result: None,
+    )
+
+    assert results == [_case_result()]
+    assert calls == ["couette"]
+
+
+def test_run_validation_cli_writes_html_without_results_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        run_validation,
+        "detect_platform",
+        lambda: PlatformInfo(
+            cpu_count=2,
+            gpu_count=0,
+            available_archs=["cpu"],
+            hardware={"cpu_count": "2"},
+        ),
+    )
+
+    def fake_run_cases(**kwargs: object) -> list[CaseResult]:
+        assert kwargs["skip_run"] is True
+        output_dir = kwargs["output_dir"]
+        assert isinstance(output_dir, Path)
+        (output_dir / "couette-gotm.html").write_text("case", encoding="utf-8")
+        return [_case_result()]
+
+    def fake_write_html_index(report: Report, output_dir: Path) -> Path:
+        path = output_dir / "report.html"
+        path.write_text(report.verdict, encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(run_validation, "_run_cases", fake_run_cases)
+    monkeypatch.setattr(run_validation, "write_html_index", fake_write_html_index)
+
+    result = CliRunner().invoke(
+        run_validation.cli,
+        [
+            "--cases",
+            "couette",
+            "--no-run",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "report.html").is_file()
+    assert not (tmp_path / "results.json").exists()
+    assert "JSON" not in result.output

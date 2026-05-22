@@ -26,7 +26,9 @@ from pygotm.util.density import (
 # ---------------------------------------------------------------------------
 
 
-def _uniform_column(nlev: int, S: float, T: float, p_surface: float = 0.0) -> tuple[
+def _uniform_column(
+    nlev: int, S: float, T: float, p_surface: float = 0.0
+) -> tuple[
     np.ndarray,
     np.ndarray,
     np.ndarray,

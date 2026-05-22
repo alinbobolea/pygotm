@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
+import pygotm.validation.compare as compare_mod
 from pygotm.validation.compare import VarResult, compare_nc
 
 
@@ -58,6 +59,7 @@ def test_var_result_has_required_fields() -> None:
     assert v.d_norm == pytest.approx(0.0)
     assert v.metric_mode == "d_norm"
     assert v.primary_score == pytest.approx(0.0)
+    assert v.peak_d_norm is None
 
 
 def test_var_result_has_no_old_metric_fields() -> None:
@@ -156,6 +158,48 @@ def test_sparse_localized_excursion_uses_normalized_frechet_score(
 
     assert result.metric_mode == "d_norm"
     assert result.primary_score == pytest.approx(result.d_norm)
+    assert result.peak_d_norm is not None
+
+
+def test_compare_uses_hybrid_normalization_and_peak_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[bool, float, float, int]] = []
+
+    def fake_frechet_raw_and_normalized(
+        *_args: object,
+        robust: bool,
+        q_low: float,
+        q_high: float,
+        frechet_k: int,
+        **_kwargs: object,
+    ) -> dict[str, float | str]:
+        calls.append((robust, q_low, q_high, frechet_k))
+        return {
+            "d_raw": 0.0,
+            "d_norm": 0.0,
+            "normalization_mode": "test",
+        }
+
+    monkeypatch.setattr(
+        compare_mod,
+        "frechet_raw_and_normalized",
+        fake_frechet_raw_and_normalized,
+    )
+    arr = np.linspace(1.0, 2.0, 20)
+    _write_nc(tmp_path / "py.nc", {"temp": arr, "oxygen": arr})
+    _write_nc(tmp_path / "ref.nc", {"temp": arr, "oxygen": arr})
+
+    results = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")
+
+    assert [result.name for result in results] == ["temp", "oxygen"]
+    assert calls == [
+        (False, 0.1, 99.9, 200),
+        (False, 0.1, 99.9, 400),
+        (True, 0.1, 99.9, 200),
+        (False, 0.1, 99.9, 400),
+    ]
 
 
 def test_near_zero_nn_small_relative_deviation_is_pass(tmp_path: Path) -> None:

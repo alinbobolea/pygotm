@@ -10,7 +10,7 @@ from dask.distributed import Client, LocalCluster, as_completed
 
 from pygotm.validate import resolve_reference_case
 from pygotm.validation.report import CaseResult
-from pygotm.validation.runner import validate_case
+from pygotm.validation.runner import validate_case, validate_case_to_html
 
 __all__ = ["run_cases_parallel"]
 
@@ -21,6 +21,9 @@ def _run_case_worker(
     arch_name: str,
     skip_run: bool,
     debug_turbulence: bool = False,
+    report_dir: Path | None = None,
+    report_generated_at: str | None = None,
+    report_hardware: dict[str, str] | None = None,
 ) -> CaseResult:
     """Worker function executed in each Dask subprocess.
 
@@ -28,6 +31,20 @@ def _run_case_worker(
     compatibility with the validation CLI; Numba kernels currently execute on CPU.
     """
     _ = arch_name
+
+    if report_dir is not None:
+        if report_generated_at is None:
+            msg = "report_generated_at is required when report_dir is set"
+            raise ValueError(msg)
+        return validate_case_to_html(
+            case_name,
+            runs_dir,
+            report_dir,
+            generated_at=report_generated_at,
+            hardware=report_hardware or {},
+            skip_run=skip_run,
+            debug_turbulence=debug_turbulence,
+        )
 
     return validate_case(
         case_name,
@@ -46,6 +63,10 @@ def run_cases_parallel(
     dashboard_port: int = 8787,
     skip_run: bool = False,
     debug_turbulence: bool = False,
+    report_dir: Path | None = None,
+    report_generated_at: str | None = None,
+    report_hardware: dict[str, str] | None = None,
+    processes: bool = True,
     on_result: Callable[[CaseResult], None] | None = None,
 ) -> list[CaseResult]:
     """Run *case_names* in parallel using a Dask LocalCluster.
@@ -62,7 +83,7 @@ def run_cases_parallel(
         LocalCluster(  # type: ignore[no-untyped-call]
             n_workers=n_workers,
             threads_per_worker=1,
-            processes=True,
+            processes=processes,
             # Disable Dask nanny memory kills; validation owns failure reporting.
             memory_limit=0,
             silence_logs=logging.CRITICAL,
@@ -80,6 +101,9 @@ def run_cases_parallel(
                 arch_name,
                 skip_run,
                 debug_turbulence,
+                report_dir,
+                report_generated_at,
+                report_hardware,
                 key=case.task_name,
             ): index
             for index, case in enumerate(cases)

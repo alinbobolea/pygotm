@@ -23,11 +23,14 @@ __all__ = [
     "render_case_html",
     "render_html",
     "save_json",
+    "write_case_html",
+    "write_html_index",
     "write_html_reports",
 ]
 
 _STATUS_COLORS: dict[str, str] = {
     "PASS": "#2e7d32",
+    "FAIL": "#c62828",
     "MARGINAL": "#f9a825",
     "DISCREPANT": "#e65100",
     "BROKEN": "#c62828",
@@ -36,6 +39,7 @@ _STATUS_COLORS: dict[str, str] = {
 
 _BADGE_CLASSES: dict[str, str] = {
     "PASS": "badge-pass",
+    "FAIL": "badge-broken",
     "MARGINAL": "badge-marginal",
     "DISCREPANT": "badge-discrepant",
     "BROKEN": "badge-broken",
@@ -132,6 +136,9 @@ def _var_result_from_json(data: dict[str, Any]) -> VarResult:
     raw.setdefault("plot_html", None)
     raw.setdefault("metric_mode", "d_norm")
     raw["score"] = _json_float(raw.get("score"), raw["d_norm"])
+    raw["peak_d_norm"] = (
+        None if raw.get("peak_d_norm") is None else _json_float(raw.get("peak_d_norm"))
+    )
     return VarResult(**raw)
 
 
@@ -202,12 +209,13 @@ def _var_rows_html(variables: list[VarResult]) -> str:
             f"<td><code>{_fmt_full(v.calculated_at_worst)}</code></td>"
             f"<td>{_fmt(v.d_raw)}</td>"
             f"<td>{_fmt(v.primary_score)}{metric_label}</td>"
+            f"<td>{_fmt(v.peak_d_norm)}</td>"
             f"<td>{'—' if v.plot_html is None else '↓ see below'}</td>"
             f"</tr>\n"
         )
         if v.plot_html is not None:
             rows += (
-                '<tr><td colspan="7" style="padding:0;border-top:none">'
+                '<tr><td colspan="8" style="padding:0;border-top:none">'
                 f'<div class="plot-container">{v.plot_html}</div>'
                 "</td></tr>\n"
             )
@@ -227,6 +235,7 @@ def _section_html(section_label: str, variables: list[VarResult]) -> str:
         "<th>Calculated (full precision)</th>"
         "<th>Raw Frechet</th>"
         "<th>Score (Normalized Frechet / d_rel)</th>"
+        "<th>Peak-sensitive d_norm</th>"
         "<th>Parameter plot</th>"
         "</tr></thead>"
         f"<tbody>{_var_rows_html(variables)}</tbody></table>"
@@ -548,9 +557,29 @@ def write_html_reports(
     """Write the report index and one standalone HTML page per validation case."""
     output_dir.mkdir(parents=True, exist_ok=True)
     for case in report.cases:
-        case_path = output_dir / _case_report_filename(case)
-        case_path.write_text(render_case_html(report, case), encoding="utf-8")
+        write_case_html(report, case, output_dir)
 
+    return write_html_index(report, output_dir, index_filename=index_filename)
+
+
+def write_case_html(report: Report, case: CaseResult, output_dir: Path) -> Path:
+    """Write one standalone validation case HTML page."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    case_path = output_dir / _case_report_filename(case)
+    case_path.write_text(render_case_html(report, case), encoding="utf-8")
+    return case_path
+
+
+def write_html_index(
+    report: Report,
+    output_dir: Path,
+    *,
+    index_filename: str = "report.html",
+) -> Path:
+    """Write the validation report index without rewriting case pages."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
     index_path = output_dir / index_filename
     index_path.write_text(render_html(report), encoding="utf-8")
     return index_path

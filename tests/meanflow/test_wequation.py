@@ -120,9 +120,9 @@ def test_peak_is_at_w_height() -> None:
     peak_idx = int(np.argmax(w_inner)) + 1
 
     # Within one layer of the expected peak
-    assert (
-        abs(peak_idx - closest) <= 1
-    ), f"Peak at level {peak_idx} but expected near level {closest}"
+    assert abs(peak_idx - closest) <= 1, (
+        f"Peak at level {peak_idx} but expected near level {closest}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +136,9 @@ def test_positive_w_adv_gives_positive_w() -> None:
     state = _make_state(nlev=nlev)
     assert state.w is not None
     wequation(state, nlev, _DT, W_ADV_PROFILE, w_adv=0.03, w_height=_DEPTH * 0.5)
-    assert np.all(
-        state.w[1:nlev] >= 0.0
-    ), "Positive w_adv must give non-negative interior w"
+    assert np.all(state.w[1:nlev] >= 0.0), (
+        "Positive w_adv must give non-negative interior w"
+    )
 
 
 def test_negative_w_adv_gives_negative_w() -> None:
@@ -147,9 +147,9 @@ def test_negative_w_adv_gives_negative_w() -> None:
     state = _make_state(nlev=nlev)
     assert state.w is not None
     wequation(state, nlev, _DT, W_ADV_PROFILE, w_adv=-0.03, w_height=_DEPTH * 0.5)
-    assert np.all(
-        state.w[1:nlev] <= 0.0
-    ), "Negative w_adv must give non-positive interior w"
+    assert np.all(state.w[1:nlev] <= 0.0), (
+        "Negative w_adv must give non-positive interior w"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -192,9 +192,9 @@ def test_clamping_top() -> None:
 
     col_depth = float(state.zi[nlev]) - float(state.zi[0])
     expected_max = float(state.zi[nlev]) - 0.01 * col_depth
-    assert (
-        returned_height <= expected_max + 1e-12
-    ), "Returned w_height must be clamped at top"
+    assert returned_height <= expected_max + 1e-12, (
+        "Returned w_height must be clamped at top"
+    )
 
 
 def test_clamping_bottom() -> None:
@@ -213,9 +213,9 @@ def test_clamping_bottom() -> None:
 
     col_depth = float(state.zi[nlev]) - float(state.zi[0])
     expected_min = float(state.zi[0]) + 0.01 * col_depth
-    assert (
-        returned_height >= expected_min - 1e-12
-    ), "Returned w_height must be clamped at bottom"
+    assert returned_height >= expected_min - 1e-12, (
+        "Returned w_height must be clamped at bottom"
+    )
 
 
 # ---------------------------------------------------------------------------

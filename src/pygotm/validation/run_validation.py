@@ -5,7 +5,7 @@ Workflow:
   2. Warm up Numba kernels once before timed runs
   4. Run validation cases in parallel via Dask (dashboard at --dashboard-port)
   5. Compare each run against Fortran reference NetCDF
-  6. Write validation/results.json + validation/report.html + per-case reports
+  6. Write validation/report.html + per-case reports
 
 Usage
 -----
@@ -31,8 +31,8 @@ import click
 from pygotm.validate import REFERENCE_CASE_NAMES
 from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
-from pygotm.validation.report import CaseResult, Report, save_json, write_html_reports
-from pygotm.validation.runner import validate_case
+from pygotm.validation.report import CaseResult, Report, write_html_index
+from pygotm.validation.runner import validate_case_to_html
 from pygotm.validation.warmup import trigger_numba_jit
 
 ALL_CASES: tuple[str, ...] = REFERENCE_CASE_NAMES
@@ -103,6 +103,54 @@ def _make_on_result(total: int) -> Callable[[CaseResult], None]:
     return on_result
 
 
+def _run_cases(
+    *,
+    case_list: list[str],
+    runs_dir: Path,
+    output_dir: Path,
+    selected_arch: str,
+    n_workers: int,
+    dashboard_port: int,
+    generated_at: str,
+    hardware: dict[str, str],
+    skip_run: bool,
+    debug_turbulence: bool,
+    on_result: Callable[[CaseResult], None],
+) -> list[CaseResult]:
+    if not case_list:
+        return []
+
+    if len(case_list) == 1:
+        results: list[CaseResult] = []
+        for case_name in case_list:
+            result = validate_case_to_html(
+                case_name,
+                runs_dir,
+                output_dir,
+                generated_at=generated_at,
+                hardware=hardware,
+                skip_run=skip_run,
+                debug_turbulence=debug_turbulence,
+            )
+            on_result(result)
+            results.append(result)
+        return results
+
+    return run_cases_parallel(
+        case_names=case_list,
+        runs_dir=runs_dir,
+        arch_name=selected_arch,
+        n_workers=n_workers,
+        dashboard_port=dashboard_port,
+        skip_run=skip_run,
+        debug_turbulence=debug_turbulence,
+        report_dir=output_dir,
+        report_generated_at=generated_at,
+        report_hardware=hardware,
+        on_result=on_result,
+    )
+
+
 @click.command()
 @click.option(
     "--cases",
@@ -142,7 +190,7 @@ def _make_on_result(total: int) -> Callable[[CaseResult], None]:
     default=None,
     type=int,
     metavar="N",
-    help="Dask worker count. Defaults to detected CPU count.",
+    help="Dask worker count for simulation runs. Defaults to detected CPU count.",
 )
 @click.option(
     "--dashboard-port",
@@ -188,7 +236,7 @@ def cli(
     skip_warmup: bool,
     debug_turbulence: bool,
 ) -> None:
-    """Run pyGOTM validation and produce JSON + HTML report."""
+    """Run pyGOTM validation and produce HTML reports."""
     # 1. Detect platform
     platform_info = detect_platform()
     arch_choices = platform_info.available_archs
@@ -223,29 +271,20 @@ def cli(
     hw["execution_backend"] = selected_arch
 
     on_result = _make_on_result(len(case_list))
-
-    if skip_run:
-        results: list[CaseResult] = []
-        for name in case_list:
-            result = validate_case(
-                name,
-                runs_dir,
-                skip_run=True,
-                debug_turbulence=debug_turbulence,
-            )
-            on_result(result)
-            results.append(result)
-    else:
-        results = run_cases_parallel(
-            case_names=case_list,
-            runs_dir=runs_dir,
-            arch_name=selected_arch,
-            n_workers=n_workers,
-            dashboard_port=dashboard_port,
-            skip_run=False,
-            debug_turbulence=debug_turbulence,
-            on_result=on_result,
-        )
+    generated_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    results = _run_cases(
+        case_list=case_list,
+        runs_dir=runs_dir,
+        output_dir=output_dir,
+        selected_arch=selected_arch,
+        n_workers=n_workers,
+        dashboard_port=dashboard_port,
+        generated_at=generated_at,
+        hardware=hw,
+        skip_run=skip_run,
+        debug_turbulence=debug_turbulence,
+        on_result=on_result,
+    )
 
     # 6. Build and write report
     cases_passed = sum(1 for r in results if r.status == "PASS")
@@ -258,21 +297,18 @@ def cli(
         verdict = "FAILED VALIDATION"
 
     report = Report(
-        generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_at=generated_at,
         hardware=hw,
         cases=results,
         verdict=verdict,
     )
 
-    json_path = output_dir / "results.json"
     html_path = output_dir / "report.html"
-    save_json(report, json_path)
-    write_html_reports(report, output_dir)
+    write_html_index(report, output_dir)
 
     print()
     print("pyGOTM validation complete")
     print(f"  Cases completed: {n_cases}/{len(case_list)}")
-    print(f"  JSON  : {json_path}")
     print(f"  HTML  : {html_path}")
 
     raise SystemExit(0 if verdict == "FULL PARITY" else 1)

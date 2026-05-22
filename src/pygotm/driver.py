@@ -221,8 +221,20 @@ class GotmDriver:
 
     @staticmethod
     def write_dataset(dataset: xr.Dataset, path: str | Path) -> None:
-        """Write *dataset* to a NetCDF file."""
+        """Write *dataset* to a NetCDF file.
+
+        Floating-point data variables are written as ``float32`` to match the
+        single-precision convention used by the Fortran GOTM NetCDF output.
+        Storing both files at the same precision is required for the validation
+        Frechet metric: a difference of float64(1e-10) vs float32(1e-10) on a
+        floor value would otherwise straddle the minimum-clip boundary and
+        produce spurious shape disagreements in the normalized comparison.
+        """
 
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        dataset.to_netcdf(output_path, engine="scipy")
+        encoding: dict[str, dict[str, Any]] = {}
+        for name, var in dataset.data_vars.items():
+            if np.issubdtype(var.dtype, np.floating):
+                encoding[str(name)] = {"dtype": "float32"}
+        dataset.to_netcdf(output_path, engine="scipy", encoding=encoding)

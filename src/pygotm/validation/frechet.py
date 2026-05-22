@@ -126,27 +126,23 @@ def _robust_range(
     )
 
 
-def dynamic_log_range_normalize_pair(
-    a: npt.ArrayLike,
-    b: npt.ArrayLike,
-    robust: bool = True,
-    q_low: float = 1.0,
-    q_high: float = 99.0,
-    switch_oom: float = 2.0,
-    eps_floor: float = 1.0e-12,
-) -> tuple[FloatArray, FloatArray, dict[str, float | str]]:
-    """Normalize a paired series to [0, 1] using dynamic linear/log scaling."""
+def _compute_normalization_params(
+    finite_mag: FloatArray,
+    robust: bool,
+    q_low: float,
+    q_high: float,
+    switch_oom: float,
+    eps_floor: float,
+) -> dict[str, float | str]:
+    """Derive normalization mode and range from full-data magnitudes.
 
-    a_arr = np.asarray(a, dtype=np.float64).ravel()
-    b_arr = np.asarray(b, dtype=np.float64).ravel()
-    mag_a = np.abs(a_arr)
-    mag_b = np.abs(b_arr)
-    mag_all = np.concatenate([mag_a, mag_b])
-    finite_mag = mag_all[np.isfinite(mag_all)]
+    Computing percentiles, span, and mode-selection on the full data set (not
+    on a subsequently downsampled subset) keeps the normalization stable when
+    the downsampler skips peak-bearing strides.
+    """
+
     if finite_mag.size == 0:
-        zeros_a = np.zeros_like(a_arr, dtype=np.float64)
-        zeros_b = np.zeros_like(b_arr, dtype=np.float64)
-        return zeros_a, zeros_b, {"mode": "degenerate"}
+        return {"mode": "degenerate"}
 
     if robust:
         low_est, high_est = _robust_range(finite_mag, q_low, q_high)
@@ -158,19 +154,16 @@ def dynamic_log_range_normalize_pair(
         high_est = float(np.max(finite_mag))
 
     if not np.isfinite(high_est) or high_est <= 0.0:
-        zeros_a = np.zeros_like(a_arr, dtype=np.float64)
-        zeros_b = np.zeros_like(b_arr, dtype=np.float64)
-        return zeros_a, zeros_b, {"mode": "degenerate"}
+        return {"mode": "degenerate"}
 
     low_pos = max(low_est, eps_floor)
     span_decades = float(np.log10(high_est) - np.log10(low_pos))
+
     if span_decades >= switch_oom:
         pos_all = finite_mag[finite_mag > 0.0]
         min_pos = float(np.min(pos_all)) if pos_all.size else 0.0
         eps_dyn = max(eps_floor, 0.1 * min_pos)
-        log_a = np.log10(mag_a + eps_dyn)
-        log_b = np.log10(mag_b + eps_dyn)
-        log_all = np.concatenate([log_a, log_b])
+        log_all = np.log10(finite_mag + eps_dyn)
         finite_log = log_all[np.isfinite(log_all)]
         if robust:
             log_lo, log_hi = _robust_range(finite_log, q_low, q_high)
@@ -181,34 +174,91 @@ def dynamic_log_range_normalize_pair(
             log_lo = float(np.min(finite_log))
             log_hi = float(np.max(finite_log))
         denom = log_hi - log_lo
-        if not np.isfinite(denom) or denom <= 1.0e-15:
-            a_norm = np.zeros_like(a_arr, dtype=np.float64)
-            b_norm = np.zeros_like(b_arr, dtype=np.float64)
-        else:
-            a_norm = (log_a - log_lo) / denom
-            b_norm = (log_b - log_lo) / denom
-        return (
-            np.clip(a_norm, 0.0, 1.0),
-            np.clip(b_norm, 0.0, 1.0),
-            {"mode": "log", "span_decades": span_decades},
-        )
+        return {
+            "mode": "log",
+            "span_decades": span_decades,
+            "eps_dyn": eps_dyn,
+            "log_lo": log_lo,
+            "denom": denom,
+        }
 
     lin_lo, lin_hi = low_est, high_est
     if not np.isfinite(lin_lo) or not np.isfinite(lin_hi) or lin_hi <= lin_lo:
         lin_lo = float(np.min(finite_mag))
         lin_hi = float(np.max(finite_mag))
     denom = lin_hi - lin_lo
+    return {
+        "mode": "linear",
+        "span_decades": span_decades,
+        "lin_lo": lin_lo,
+        "denom": denom,
+    }
+
+
+def _apply_normalization_params(
+    a: FloatArray,
+    b: FloatArray,
+    params: dict[str, float | str],
+) -> tuple[FloatArray, FloatArray]:
+    """Map two arrays to [0, 1] using normalization params from another set."""
+
+    mode = params.get("mode", "degenerate")
+    mag_a = np.abs(a)
+    mag_b = np.abs(b)
+    if mode == "degenerate":
+        return np.zeros_like(a, dtype=np.float64), np.zeros_like(b, dtype=np.float64)
+
+    if mode == "log":
+        eps_dyn = float(params["eps_dyn"])
+        log_lo = float(params["log_lo"])
+        denom = float(params["denom"])
+        log_a = np.log10(mag_a + eps_dyn)
+        log_b = np.log10(mag_b + eps_dyn)
+        if not np.isfinite(denom) or denom <= 1.0e-15:
+            return (
+                np.zeros_like(a, dtype=np.float64),
+                np.zeros_like(b, dtype=np.float64),
+            )
+        a_norm = (log_a - log_lo) / denom
+        b_norm = (log_b - log_lo) / denom
+        return np.clip(a_norm, 0.0, 1.0), np.clip(b_norm, 0.0, 1.0)
+
+    # linear
+    lin_lo = float(params["lin_lo"])
+    denom = float(params["denom"])
     if not np.isfinite(denom) or denom <= 1.0e-15:
-        a_norm = np.zeros_like(a_arr, dtype=np.float64)
-        b_norm = np.zeros_like(b_arr, dtype=np.float64)
-    else:
-        a_norm = (mag_a - lin_lo) / denom
-        b_norm = (mag_b - lin_lo) / denom
-    return (
-        np.clip(a_norm, 0.0, 1.0),
-        np.clip(b_norm, 0.0, 1.0),
-        {"mode": "linear", "span_decades": span_decades},
+        return np.zeros_like(a, dtype=np.float64), np.zeros_like(b, dtype=np.float64)
+    a_norm = (mag_a - lin_lo) / denom
+    b_norm = (mag_b - lin_lo) / denom
+    return np.clip(a_norm, 0.0, 1.0), np.clip(b_norm, 0.0, 1.0)
+
+
+def dynamic_log_range_normalize_pair(
+    a: npt.ArrayLike,
+    b: npt.ArrayLike,
+    robust: bool = True,
+    q_low: float = 1.0,
+    q_high: float = 99.0,
+    switch_oom: float = 2.0,
+    eps_floor: float = 1.0e-12,
+) -> tuple[FloatArray, FloatArray, dict[str, float | str]]:
+    """Normalize a paired series to [0, 1] using dynamic linear/log scaling.
+
+    Public API preserved for backward compatibility — derives normalization
+    params from the input pair and applies them to the same pair.
+    """
+
+    a_arr = np.asarray(a, dtype=np.float64).ravel()
+    b_arr = np.asarray(b, dtype=np.float64).ravel()
+    mag_all = np.concatenate([np.abs(a_arr), np.abs(b_arr)])
+    finite_mag = mag_all[np.isfinite(mag_all)]
+    params = _compute_normalization_params(
+        finite_mag, robust, q_low, q_high, switch_oom, eps_floor
     )
+    a_norm, b_norm = _apply_normalization_params(a_arr, b_arr, params)
+    meta_keys = ("mode", "span_decades")
+    meta = {k: params[k] for k in meta_keys if k in params}
+    return a_norm, b_norm, meta
 
 
 def _downsample_pair(
@@ -242,12 +292,23 @@ def frechet_raw_and_normalized(
     eps_floor: float = 1.0e-12,
     frechet_k: int = 400,
 ) -> FrechetResult:
-    """Return raw and dynamically normalized Frechet distances."""
+    """Return raw and dynamically normalized Frechet distances.
+
+    Normalization mode and range are computed from the *full* aligned series
+    so that the downsampling stride cannot flip the mode (log/linear) by
+    landing on or skipping isolated peaks.
+    """
 
     del norm_tolerance
     a, b = _prepare_pair(runA, runB)
     if a.size == 0:
         return {"d_raw": 0.0, "d_norm": 0.0, "normalization_mode": "degenerate"}
+
+    mag_all = np.concatenate([np.abs(a), np.abs(b)])
+    finite_mag = mag_all[np.isfinite(mag_all)]
+    norm_params = _compute_normalization_params(
+        finite_mag, robust, q_low, q_high, switch_oom, eps_floor
+    )
 
     a_sample, b_sample = _downsample_pair(a, b, frechet_k)
     p_raw = np.ascontiguousarray(a_sample.reshape(-1, 1), dtype=np.float64)
@@ -257,25 +318,17 @@ def frechet_raw_and_normalized(
         return {"d_raw": 0.0, "d_norm": 0.0, "normalization_mode": "abs_tolerance"}
 
     signal_scale = max(
-        float(np.max(np.abs(a_sample))), float(np.max(np.abs(b_sample))), eps_floor
+        float(np.max(np.abs(a))), float(np.max(np.abs(b))), eps_floor
     )
     if d_raw < rel_tolerance * signal_scale:
         return {"d_raw": d_raw, "d_norm": 0.0, "normalization_mode": "rel_tolerance"}
 
-    a_norm, b_norm, meta = dynamic_log_range_normalize_pair(
-        a_sample,
-        b_sample,
-        robust=robust,
-        q_low=q_low,
-        q_high=q_high,
-        switch_oom=switch_oom,
-        eps_floor=eps_floor,
-    )
+    a_norm, b_norm = _apply_normalization_params(a_sample, b_sample, norm_params)
     p_norm = np.ascontiguousarray(a_norm.reshape(-1, 1), dtype=np.float64)
     q_norm = np.ascontiguousarray(b_norm.reshape(-1, 1), dtype=np.float64)
     d_norm = _frechet_distance(p_norm, q_norm)
     return {
         "d_raw": d_raw,
         "d_norm": d_norm,
-        "normalization_mode": str(meta["mode"]),
+        "normalization_mode": str(norm_params.get("mode", "degenerate")),
     }

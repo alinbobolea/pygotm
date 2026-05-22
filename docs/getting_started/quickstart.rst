@@ -82,7 +82,7 @@ Compare pyGOTM output against the official Fortran GOTM reference cases:
    conda run -n pygotm python -m pygotm.validation.run_validation \
        --cases couette,channel,entrainment
 
-Output: ``validation/report.html`` and ``validation/results.json``
+Output: ``validation/report.html`` plus one per-case HTML report.
 
 Python API Summary
 ------------------

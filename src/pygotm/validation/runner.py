@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import time
 import traceback
+from dataclasses import replace
 from pathlib import Path
 
 from pygotm.validation.compare import compare_nc
 from pygotm.validation.debug import write_turbulence_debug_dump
-from pygotm.validation.report import CaseResult
+from pygotm.validation.report import CaseResult, Report, write_case_html
 
-__all__ = ["main", "run_case", "validate_case"]
+__all__ = [
+    "main",
+    "run_case",
+    "validate_case",
+    "validate_case_to_html",
+]
 
 
 def _ref_path(case_name: str) -> Path:
@@ -119,6 +125,48 @@ def validate_case(
         n_discrepant=n_discrepant,
         n_broken=n_broken,
     )
+
+
+def _case_verdict(result: CaseResult) -> str:
+    if result.status == "PASS":
+        return "FULL PARITY"
+    if result.status == "ERROR":
+        return "FAILED VALIDATION"
+    return "PARTIAL PARITY"
+
+
+def _summary_case(result: CaseResult) -> CaseResult:
+    """Drop per-variable plot payloads after the case HTML has been written."""
+
+    return replace(result, variables=[])
+
+
+def validate_case_to_html(
+    case_name: str,
+    runs_dir: Path,
+    output_dir: Path,
+    *,
+    generated_at: str,
+    hardware: dict[str, str],
+    skip_run: bool = False,
+    debug_turbulence: bool = False,
+) -> CaseResult:
+    """Run or compare one case, write its HTML page, and return a summary."""
+
+    result = validate_case(
+        case_name,
+        runs_dir,
+        skip_run=skip_run,
+        debug_turbulence=debug_turbulence,
+    )
+    report = Report(
+        generated_at=generated_at,
+        hardware=hardware,
+        cases=[result],
+        verdict=_case_verdict(result),
+    )
+    write_case_html(report, result, output_dir)
+    return _summary_case(result)
 
 
 def main() -> None:

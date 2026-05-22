@@ -21,6 +21,7 @@ from pygotm.turbulence.turbulence import (
 _NLEV = 12
 _DT = 60.0
 _DEPTH = 24.0
+_F90_SQRT_TWO = float(np.float32(np.sqrt(2.0)))
 
 
 def _zeros(nlev: int = _NLEV) -> np.ndarray:
@@ -472,7 +473,7 @@ def test_galperin_length_limit_applies_under_stable_stratification() -> None:
 
     assert state.eps is not None
     assert state.L is not None
-    epslim = state.cde / np.sqrt(2.0) / state.galp * tke[1:nlev] * np.sqrt(NN[1:nlev])
+    epslim = state.cde / _F90_SQRT_TWO / state.galp * tke[1:nlev] * np.sqrt(NN[1:nlev])
     expected_l = state.cde * np.sqrt(tke[1:nlev] ** 3) / epslim
     np.testing.assert_allclose(state.eps[2 : nlev - 1], epslim[1:-1], rtol=1.0e-12)
     np.testing.assert_allclose(state.L[2 : nlev - 1], expected_l[1:-1], rtol=1.0e-12)

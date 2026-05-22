@@ -22,6 +22,7 @@ from pygotm.turbulence.turbulence import (
 _NLEV = 12
 _DT = 60.0
 _DEPTH = 24.0
+_F90_SQRT_TWO = float(np.float32(np.sqrt(2.0)))
 
 
 def make_equidistant_h(nlev: int, depth: float) -> np.ndarray:
@@ -488,7 +489,7 @@ def test_galperin_length_limit_applies_under_stable_stratification() -> None:
 
     assert state.eps is not None
     assert state.L is not None
-    epslim = state.cde / np.sqrt(2.0) / state.galp * tke[1:nlev] * np.sqrt(NN[1:nlev])
+    epslim = state.cde / _F90_SQRT_TWO / state.galp * tke[1:nlev] * np.sqrt(NN[1:nlev])
     np.testing.assert_allclose(state.eps[1:nlev], epslim, rtol=1.0e-12)
     expected_l = state.cde * np.sqrt(tke[1:nlev] ** 3) / epslim
     np.testing.assert_allclose(state.L[1:nlev], expected_l, rtol=1.0e-12)

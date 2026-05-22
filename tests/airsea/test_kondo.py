@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 from pygotm.airsea.airsea_variables import (
@@ -23,6 +24,12 @@ _SST = 18.0
 _AIRT = 15.0
 
 
+def _f32(*values: float) -> tuple[float, ...]:
+    """Return unsuffixed Fortran literal values after float32 promotion."""
+
+    return tuple(float(np.float32(value)) for value in values)
+
+
 def _make_state() -> AirSeaState:
     state = AirSeaState()
     humidity(state, 1, 75.0, _AIRP, _SST, _AIRT)
@@ -37,17 +44,17 @@ def _expected_kondo(
     v10: float,
     precip: float,
 ) -> tuple[float, float, float, float, float]:
-    ae_d = (0.0, 0.771, 0.867, 1.2, 0.0)
-    ae_h = (0.0, 0.927, 1.15, 1.17, 1.652)
-    ae_e = (0.0, 0.969, 1.18, 1.196, 1.68)
-    be_d = (1.08, 0.0858, 0.0667, 0.025, 0.073)
-    be_h = (1.185, 0.0546, 0.01, 0.0075, -0.017)
-    be_e = (1.23, 0.0521, 0.01, 0.008, -0.016)
-    ce_h = (0.0, 0.0, 0.0, -0.00045, 0.0)
-    ce_e = (0.0, 0.0, 0.0, -0.0004, 0.0)
-    pe_d = (-0.15, 1.0, 1.0, 1.0, 1.0)
-    pe_h = (-0.157, 1.0, 1.0, 1.0, 1.0)
-    pe_e = (-0.16, 1.0, 1.0, 1.0, 1.0)
+    ae_d = _f32(0.0, 0.771, 0.867, 1.2, 0.0)
+    ae_h = _f32(0.0, 0.927, 1.15, 1.17, 1.652)
+    ae_e = _f32(0.0, 0.969, 1.18, 1.196, 1.68)
+    be_d = _f32(1.08, 0.0858, 0.0667, 0.025, 0.073)
+    be_h = _f32(1.185, 0.0546, 0.01, 0.0075, -0.017)
+    be_e = _f32(1.23, 0.0521, 0.01, 0.008, -0.016)
+    ce_h = _f32(0.0, 0.0, 0.0, -0.00045, 0.0)
+    ce_e = _f32(0.0, 0.0, 0.0, -0.0004, 0.0)
+    pe_d = _f32(-0.15, 1.0, 1.0, 1.0, 1.0)
+    pe_h = _f32(-0.157, 1.0, 1.0, 1.0, 1.0)
+    pe_e = _f32(-0.16, 1.0, 1.0, 1.0, 1.0)
     eps = 1.0e-12
 
     evap = 0.0

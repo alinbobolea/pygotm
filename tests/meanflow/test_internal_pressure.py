@@ -477,9 +477,9 @@ def test_type2_surface_plume_zero_at_bottom() -> None:
         plume_slope_y=slope_y,
     )
 
-    assert idpdx[1] == pytest.approx(
-        0.0, abs=1e-14
-    ), "Surface plume: idpdx(1) must be zero"
+    assert idpdx[1] == pytest.approx(0.0, abs=1e-14), (
+        "Surface plume: idpdx(1) must be zero"
+    )
 
 
 def test_type2_surface_plume_maximum_at_surface() -> None:
@@ -578,9 +578,9 @@ def test_type2_bottom_plume_zero_at_surface() -> None:
         plume_slope_y=0.0,
     )
 
-    assert idpdx[nlev] == pytest.approx(
-        0.0, abs=1e-14
-    ), "Bottom plume: idpdx(nlev) must be zero"
+    assert idpdx[nlev] == pytest.approx(0.0, abs=1e-14), (
+        "Bottom plume: idpdx(nlev) must be zero"
+    )
 
 
 def test_type2_bottom_plume_formula() -> None:

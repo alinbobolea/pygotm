@@ -51,9 +51,9 @@ from pygotm.arrays import ColumnWorkspace, make_column_array
 
 __all__ = ["VariancesWorkspace", "step_variances", "step_variances_single"]
 
-_TWO_THIRDS = 2.0 / 3.0
-_FOUR_THIRDS = 4.0 / 3.0
-_EIGHT_THIRDS = 8.0 / 3.0
+_TWO_THIRDS = float(np.float32(2.0) / np.float32(3.0))
+_FOUR_THIRDS = float(np.float32(4.0) / np.float32(3.0))
+_EIGHT_THIRDS = float(np.float32(8.0) / np.float32(3.0))
 
 
 class VariancesWorkspace(ColumnWorkspace):

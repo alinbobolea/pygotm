@@ -1760,9 +1760,7 @@ def integrate_gotm_compiled(
     # Initialise FABM engine once
     assert run.fabm_config is not None
     assert run.fabm_config.config_path is not None
-    h_initial = np.ascontiguousarray(
-        bundle.state.h[1 : nlev + 1], dtype=np.float64
-    )  # noqa: E203
+    h_initial = np.ascontiguousarray(bundle.state.h[1 : nlev + 1], dtype=np.float64)  # noqa: E203
     engine = FABMEngine(run.fabm_config.config_path)
     engine.initialize(nlev=nlev, h_col=h_initial, skip_start=True)
     run.fabm_engine = engine

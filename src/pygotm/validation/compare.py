@@ -29,6 +29,7 @@ Color = Literal["green", "yellow", "orange", "red"]
 MetricMode = Literal["d_norm", "d_rel"]
 
 _TIME_DIM_NAMES = {"time", "t"}
+_MAX_PLOT_POINTS = 5_000
 
 
 class ValidationError(Exception):
@@ -54,6 +55,7 @@ class VarResult:
     plot_html: str | None
     metric_mode: MetricMode = "d_norm"
     score: float | None = None
+    peak_d_norm: float | None = None
 
     @property
     def primary_score(self) -> float:
@@ -94,13 +96,13 @@ def _make_plot_html(
         f"Normalized Frechet: {d_norm:.3e} | "
         f"Score: {score:.3e} ({metric_mode})"
     )
-    x = list(range(len(ref_arr.ravel())))
+    ref_plot, calc_plot, x = _sample_plot_arrays(ref_arr, calc_arr)
     fig = go.Figure(
         [
-            go.Scatter(x=x, y=ref_arr.ravel().tolist(), mode="lines", name="Reference"),
+            go.Scatter(x=x, y=ref_plot.tolist(), mode="lines", name="Reference"),
             go.Scatter(
                 x=x,
-                y=calc_arr.ravel().tolist(),
+                y=calc_plot.tolist(),
                 mode="lines",
                 name="Calculated",
             ),
@@ -116,6 +118,20 @@ def _make_plot_html(
     return str(pio.to_html(fig, include_plotlyjs=False, full_html=False))
 
 
+def _sample_plot_arrays(
+    ref_arr: FloatArray,
+    calc_arr: FloatArray,
+) -> tuple[FloatArray, FloatArray, list[int]]:
+    ref_flat = np.asarray(ref_arr, dtype=np.float64).ravel()
+    calc_flat = np.asarray(calc_arr, dtype=np.float64).ravel()
+    n = ref_flat.size
+    if n <= _MAX_PLOT_POINTS:
+        return ref_flat, calc_flat, list(range(n))
+
+    indices = np.linspace(0, n - 1, _MAX_PLOT_POINTS, dtype=np.int64)
+    return ref_flat[indices], calc_flat[indices], indices.tolist()
+
+
 def _broken_result(name: str) -> VarResult:
     section = classify_section(name)
     return VarResult(
@@ -128,6 +144,7 @@ def _broken_result(name: str) -> VarResult:
         d_raw=float("inf"),
         d_norm=float("inf"),
         plot_html=None,
+        peak_d_norm=None,
     )
 
 
@@ -224,6 +241,15 @@ def _aligned_arrays(
 
     ref_times = _time_values(ref_da, ref_time_dim)
     calc_times = _time_values(calc_da, calc_time_dim)
+    if ref_times.shape == calc_times.shape and np.array_equal(
+        ref_times,
+        calc_times,
+        equal_nan=True,
+    ):
+        ref_flat = np.moveaxis(ref_values, ref_axis, 0).ravel()
+        calc_flat = np.moveaxis(calc_values, calc_axis, 0).ravel()
+        return ref_flat, calc_flat
+
     finite_times = np.concatenate(
         [ref_times[np.isfinite(ref_times)], calc_times[np.isfinite(calc_times)]]
     )
@@ -260,13 +286,14 @@ def _compute_var_result(
     """Compute Frechet validation metrics for one aligned variable."""
 
     ref_at_worst, calc_at_worst = _at_worst(ref_arr, calc_arr)
+    robust, q_low, q_high = config.normalization_settings(name)
     frechet = frechet_raw_and_normalized(
         ref_arr,
         calc_arr,
         abs_tolerance=config.frechet_abs_tol,
-        robust=config.robust,
-        q_low=config.q_low,
-        q_high=config.q_high,
+        robust=robust,
+        q_low=q_low,
+        q_high=q_high,
         switch_oom=config.switch_oom,
         eps_floor=config.eps_floor,
         frechet_k=config.frechet_k,
@@ -276,6 +303,21 @@ def _compute_var_result(
     if d_raw < config.frechet_abs_tol:
         d_raw = 0.0
         d_norm = 0.0
+
+    peak_frechet = frechet_raw_and_normalized(
+        ref_arr,
+        calc_arr,
+        abs_tolerance=config.frechet_abs_tol,
+        robust=False,
+        q_low=config.q_low,
+        q_high=config.q_high,
+        switch_oom=config.switch_oom,
+        eps_floor=config.eps_floor,
+        frechet_k=config.peak_frechet_k,
+    )
+    peak_d_norm = float(peak_frechet["d_norm"])
+    if float(peak_frechet["d_raw"]) < config.frechet_abs_tol:
+        peak_d_norm = 0.0
 
     finite_ref = ref_arr[np.isfinite(ref_arr)]
     finite_calc = calc_arr[np.isfinite(calc_arr)]
@@ -316,6 +358,7 @@ def _compute_var_result(
         plot_html=plot_html,
         metric_mode=metric_mode,
         score=score,
+        peak_d_norm=peak_d_norm,
     )
 
 

@@ -138,7 +138,6 @@ conda run -n pygotm python -m pytest -W error::RuntimeWarning
 conda run -n pygotm mypy src/
 conda run -n pygotm ruff format .
 conda run -n pygotm ruff check .
-conda run -n pygotm black .
 ```
 
 Use project-specific variants when the task is narrower, but never skip relevant

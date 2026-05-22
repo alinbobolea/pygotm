@@ -19,10 +19,14 @@ def test_frechet_config_defaults_match_validation_policy() -> None:
     assert cfg.marginal_tol == pytest.approx(0.05)
     assert cfg.discrepant_tol == pytest.approx(0.20)
     assert cfg.frechet_abs_tol == pytest.approx(1.0e-12)
-    assert cfg.frechet_k == 400
-    assert cfg.robust is True
-    assert cfg.q_low == pytest.approx(1.0)
-    assert cfg.q_high == pytest.approx(99.0)
+    assert cfg.frechet_k == 200
+    assert cfg.robust is False
+    assert cfg.q_low == pytest.approx(0.1)
+    assert cfg.q_high == pytest.approx(99.9)
+    assert cfg.pyfabm_robust is True
+    assert cfg.pyfabm_q_low == pytest.approx(0.1)
+    assert cfg.pyfabm_q_high == pytest.approx(99.9)
+    assert cfg.peak_frechet_k == 400
     assert cfg.switch_oom == pytest.approx(2.0)
     assert cfg.eps_floor == pytest.approx(1.0e-12)
     assert cfg.default_magnitude_floor == pytest.approx(1.0e-6)
@@ -37,6 +41,22 @@ def test_frechet_config_is_frozen() -> None:
 def test_frechet_config_validates_threshold_order() -> None:
     with pytest.raises(ValueError, match="pass < marginal < discrepant"):
         FrechetConfig(pass_tol=0.05, marginal_tol=0.01)
+
+
+def test_frechet_config_validates_pyfabm_quantiles() -> None:
+    with pytest.raises(ValueError, match="pyfabm normalization quantiles"):
+        FrechetConfig(pyfabm_q_low=99.9, pyfabm_q_high=0.1)
+
+
+def test_normalization_settings_are_section_specific() -> None:
+    cfg = FrechetConfig()
+
+    assert cfg.normalization_settings("temp") == (False, 0.1, 99.9)
+    assert cfg.normalization_settings("oxygen_some_fabm_model") == (
+        True,
+        0.1,
+        99.9,
+    )
 
 
 def test_known_gotm_variable_returns_pygotm_section() -> None:

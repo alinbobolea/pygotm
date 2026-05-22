@@ -2,8 +2,8 @@ Test Cases
 ==========
 
 pyGOTM is validated against the 22 official GOTM 6.0.7 test cases.  The table
-below summarizes the latest checked-in ``validation/results.json`` snapshot,
-generated at ``2026-05-19T17:50:23Z``.
+below summarizes the latest generated ``validation/report.html`` snapshot,
+generated at ``2026-05-22T15:19:19Z``.
 
 Case status is aggregated from Frechet variable statuses:
 
@@ -13,9 +13,9 @@ Case status is aggregated from Frechet variable statuses:
 * ``ERROR`` means the case failed during setup, execution, or comparison before
   a complete variable table could be produced.
 
-The snapshot verdict is ``PARTIAL PARITY``: 14 cases pass and 8 cases fail.
-Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
-``DISCREPANT``, and 59 ``BROKEN``.
+The snapshot verdict is ``PARTIAL PARITY``: 15 cases pass and 7 cases fail.
+Across all cases, the variable totals are 2329 ``PASS``, 59 ``MARGINAL``, 26
+``DISCREPANT``, and 0 ``BROKEN``.
 
 .. list-table::
    :header-rows: 1
@@ -72,10 +72,10 @@ Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
      - FLEX experiment.
    * - ``gotland``
      - FAIL
-     - 73
-     - 5
-     - 20
-     - 6
+     - 79
+     - 9
+     - 16
+     - 0
      - Baltic Sea Gotland Deep.
    * - ``lago_maggiore``
      - PASS
@@ -86,10 +86,10 @@ Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
      - Alpine lake.
    * - ``langmuir``
      - FAIL
-     - 88
-     - 8
-     - 15
-     - 2
+     - 111
+     - 1
+     - 1
+     - 0
      - Langmuir turbulence with Stokes drift.
    * - ``liverpool_bay``
      - PASS
@@ -100,24 +100,24 @@ Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
      - Tidal mixing in Liverpool Bay.
    * - ``medsea_east``
      - FAIL
-     - 114
-     - 24
-     - 2
+     - 124
+     - 16
+     - 0
      - 0
      - Eastern Mediterranean.
    * - ``medsea_west``
      - FAIL
-     - 118
-     - 21
+     - 125
+     - 14
      - 1
      - 0
      - Western Mediterranean.
    * - ``nns_annual``
      - FAIL
-     - 90
-     - 17
+     - 102
      - 7
-     - 1
+     - 6
+     - 0
      - North Sea annual cycle.
    * - ``nns_seasonal``
      - PASS
@@ -128,10 +128,10 @@ Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
      - North Sea seasonal cycle.
    * - ``ows_papa``
      - FAIL
-     - 58
-     - 5
-     - 14
-     - 36
+     - 111
+     - 1
+     - 1
+     - 0
      - Ocean Weather Station Papa.
    * - ``plume``
      - PASS
@@ -142,10 +142,10 @@ Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
      - Freshwater plume.
    * - ``resolute``
      - FAIL
-     - 88
-     - 7
-     - 14
-     - 6
+     - 103
+     - 11
+     - 1
+     - 0
      - Arctic mixing.
    * - ``reynolds``
      - PASS
@@ -169,11 +169,11 @@ Across all cases, the variable totals are 2184 ``PASS``, 93 ``MARGINAL``, 78
      - 0
      - Seagrass canopy dynamics. See :ref:`fortran-parity-deviations`.
    * - ``wave_breaking``
-     - FAIL
-     - 81
-     - 6
-     - 5
-     - 8
+     - PASS
+     - 100
+     - 0
+     - 0
+     - 0
      - Wave-breaking enhanced mixing.
    * - ``asics_med``
      - PASS
@@ -193,7 +193,9 @@ The current validation suite uses Frechet-distance indicators from
    Discrete Frechet distance on aligned original values.
 
 ``d_norm``
-   Discrete Frechet distance after robust dynamic linear/log normalization.
+   Discrete Frechet distance after section-aware dynamic linear/log
+   normalization. Core PyGOTM variables use full finite ranges by default;
+   non-PyGOTM variables use a wide robust range.
 
 ``d_rel``
    ``d_raw / signal_scale`` for variables whose signal magnitude is below the
@@ -203,6 +205,11 @@ The current validation suite uses Frechet-distance indicators from
    The status-driving value.  This is normally ``d_norm`` and switches to
    ``d_rel`` for below-floor signals.  The selected indicator is recorded in
    ``metric_mode``.
+
+``peak_d_norm``
+   Non-classifying diagnostic ``d_norm`` computed with full-range
+   normalization and ``frechet_k = 400`` to retain a peak-sensitive debugging
+   signal.
 
 Variable status bands are:
 

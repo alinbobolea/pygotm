@@ -310,9 +310,9 @@ def test_quiescent_zero_friction() -> None:
     # friction velocity is zero when there is no flow
     np.testing.assert_allclose(state.u_taub, 0.0, atol=1e-15)
     # drag coefficient (rr_b²) is always set from log-law, never zero
-    assert (
-        state.drag[1] > 0.0
-    ), "drag[1] = rr_b² must be positive even for zero velocity"
+    assert state.drag[1] > 0.0, (
+        "drag[1] = rr_b² must be positive even for zero velocity"
+    )
 
 
 # ---------------------------------------------------------------------------
