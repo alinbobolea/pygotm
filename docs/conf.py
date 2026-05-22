@@ -5,7 +5,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+DOCS_DIR = Path(__file__).parent.resolve()
+REPO_ROOT = DOCS_DIR.parent
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(DOCS_DIR))
+
+from _validation_staging import stage_validation_html  # noqa: E402
 
 project = "pyGOTM"
 copyright = (
@@ -32,6 +38,13 @@ extensions = [
 
 html_theme = "furo"
 html_title = "pyGOTM Documentation"
+_VALIDATION_HTML_STAGING = DOCS_DIR / "_validation_html"
+stage_validation_html(
+    src=REPO_ROOT / "validation",
+    staged_root=_VALIDATION_HTML_STAGING,
+)
+html_extra_path = [str(_VALIDATION_HTML_STAGING.relative_to(DOCS_DIR))]
+
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_theme_options = {
