@@ -89,12 +89,12 @@ def _sanitise(obj: Any) -> Any:
 def save_json(report: Report, path: Path) -> None:
     data = _sanitise(asdict(report))
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
 def load_json(path: Path) -> Report:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
     cases = []
     for cd in data["cases"]:
@@ -105,13 +105,9 @@ def load_json(path: Path) -> Report:
         case_data.setdefault("n_discrepant", 0)
         case_data.setdefault("n_broken", 0)
         case_data.setdefault("task_name", None)
-        case_data.pop("n_fail", None)
-        case_data.pop("n_skip", None)
         cases.append(CaseResult(**case_data, variables=vars_))
     data["cases"] = cases
     data.setdefault("hardware", {})
-    data.pop("atol", None)
-    data.pop("rtol", None)
     return Report(**data)
 
 
@@ -123,12 +119,7 @@ def _json_float(value: Any, default: float = float("nan")) -> float:
 
 def _var_result_from_json(data: dict[str, Any]) -> VarResult:
     raw = dict(data)
-    if "d_norm" not in raw and "primary_score" in raw:
-        raw["d_norm"] = raw["primary_score"]
     raw.setdefault("d_raw", float("nan"))
-    raw.pop("primary_score", None)
-    raw.pop("birge_ratio", None)
-    raw.pop("normalized_signed_bias", None)
     raw["reference_at_worst"] = _json_float(raw.get("reference_at_worst"))
     raw["calculated_at_worst"] = _json_float(raw.get("calculated_at_worst"))
     raw["d_raw"] = _json_float(raw.get("d_raw"))
@@ -140,6 +131,10 @@ def _var_result_from_json(data: dict[str, Any]) -> VarResult:
         None if raw.get("peak_d_norm") is None else _json_float(raw.get("peak_d_norm"))
     )
     return VarResult(**raw)
+
+
+def _score_for_display(result: VarResult) -> float:
+    return result.d_norm if result.score is None else result.score
 
 
 def _fmt(v: float | None, precision: int = 3) -> str:
@@ -208,7 +203,7 @@ def _var_rows_html(variables: list[VarResult]) -> str:
             f"<td><code>{_fmt_full(v.reference_at_worst)}</code></td>"
             f"<td><code>{_fmt_full(v.calculated_at_worst)}</code></td>"
             f"<td>{_fmt(v.d_raw)}</td>"
-            f"<td>{_fmt(v.primary_score)}{metric_label}</td>"
+            f"<td>{_fmt(_score_for_display(v))}{metric_label}</td>"
             f"<td>{_fmt(v.peak_d_norm)}</td>"
             f"</tr>\n"
         )

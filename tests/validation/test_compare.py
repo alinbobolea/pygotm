@@ -58,7 +58,7 @@ def test_var_result_has_required_fields() -> None:
     assert v.d_raw == pytest.approx(0.0)
     assert v.d_norm == pytest.approx(0.0)
     assert v.metric_mode == "d_norm"
-    assert v.primary_score == pytest.approx(0.0)
+    assert v.score is None
     assert v.peak_d_norm is None
 
 
@@ -66,38 +66,6 @@ def test_var_result_has_no_old_metric_fields() -> None:
     field_names = {f.name for f in dataclasses.fields(VarResult)}
     old_metrics = {"primary_score", "birge_ratio", "normalized_signed_bias"}
     assert not field_names & old_metrics
-
-
-def test_primary_score_property_aliases_d_norm_for_reports() -> None:
-    v = VarResult(
-        name="temp",
-        section="pygotm",
-        status="MARGINAL",
-        color="yellow",
-        reference_at_worst=1.0,
-        calculated_at_worst=1.02,
-        d_raw=0.02,
-        d_norm=0.02,
-        plot_html=None,
-    )
-    assert v.primary_score == pytest.approx(v.d_norm)
-
-
-def test_primary_score_property_uses_effective_score_when_available() -> None:
-    v = VarResult(
-        name="NN",
-        section="pygotm",
-        status="PASS",
-        color="green",
-        reference_at_worst=1.3e-6,
-        calculated_at_worst=1.3039e-6,
-        d_raw=3.9e-9,
-        d_norm=0.013,
-        plot_html=None,
-        metric_mode="d_rel",
-        score=0.003,
-    )
-    assert v.primary_score == pytest.approx(0.003)
 
 
 def test_identical_series_is_pass(tmp_path: Path) -> None:
@@ -157,7 +125,9 @@ def test_sparse_localized_excursion_uses_normalized_frechet_score(
     result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
 
     assert result.metric_mode == "d_norm"
-    assert result.primary_score == pytest.approx(result.d_norm)
+    assert (result.score if result.score is not None else result.d_norm) == (
+        pytest.approx(result.d_norm)
+    )
     assert result.peak_d_norm is not None
 
 
@@ -209,8 +179,8 @@ def test_near_zero_nn_small_relative_deviation_is_pass(tmp_path: Path) -> None:
     _write_nc(tmp_path / "ref.nc", {"NN": ref})
     result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
     assert result.metric_mode == "d_rel"
-    assert result.primary_score == pytest.approx(result.d_raw / np.max(np.abs(py)))
-    assert result.primary_score < 0.01
+    assert result.score == pytest.approx(result.d_raw / np.max(np.abs(py)))
+    assert result.score is not None and result.score < 0.01
     assert result.status == "PASS"
 
 
@@ -223,7 +193,7 @@ def test_near_zero_nn_meaningful_relative_deviation_is_discrepant(
     _write_nc(tmp_path / "ref.nc", {"NN": ref})
     result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
     assert result.metric_mode == "d_rel"
-    assert result.primary_score == pytest.approx(0.14)
+    assert result.score == pytest.approx(0.14)
     assert result.status == "DISCREPANT"
 
 
@@ -234,7 +204,7 @@ def test_nn_above_magnitude_floor_uses_dnorm(tmp_path: Path) -> None:
     _write_nc(tmp_path / "ref.nc", {"NN": ref})
     result = compare_nc(tmp_path / "py.nc", tmp_path / "ref.nc", case_name="test")[0]
     assert result.metric_mode == "d_norm"
-    assert result.primary_score == pytest.approx(result.d_norm)
+    assert result.score == pytest.approx(result.d_norm)
     assert result.status == "PASS"
 
 

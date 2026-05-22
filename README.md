@@ -29,7 +29,7 @@ Target users: aquaculture site engineers, limnologists, coastal ocean researcher
 | Feature | Description |
 |---------|-------------|
 | Compiled runtime | Numba JIT single-column timestep loop with flat float64 arrays |
-| GOTM parity | Validated against Fortran GOTM 6.0.7 with the project range-aware tolerance |
+| GOTM parity | Validated against Fortran GOTM 6.0.7 with the Frechet validation suite |
 | Built-in cases | All 22 official GOTM test cases loadable in one click |
 | REST API | FastAPI with async job submission + WebSocket progress streaming |
 | Browser UI | NiceGUI + Plotly interactive vertical profiles and Hövmoller diagrams |
@@ -93,11 +93,12 @@ https://github.com/<org>/pygotm/releases/download/reference-data-v0.1.0/pygotm-v
 ```
 
 ```bash
-# Run validation for a supported reference case
-conda run -n pygotm pygotm validate --case couette
+# Run a single-column YAML configuration and write NetCDF output
+conda run -n pygotm pygotm run validation/reference/couette/gotm.yaml \
+  --output couette.nc
 
-# Benchmark the compiled runtime
-conda run -n pygotm pygotm benchmark --cases couette,channel
+# Run official Frechet validation for supported reference cases
+conda run -n pygotm pygotm validate --cases couette,channel
 ```
 
 ## Example Use Cases

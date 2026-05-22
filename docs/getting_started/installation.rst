@@ -81,12 +81,12 @@ Numba JIT Compilation
 ---------------------
 
 pyGOTM compiles its physics kernels with Numba at first run. Subsequent runs
-reuse the cached compiled code (``cache=True``). To force compilation before
-benchmarking:
+reuse the cached compiled code (``cache=True``). Developers can force
+compilation before internal timing work with the execution benchmark module:
 
 .. code-block:: bash
 
-   conda run -n pygotm pygotm benchmark --cases couette
+   conda run -n pygotm python -m pygotm.execution.benchmark --cases couette
 
 The first run pays the compilation cost; subsequent runs are fast.
 

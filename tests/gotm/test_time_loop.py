@@ -44,11 +44,11 @@ from pygotm.turbulence.production import step_production_single
 from pygotm.turbulence.tkeeq import step_tkeeq_single
 from pygotm.turbulence.turbulence import Constant, first_order, omega_eq, tke_keps
 from pygotm.util.gsw import gsw_sp_from_sa
-from pygotm.validate import (
-    compare_datasets,
+from pygotm.validation.reference import (
     open_reference_dataset,
     resolve_reference_case,
 )
+from tests.dataset_assertions import assert_dataset_variables_allclose
 
 _COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
 _ESTUARY_CONFIG = Path("validation/reference/estuary/gotm.yaml")
@@ -709,27 +709,12 @@ def test_compiled_reference_emitted_variables_match_fortran(case_name: str) -> N
             "nus",
             "nucl",
         )
-        comparison = compare_datasets(
-            actual,
-            reference,
-            rtol=5.0e-6,
-            atol=1.0e-12,
-            variables=variables,
-        )
+        assert_dataset_variables_allclose(actual, reference, variables)
     finally:
         if actual is not None:
             actual.close()
         reference.close()
         finalize_gotm(compiled_run)
-
-    if comparison.failures:
-        details = "; ".join(
-            f"{f.variable} index={f.index} rel={f.max_rel_error:.2e} "
-            f"abs={f.max_abs_error:.2e}"
-            for f in comparison.failures
-        )
-        pytest.fail(f"compiled {case_name} core validation failed: {details}")
-    assert comparison.ok
 
 
 @pytest.mark.slow
@@ -797,18 +782,12 @@ def test_compiled_profile_cases_emit_parity_comparable_output(case_name: str) ->
             for name in variables
             if name in actual.data_vars and name in reference_slice.data_vars
         )
-        comparison = compare_datasets(
-            actual,
-            reference_slice,
-            rtol=5.0e-6,
-            atol=1.0e-12,
-            variables=shared,
-        )
+        assert_dataset_variables_allclose(actual, reference_slice, shared)
     finally:
         if actual is not None:
             actual.close()
         reference.close()
         finalize_gotm(compiled_run)
 
-    assert comparison.checked_variables
+    assert shared
     assert time_loop_compiled.nopython_signatures

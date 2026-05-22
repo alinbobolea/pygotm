@@ -1,4 +1,4 @@
-"""Benchmark helpers for the compiled single-column validation runtime."""
+"""Benchmark helpers for the compiled single-column runtime."""
 
 from __future__ import annotations
 
@@ -22,12 +22,7 @@ from pygotm.gotm.runtime_builder import (
     runtime_output_to_dataset,
 )
 from pygotm.gotm.time_loop import time_loop_compiled
-from pygotm.validate import (
-    DatasetComparison,
-    compare_datasets,
-    open_reference_dataset,
-    resolve_reference_case,
-)
+from pygotm.validation.reference import resolve_reference_case
 from pygotm.validation.warmup import trigger_numba_jit
 
 __all__ = [
@@ -39,8 +34,7 @@ __all__ = [
     "save_benchmark_results",
 ]
 
-BenchmarkStatus = Literal["PASS", "FAIL", "ERROR", "UNSUPPORTED"]
-ValidationStatus = Literal["PASS", "FAIL", "SKIP", "ERROR"]
+BenchmarkStatus = Literal["PASS", "ERROR", "UNSUPPORTED"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -52,7 +46,6 @@ class BenchmarkTimings:
     runtime_build_s: float
     integration_s: float
     output_conversion_s: float
-    validation_s: float
     total_s: float
 
 
@@ -62,44 +55,16 @@ class BenchmarkResult:
 
     case_name: str
     status: BenchmarkStatus
-    validation_status: ValidationStatus
     error: str | None
     compiled_function: str
     nopython_signature_count: int
     n_steps: int
     n_output: int
-    checked_variables: tuple[str, ...]
-    failed_variables: tuple[str, ...]
     timings: BenchmarkTimings
-
-
-def _zero_timings(total_s: float = 0.0) -> BenchmarkTimings:
-    return BenchmarkTimings(
-        warmup_s=0.0,
-        initialization_s=0.0,
-        runtime_build_s=0.0,
-        integration_s=0.0,
-        output_conversion_s=0.0,
-        validation_s=0.0,
-        total_s=total_s,
-    )
 
 
 def _compiled_function_for_bundle(bundle: RuntimeBundle) -> Any:
     return time_loop_compiled
-
-
-def _validation_status(
-    comparison: DatasetComparison | None,
-) -> tuple[ValidationStatus, tuple[str, ...], tuple[str, ...]]:
-    if comparison is None:
-        return "SKIP", (), ()
-    failed = tuple(failure.variable for failure in comparison.failures)
-    return ("PASS" if not failed else "FAIL"), comparison.checked_variables, failed
-
-
-def _benchmark_status(validation_status: ValidationStatus) -> BenchmarkStatus:
-    return "FAIL" if validation_status == "FAIL" else "PASS"
 
 
 def benchmark_compiled_case(
@@ -108,7 +73,6 @@ def benchmark_compiled_case(
     max_steps: int | None = None,
     output: bool = True,
     warmup: bool = True,
-    validate: bool = True,
 ) -> BenchmarkResult:
     """Run one case through the compiled runtime and record benchmark timings."""
 
@@ -118,13 +82,11 @@ def benchmark_compiled_case(
     runtime_build_s = 0.0
     integration_s = 0.0
     output_conversion_s = 0.0
-    validation_s = 0.0
     n_steps = 0
     n_output = 0
     compiled_function = ""
     signature_count = 0
     actual: xr.Dataset | None = None
-    reference: xr.Dataset | None = None
     run: Any | None = None
     result_case_name = case_name
 
@@ -160,51 +122,32 @@ def benchmark_compiled_case(
                 )
                 raise RuntimeError(msg)
 
-            comparison: DatasetComparison | None = None
             if output:
                 t0 = time.perf_counter()
                 actual = runtime_output_to_dataset(run, bundle)
                 output_conversion_s = time.perf_counter() - t0
 
-                if validate:
-                    t0 = time.perf_counter()
-                    reference = open_reference_dataset(case)
-                    reference_for_compare = reference
-                    if "time" in actual.sizes and "time" in reference.sizes:
-                        reference_for_compare = reference.isel(
-                            time=slice(0, actual.sizes["time"])
-                        ).squeeze(drop=True)
-                    comparison = compare_datasets(actual, reference_for_compare)
-                    validation_s = time.perf_counter() - t0
-
-            validation_status, checked, failed = _validation_status(comparison)
             timings = BenchmarkTimings(
                 warmup_s=warmup_s,
                 initialization_s=initialization_s,
                 runtime_build_s=runtime_build_s,
                 integration_s=integration_s,
                 output_conversion_s=output_conversion_s,
-                validation_s=validation_s,
                 total_s=time.perf_counter() - total_t0,
             )
             return BenchmarkResult(
                 case_name=result_case_name,
-                status=_benchmark_status(validation_status),
-                validation_status=validation_status,
+                status="PASS",
                 error=None,
                 compiled_function=compiled_function,
                 nopython_signature_count=signature_count,
                 n_steps=n_steps,
                 n_output=n_output,
-                checked_variables=checked,
-                failed_variables=failed,
                 timings=timings,
             )
         finally:
             if actual is not None:
                 actual.close()
-            if reference is not None:
-                reference.close()
             finalize_gotm(run)
     except UnsupportedConfigurationError as exc:
         timings = BenchmarkTimings(
@@ -213,20 +156,16 @@ def benchmark_compiled_case(
             runtime_build_s=runtime_build_s,
             integration_s=integration_s,
             output_conversion_s=output_conversion_s,
-            validation_s=validation_s,
             total_s=time.perf_counter() - total_t0,
         )
         return BenchmarkResult(
             case_name=result_case_name,
             status="UNSUPPORTED",
-            validation_status="SKIP",
             error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
             compiled_function=compiled_function,
             nopython_signature_count=signature_count,
             n_steps=n_steps,
             n_output=n_output,
-            checked_variables=(),
-            failed_variables=(),
             timings=timings,
         )
     except Exception as exc:
@@ -236,20 +175,16 @@ def benchmark_compiled_case(
             runtime_build_s=runtime_build_s,
             integration_s=integration_s,
             output_conversion_s=output_conversion_s,
-            validation_s=validation_s,
             total_s=time.perf_counter() - total_t0,
         )
         return BenchmarkResult(
             case_name=result_case_name,
             status="ERROR",
-            validation_status="ERROR",
             error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
             compiled_function=compiled_function,
             nopython_signature_count=signature_count,
             n_steps=n_steps,
             n_output=n_output,
-            checked_variables=(),
-            failed_variables=(),
             timings=timings,
         )
 
@@ -260,7 +195,6 @@ def benchmark_cases(
     max_steps: int | None = None,
     output: bool = True,
     warmup: bool = True,
-    validate: bool = True,
 ) -> tuple[BenchmarkResult, ...]:
     """Benchmark cases sequentially, warming up only before the first case."""
 
@@ -273,7 +207,6 @@ def benchmark_cases(
                 max_steps=max_steps,
                 output=output,
                 warmup=should_warmup,
-                validate=validate,
             )
         )
         should_warmup = False
@@ -289,7 +222,7 @@ def save_benchmark_results(results: Sequence[BenchmarkResult], path: Path) -> No
         "cases": [asdict(result) for result in results],
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
@@ -297,7 +230,6 @@ def _format_result(result: BenchmarkResult) -> str:
     timings = result.timings
     return (
         f"{result.status:<11} {result.case_name:<18} "
-        f"validation={result.validation_status:<5} "
         f"loop={result.compiled_function or '-'} "
         f"steps={result.n_steps} "
         f"integrate={timings.integration_s:.3f}s "
@@ -306,7 +238,7 @@ def _format_result(result: BenchmarkResult) -> str:
     )
 
 
-@click.command(name="benchmark")
+@click.command()
 @click.option(
     "--cases",
     default="couette,channel",
@@ -322,16 +254,14 @@ def _format_result(result: BenchmarkResult) -> str:
 )
 @click.option("--no-output", "output", is_flag=True, flag_value=False, default=True)
 @click.option("--no-warmup", "warmup", is_flag=True, flag_value=False, default=True)
-@click.option("--no-validate", "validate", is_flag=True, flag_value=False, default=True)
 def cli(
     cases: str,
     max_steps: int | None,
     output_dir: Path | None,
     output: bool,
     warmup: bool,
-    validate: bool,
 ) -> None:
-    """Benchmark the compiled single-column validation runtime."""
+    """Benchmark the compiled single-column runtime without parity validation."""
 
     case_names = tuple(case.strip() for case in cases.split(",") if case.strip())
     results = benchmark_cases(
@@ -339,7 +269,6 @@ def cli(
         max_steps=max_steps,
         output=output,
         warmup=warmup,
-        validate=validate,
     )
 
     for result in results:
@@ -351,3 +280,7 @@ def cli(
         json_path = output_dir / "results.json"
         save_benchmark_results(results, json_path)
         click.echo(f"Wrote {json_path}")
+
+
+if __name__ == "__main__":
+    cli()

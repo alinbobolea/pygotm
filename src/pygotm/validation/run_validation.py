@@ -28,9 +28,9 @@ from pathlib import Path
 
 import click
 
-from pygotm.validate import REFERENCE_CASE_NAMES
 from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
+from pygotm.validation.reference import REFERENCE_CASE_NAMES
 from pygotm.validation.report import CaseResult, Report, write_html_index
 from pygotm.validation.runner import validate_case_to_html
 from pygotm.validation.warmup import trigger_numba_jit

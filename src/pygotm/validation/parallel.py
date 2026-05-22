@@ -8,7 +8,7 @@ from pathlib import Path
 
 from dask.distributed import Client, LocalCluster, as_completed
 
-from pygotm.validate import resolve_reference_case
+from pygotm.validation.reference import resolve_reference_case
 from pygotm.validation.report import CaseResult
 from pygotm.validation.runner import validate_case, validate_case_to_html
 

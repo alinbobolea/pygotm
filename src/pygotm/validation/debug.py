@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from pygotm.validate import open_validation_dataset
+from pygotm.validation.reference import open_validation_dataset
 
 # Diagnostic-only fallback tolerances used to compute the "passes" field in
 # debug dumps.  These are not parity-decision values; real parity uses the

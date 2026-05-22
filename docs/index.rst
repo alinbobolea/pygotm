@@ -19,6 +19,7 @@ modelling with no Fortran compiler required.
    getting_started/introduction
    getting_started/installation
    getting_started/quickstart
+   getting_started/interfaces
    getting_started/configuration
 
 .. toctree::
@@ -52,6 +53,7 @@ modelling with no Fortran compiler required.
    api/util
    api/input
    api/validation
+   api/execution
    api/stokes_drift
    api/fabm
    api/icethm

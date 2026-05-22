@@ -12,8 +12,8 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import xarray as xr
 
-from pygotm.validate import numeric_variable_names, open_validation_dataset
 from pygotm.validation.frechet import frechet_raw_and_normalized
+from pygotm.validation.reference import numeric_variable_names, open_validation_dataset
 from pygotm.validation.tolerances import (
     DEFAULT_FRECHET_CONFIG,
     FrechetConfig,
@@ -56,12 +56,6 @@ class VarResult:
     metric_mode: MetricMode = "d_norm"
     score: float | None = None
     peak_d_norm: float | None = None
-
-    @property
-    def primary_score(self) -> float:
-        """Compatibility alias for report rendering and old JSON payloads."""
-
-        return self.d_norm if self.score is None else self.score
 
 
 def _classify_status(score: float, config: FrechetConfig) -> tuple[Status, Color]:

@@ -42,11 +42,12 @@ Run from the Command Line
 
 .. code-block:: bash
 
-   # Run the built-in validation suite for a specific case
-   conda run -n pygotm pygotm validate --case couette
+   # Run one YAML configuration and write NetCDF output
+   conda run -n pygotm pygotm run validation/reference/couette/gotm.yaml \
+       --output couette_out.nc
 
-   # Benchmark the compiled runtime (prints timing to the terminal)
-   conda run -n pygotm pygotm benchmark --cases couette,channel
+   # Run the Frechet validation suite for specific cases
+   conda run -n pygotm pygotm validate --cases couette,channel
 
 Suppress Output (no-output integration)
 -----------------------------------------
@@ -83,6 +84,8 @@ Compare pyGOTM output against the official Fortran GOTM reference cases:
        --cases couette,channel,entrainment
 
 Output: ``validation/report.html`` plus one per-case HTML report.
+
+See :doc:`interfaces` for the full user and developer command surfaces.
 
 Python API Summary
 ------------------

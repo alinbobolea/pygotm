@@ -117,52 +117,6 @@ def test_save_load_json_round_trips(tmp_path: Path) -> None:
     assert loaded.cases[0].variables[0].d_norm == pytest.approx(0.0)
 
 
-def test_load_json_migrates_old_primary_score_results(tmp_path: Path) -> None:
-    path = tmp_path / "old-results.json"
-    path.write_text(
-        json.dumps(
-            {
-                "generated_at": "2026-05-11T10:00:00Z",
-                "hardware": {},
-                "verdict": "PARTIAL PARITY",
-                "cases": [
-                    {
-                        "case_name": "couette",
-                        "status": "FAIL",
-                        "error": None,
-                        "py_nc_path": "py.nc",
-                        "ref_nc_path": "ref.nc",
-                        "wall_time_s": 1.0,
-                        "task_name": "couette-gotm",
-                        "n_pass": 0,
-                        "n_marginal": 1,
-                        "n_discrepant": 0,
-                        "n_broken": 0,
-                        "variables": [
-                            {
-                                "name": "temp",
-                                "section": "pygotm",
-                                "status": "MARGINAL",
-                                "color": "yellow",
-                                "reference_at_worst": 1.0,
-                                "calculated_at_worst": 1.01,
-                                "primary_score": 0.02,
-                                "birge_ratio": 0.01,
-                                "normalized_signed_bias": 0.0,
-                                "plot_html": None,
-                            }
-                        ],
-                    }
-                ],
-            }
-        )
-    )
-    loaded = load_json(path)
-    assert loaded.cases[0].variables[0].d_norm == pytest.approx(0.02)
-    assert loaded.cases[0].variables[0].metric_mode == "d_norm"
-    assert loaded.cases[0].variables[0].primary_score == pytest.approx(0.02)
-
-
 def test_var_result_from_json_defaults_metric_mode_to_dnorm() -> None:
     from pygotm.validation.report import _var_result_from_json
 
@@ -180,7 +134,7 @@ def test_var_result_from_json_defaults_metric_mode_to_dnorm() -> None:
         }
     )
     assert result.metric_mode == "d_norm"
-    assert result.primary_score == pytest.approx(0.0)
+    assert result.score == pytest.approx(0.0)
 
 
 def test_var_result_from_json_preserves_drel_metric_mode_and_score() -> None:
@@ -202,7 +156,7 @@ def test_var_result_from_json_preserves_drel_metric_mode_and_score() -> None:
         }
     )
     assert result.metric_mode == "d_rel"
-    assert result.primary_score == pytest.approx(0.003)
+    assert result.score == pytest.approx(0.003)
 
 
 def test_json_preserves_full_precision_ref_calc(tmp_path: Path) -> None:

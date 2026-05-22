@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from pygotm.validate import resolve_reference_case
+from pygotm.validation.reference import resolve_reference_case
 
 
 def _write_case_assets(

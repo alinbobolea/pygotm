@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -14,15 +16,14 @@ from pygotm.gotm.runtime_builder import (
     build_runtime_from_run,
     runtime_output_to_dataset,
 )
-from pygotm.validate import (
+from pygotm.validation.compare import compare_nc
+from pygotm.validation.reference import (
     REFERENCE_CASE_NAMES,
-    ValidationCase,
-    compare_datasets,
     discover_reference_cases,
     open_reference_dataset,
     resolve_reference_case,
-    run_case_validation,
 )
+from tests.dataset_assertions import assert_dataset_variables_allclose
 
 # ---------------------------------------------------------------------------
 # pytest marks
@@ -76,48 +77,10 @@ def test_case_assets_are_present(case_name: str) -> None:
 @pytest.mark.parametrize("case_name", REFERENCE_CASE_NAMES)
 def test_reference_dataset_self_comparison_is_exact(case_name: str) -> None:
     case = resolve_reference_case(case_name)
-    dataset = open_reference_dataset(case)
-    try:
-        comparison = compare_datasets(dataset, dataset)
-    finally:
-        dataset.close()
+    results = compare_nc(case.reference_path, case.reference_path, case_name=case.name)
+    failures = [result for result in results if result.status != "PASS"]
 
-    assert comparison.ok
-    assert comparison.failures == ()
-
-
-def test_compare_datasets_squeezes_singleton_lat_lon_dimensions() -> None:
-    case = resolve_reference_case("couette")
-    dataset = open_reference_dataset(case)
-    try:
-        squeezed = dataset.squeeze(drop=True)
-        comparison = compare_datasets(squeezed, dataset, variables=("temp", "salt"))
-    finally:
-        dataset.close()
-
-    assert comparison.ok
-
-
-def test_compare_datasets_uses_range_aware_tolerance() -> None:
-    expected = xr.Dataset({"signal": ("z", np.array([0.0, 100.0], dtype=np.float64))})
-    within = xr.Dataset({"signal": ("z", np.array([9.0e-6, 100.0], dtype=np.float64))})
-    outside = xr.Dataset({"signal": ("z", np.array([1.1e-5, 100.0], dtype=np.float64))})
-
-    assert compare_datasets(within, expected, variables=("signal",)).ok
-
-    comparison = compare_datasets(outside, expected, variables=("signal",))
-    assert not comparison.ok
-    assert comparison.failures[0].variable == "signal"
-
-
-def test_run_case_validation_accepts_custom_runner() -> None:
-    def runner(case: ValidationCase) -> xr.Dataset:
-        return xr.open_dataset(case.reference_path, engine="scipy")
-
-    comparison = run_case_validation("couette", runner=runner)
-
-    assert comparison.ok
-    assert comparison.failures == ()
+    assert not failures
 
 
 def test_couette_driver_matches_reference_for_full_hourly_slice() -> None:
@@ -131,13 +94,10 @@ def test_couette_driver_matches_reference_for_full_hourly_slice() -> None:
             for name in _COMPILED_VALIDATED_VARIABLES
             if name in actual.data_vars and name in expected_slice.data_vars
         )
-        comparison = compare_datasets(actual, expected_slice, variables=variables)
+        assert_dataset_variables_allclose(actual, expected_slice, variables)
     finally:
         expected.close()
         actual.close()
-
-    assert comparison.ok
-    assert comparison.failures == ()
 
 
 def test_couette_driver_advances_velocity_and_turbulence() -> None:
@@ -186,8 +146,8 @@ def test_ice_cases_initialize_grid_with_ice_displacement(
 
 @pytest.mark.slow
 @pytest.mark.parametrize("case_name", REFERENCE_CASE_NAMES)
-def test_full_case_matches_reference(case_name: str) -> None:
-    """Release gate: full simulation must pass rtol=5e-6 against Fortran GOTM.
+def test_full_case_matches_reference(case_name: str, tmp_path: Path) -> None:
+    """Release gate: full simulation must pass Frechet validation.
 
     Compares every numeric variable in the Fortran reference. Missing pyGOTM
     outputs are validation failures because release parity requires matching
@@ -198,29 +158,25 @@ def test_full_case_matches_reference(case_name: str) -> None:
     from pygotm.driver import GotmDriver
 
     case = resolve_reference_case(case_name)
-    actual = GotmDriver(case.yaml_path).run()
-    expected = open_reference_dataset(case)
+    py_path = tmp_path / f"{case.run_name}.nc"
+    actual = GotmDriver(case.yaml_path).run(output_path=py_path)
+    actual.close()
 
-    try:
-        comparison = compare_datasets(actual, expected, rtol=5e-6, atol=1e-12)
-    finally:
-        actual.close()
-        expected.close()
+    results = compare_nc(py_path, case.reference_path, case_name=case.run_name)
+    failures = [result for result in results if result.status != "PASS"]
 
-    if comparison.failures:
+    if failures:
         details = "; ".join(
-            f"{f.variable} rel={f.max_rel_error:.2e} abs={f.max_abs_error:.2e}"
-            for f in comparison.failures[:5]
+            f"{result.name} status={result.status} score={result.score} "
+            f"d_raw={result.d_raw:.2e} d_norm={result.d_norm:.2e}"
+            for result in failures[:5]
         )
-        if len(comparison.failures) > 5:
-            details += f"; ... ({len(comparison.failures) - 5} more)"
-        count = len(comparison.failures)
-        total = len(comparison.checked_variables)
+        if len(failures) > 5:
+            details += f"; ... ({len(failures) - 5} more)"
         pytest.fail(
-            f"Case {case_name!r}: {count}/{total} "
-            f"variable(s) exceeded rtol=5e-6. First failures: {details}"
+            f"Case {case_name!r}: {len(failures)}/{len(results)} "
+            f"variable(s) failed Frechet validation. First failures: {details}"
         )
-    assert comparison.ok
 
 
 # ---------------------------------------------------------------------------

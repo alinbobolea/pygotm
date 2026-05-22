@@ -35,7 +35,7 @@ def trigger_numba_jit(nlev: int = 5) -> float:
     from pygotm.gotm.gotm import finalize_gotm, initialize_gotm
     from pygotm.gotm.runtime_builder import build_runtime_from_run
     from pygotm.gotm.time_loop import warmup_couette_step_routines
-    from pygotm.validate import resolve_reference_case
+    from pygotm.validation.reference import resolve_reference_case
 
     case = resolve_reference_case("couette")
     run = initialize_gotm(case.yaml_path)

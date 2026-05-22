@@ -10,8 +10,8 @@ from unittest.mock import patch
 import numpy as np
 import xarray as xr
 
-from pygotm.validate import ValidationCase
 from pygotm.validation.compare import VarResult
+from pygotm.validation.reference import ValidationCase
 from pygotm.validation.report import CaseResult
 from pygotm.validation.runner import validate_case, validate_case_to_html
 
@@ -33,7 +33,7 @@ def _fake_case(
 
 def test_validate_case_skip_run_missing_nc_returns_error(tmp_path: Path) -> None:
     with patch(
-        "pygotm.validate.resolve_reference_case",
+        "pygotm.validation.reference.resolve_reference_case",
         return_value=_fake_case(tmp_path),
     ):
         result = validate_case("couette", tmp_path / "runs", skip_run=True)
@@ -55,7 +55,7 @@ def test_validate_case_skip_run_existing_nc(tmp_path: Path) -> None:
     ds.to_netcdf(ref_nc, engine="scipy")
 
     with patch(
-        "pygotm.validate.resolve_reference_case",
+        "pygotm.validation.reference.resolve_reference_case",
         return_value=_fake_case(tmp_path, ref_path=ref_nc),
     ):
         result = validate_case("couette", runs_dir, skip_run=True)
@@ -125,7 +125,7 @@ def test_validate_case_counts_vars_correctly(tmp_path: Path) -> None:
     ref_ds.to_netcdf(ref_nc, engine="scipy")
 
     with patch(
-        "pygotm.validate.resolve_reference_case",
+        "pygotm.validation.reference.resolve_reference_case",
         return_value=_fake_case(tmp_path, ref_path=ref_nc),
     ):
         result = validate_case("couette", runs_dir, skip_run=True)
@@ -153,7 +153,7 @@ def test_validate_case_writes_turbulence_debug_dump(tmp_path: Path) -> None:
     ).to_netcdf(ref_nc, engine="scipy")
 
     with patch(
-        "pygotm.validate.resolve_reference_case",
+        "pygotm.validation.reference.resolve_reference_case",
         return_value=_fake_case(tmp_path, ref_path=ref_nc),
     ):
         result = validate_case(
@@ -188,7 +188,7 @@ def test_validate_case_run_exception_returns_error(tmp_path: Path) -> None:
         )
         stack.enter_context(
             patch(
-                "pygotm.validate.resolve_reference_case",
+                "pygotm.validation.reference.resolve_reference_case",
                 return_value=_fake_case(tmp_path, ref_path=ref_nc),
             )
         )

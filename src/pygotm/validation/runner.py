@@ -12,23 +12,10 @@ from pygotm.validation.debug import write_turbulence_debug_dump
 from pygotm.validation.report import CaseResult, Report, write_case_html
 
 __all__ = [
-    "main",
     "run_case",
     "validate_case",
     "validate_case_to_html",
 ]
-
-
-def _ref_path(case_name: str) -> Path:
-    from pygotm.validate import resolve_reference_case
-
-    return resolve_reference_case(case_name).reference_path
-
-
-def _yaml_path(case_name: str) -> Path:
-    from pygotm.validate import resolve_reference_case
-
-    return resolve_reference_case(case_name).yaml_path
 
 
 def run_case(
@@ -37,7 +24,7 @@ def run_case(
 ) -> tuple[Path, float]:
     """Run a compiled parity case, write NetCDF, return (path, elapsed_s)."""
     from pygotm.driver import GotmDriver
-    from pygotm.validate import resolve_reference_case
+    from pygotm.validation.reference import resolve_reference_case
 
     case = resolve_reference_case(case_name)
     case_dir = runs_dir / case.run_name
@@ -66,7 +53,7 @@ def validate_case(
     debug_turbulence: bool = False,
 ) -> CaseResult:
     """Run (optionally) and validate a single GOTM case."""
-    from pygotm.validate import resolve_reference_case
+    from pygotm.validation.reference import resolve_reference_case
 
     case = resolve_reference_case(case_name)
     ref_path = case.reference_path
@@ -167,15 +154,3 @@ def validate_case_to_html(
     )
     write_case_html(report, result, output_dir)
     return _summary_case(result)
-
-
-def main() -> None:
-    """CLI compatibility shim for ``python -m pygotm.validation.runner``."""
-
-    from pygotm.validation.run_validation import cli
-
-    cli()
-
-
-if __name__ == "__main__":
-    main()

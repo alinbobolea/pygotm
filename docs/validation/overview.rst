@@ -495,18 +495,22 @@ If you are reading this page after a fresh clone and no validation run has
 been executed yet, the link above will return a 404. Run the validation suite
 locally and rebuild the documentation to populate the reports.
 
-Benchmark Mode
---------------
+Developer Benchmarking
+----------------------
 
-Benchmarking is separate from Frechet parity validation but can optionally run
-validation after timed case execution.
+Benchmarking is separate from Frechet parity validation. The developer-only
+benchmark command measures execution timing and does not classify scientific
+parity:
 
 .. code-block:: bash
 
-   conda run -n pygotm pygotm benchmark --cases couette,channel --no-validate
+   conda run -n pygotm python -m pygotm.execution.benchmark \
+       --cases couette,channel
 
-Benchmark options include ``--cases``, ``--max-steps``, ``--output-dir``,
-``--no-output``, ``--no-warmup``, and ``--no-validate``.
+Run ``pygotm validate`` or ``python -m pygotm.validation.run_validation`` as a
+separate acceptance gate after any benchmarked code change. See
+:doc:`../getting_started/interfaces` for every user and developer command
+option.
 
 Validation API
 --------------

@@ -16,10 +16,10 @@ output against Fortran reference NetCDF files, and rendering HTML reports.
    :members:
    :undoc-members:
 
-.. automodule:: pygotm.validation.render_report
+.. automodule:: pygotm.validation.reference
    :members:
    :undoc-members:
 
-.. automodule:: pygotm.validation.benchmark
+.. automodule:: pygotm.validation.render_report
    :members:
    :undoc-members:
