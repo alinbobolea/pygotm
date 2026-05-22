@@ -5329,21 +5329,6 @@ def _run_second_order_turbulence_single(
         aw,
     )
     _kolpran_single(nlev, tke, L, num, nuh, nus, nucl, cmue1, cmue2, cmue3)
-    if iw_model == 2:
-        step_internal_wave_single(
-            nlev,
-            iw_model,
-            klimiw,
-            rich_cr,
-            numiw,
-            nuhiw,
-            numshear,
-            tke,
-            num,
-            nuh,
-            NN,
-            SS,
-        )
     step_variances_single(
         nlev,
         cc1,

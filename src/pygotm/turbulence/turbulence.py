@@ -256,6 +256,15 @@ CHCD01B = 6
 CCH02 = 7
 
 _CVMIX_TURB_METHOD = 100
+
+
+def _f90_default_real(value: float) -> float:
+    """Return the value GOTM gets from an unsuffixed Fortran real literal."""
+
+    return float(np.float32(value))
+
+
+_F90_TWO_THIRDS = float(np.float32(2.0) / np.float32(3.0))
 _DEFAULT_EDDY_DIFFUSIVITY = 1.0e-6
 _ARRAY_FIELD_NAMES = (
     "tke",
@@ -752,13 +761,22 @@ def _copy_neighbour_boundaries(array: np.ndarray, nlev: int) -> None:
 
 
 def _init_scnd(state: TurbulenceState) -> None:
+    def preset(*values: float) -> tuple[float, ...]:
+        return tuple(_f90_default_real(value) for value in values)
+
     presets = {
-        GL78: (3.6, 0.8, 1.2, 1.2, 0.0, 0.5, 3.0, 0.3333, 0.3333, 0.0, 0.3333, 0.8),
-        MY82: (6.0, 0.32, 0.0, 0.0, 0.0, 0.0, 3.728, 0.0, 0.0, 0.0, 0.0, 0.6102),
-        KC94: (6.0, 0.32, 0.0, 0.0, 0.0, 0.0, 3.728, 0.7, 0.7, 0.0, 0.2, 0.6102),
-        LDOR96: (3.0, 0.8, 2.0, 1.118, 0.0, 0.5, 3.0, 0.3333, 0.3333, 0.0, 0.3333, 0.8),
-        CHCD01A: (5.0, 0.8, 1.968, 1.136, 0.0, 0.4, 5.95, 0.6, 1.0, 0.0, 0.3333, 0.72),
-        CHCD01B: (
+        GL78: preset(
+            3.6, 0.8, 1.2, 1.2, 0.0, 0.5, 3.0, 0.3333, 0.3333, 0.0, 0.3333, 0.8
+        ),
+        MY82: preset(6.0, 0.32, 0.0, 0.0, 0.0, 0.0, 3.728, 0.0, 0.0, 0.0, 0.0, 0.6102),
+        KC94: preset(6.0, 0.32, 0.0, 0.0, 0.0, 0.0, 3.728, 0.7, 0.7, 0.0, 0.2, 0.6102),
+        LDOR96: preset(
+            3.0, 0.8, 2.0, 1.118, 0.0, 0.5, 3.0, 0.3333, 0.3333, 0.0, 0.3333, 0.8
+        ),
+        CHCD01A: preset(
+            5.0, 0.8, 1.968, 1.136, 0.0, 0.4, 5.95, 0.6, 1.0, 0.0, 0.3333, 0.72
+        ),
+        CHCD01B: preset(
             5.0,
             0.6983,
             1.9664,
@@ -772,7 +790,7 @@ def _init_scnd(state: TurbulenceState) -> None:
             0.3333,
             0.477,
         ),
-        CCH02: (
+        CCH02: preset(
             5.0,
             0.7983,
             1.968,
@@ -808,7 +826,7 @@ def _init_scnd(state: TurbulenceState) -> None:
             msg = f"invalid second-order coefficient set {state.scnd_coeff}"
             raise ValueError(msg) from exc
 
-    state.a1 = 2.0 / 3.0 - state.cc2 / 2.0
+    state.a1 = _F90_TWO_THIRDS - state.cc2 / 2.0
     state.a2 = 1.0 - state.cc3 / 2.0
     state.a3 = 1.0 - state.cc4 / 2.0
     state.a4 = state.cc5 / 2.0
@@ -833,14 +851,16 @@ def _compute_cm0(state: TurbulenceState) -> None:
         msg = f"unsupported turb_method for cm0 initialisation: {state.turb_method}"
         raise ValueError(msg)
 
+    a1 = _F90_TWO_THIRDS - state.cc2 / 2.0
+    a3 = 1.0 - state.cc4 / 2.0
     n_val = state.cc1 / 2.0
-    numerator = state.a2**2 - 3.0 * state.a3**2 + 3.0 * state.a1 * n_val
+    numerator = state.a2**2 - 3.0 * a3**2 + 3.0 * a1 * n_val
     if n_val == 0.0 or numerator <= 0.0:
         msg = "second-order closure coefficients are not initialised consistently"
         raise ValueError(msg)
 
     state.cm0 = (numerator / (3.0 * n_val * n_val)) ** 0.25
-    state.cmsf = state.a1 / n_val / state.cm0**3
+    state.cmsf = a1 / n_val / state.cm0**3
 
 
 def _analyse_model(state: TurbulenceState) -> None:

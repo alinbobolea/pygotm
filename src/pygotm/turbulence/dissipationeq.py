@@ -96,6 +96,7 @@ __all__ = [
 ]
 
 _CNPAR: float = 1.0
+_F90_SQRT_TWO: float = math.sqrt(float(np.float32(2.0)))
 
 
 class DissipationEquationWorkspace(ColumnWorkspace):
@@ -412,7 +413,7 @@ def _step_dissipationeq(
     if length_lim != 0:
         for i in range(nlev + 1):
             nn_pos = 0.5 * (NN[i] + abs(NN[i]))
-            epslim = cde / math.sqrt(2.0) / galp * tke[i] * math.sqrt(nn_pos)
+            epslim = cde / _F90_SQRT_TWO / galp * tke[i] * math.sqrt(nn_pos)
             if eps[i] < epslim:
                 eps[i] = epslim
 

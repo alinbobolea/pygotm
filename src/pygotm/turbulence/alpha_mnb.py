@@ -40,7 +40,7 @@ __all__ = [
     "step_alpha_mnb_single",
 ]
 
-_MIN_NONNEGATIVE_ALPHA: float = 1.0e-10
+_MIN_NONNEGATIVE_ALPHA: float = float(np.float32(1.0e-10))
 
 
 class AlphaMNBWorkspace(ColumnWorkspace):

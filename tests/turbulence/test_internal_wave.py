@@ -147,6 +147,20 @@ def test_non_matching_iw_model_leaves_fields_unchanged() -> None:
     np.testing.assert_allclose(workspace.nuh[0], nuh)
 
 
+def test_threshold_value_uses_internal_wave_diffusivities() -> None:
+    state = _make_state()
+    tke = np.array([4.0e-6, 5.0e-7, state.klimiw, 5.0e-7, 2.0e-6, 5.0e-7, 4.0e-6])
+    num = np.linspace(2.0e-4, 8.0e-4, _NLEV + 1)
+    nuh = np.linspace(3.0e-4, 9.0e-4, _NLEV + 1)
+    NN = np.array([0.0, -1.0e-4, -1.0e-4, 1.0, 1.0e-4, 2.0e-4, 0.0])
+    SS = np.array([0.0, 4.0e-4, 4.0e-4, 1.0, 5.0e-4, 1.0e-5, 0.0])
+
+    workspace = _run_step(state, tke=tke, num=num, nuh=nuh, NN=NN, SS=SS)
+
+    assert workspace.num[0, 2] == state.numiw + state.numshear
+    assert workspace.nuh[0, 2] == state.nuhiw + state.numshear
+
+
 def test_multicolumn_parity_for_identical_columns() -> None:
     state = _make_state()
     tke = np.array([4.0e-6, 5.0e-7, 5.0e-7, 5.0e-7, 2.0e-6, 5.0e-7, 4.0e-6])

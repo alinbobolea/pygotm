@@ -4,7 +4,7 @@ Internal-wave background mixing.
 
 Implements GOTM Section 4.7.45 (internal_wave.F90) — imposes an eddy viscosity
 and diffusivity characteristic of internal wave activity and shear instability
-when the turbulence kinetic energy is below a threshold ``klimiw``.  Following
+when the turbulence kinetic energy is at or below a threshold ``klimiw``.  Following
 Kantha and Clayson (1994), when :math:`k < k_{\\mathrm{limiw}}` the mixing
 coefficients are set to empirical values (Eq. 204):
 
