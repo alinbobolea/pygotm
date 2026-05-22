@@ -187,8 +187,8 @@ normalization is used:
 
    N(x) = \operatorname{clip}
    \left(
-     \frac{\log_{10}(|x| + \epsilon_\mathrm{dyn}) - l_\log}
-          {h_\log - l_\log},
+     \frac{\log_{10}(|x| + \epsilon_\mathrm{dyn}) - l_{\log}}
+          {h_{\log} - l_{\log}},
      0,
      1
    \right)
@@ -480,6 +480,20 @@ Output files:
   reference and pyGOTM NetCDF files, with embedded Plotly plots for marginal
   and discrepant variables.
 * ``validation/runs/<run_name>/<run_name>.nc`` - generated pyGOTM NetCDF files.
+
+Generated Reports
+-----------------
+
+The documentation build copies the HTML reports currently present in
+``validation/`` (produced by ``conda run -n pygotm python -m
+pygotm.validation.run_validation``) into the built docs at
+``validation/``. The index page links to each per-case report:
+
+* `Validation report (all cases) <report.html>`_
+
+If you are reading this page after a fresh clone and no validation run has
+been executed yet, the link above will return a 404. Run the validation suite
+locally and rebuild the documentation to populate the reports.
 
 Benchmark Mode
 --------------

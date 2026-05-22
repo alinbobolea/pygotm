@@ -210,12 +210,11 @@ def _var_rows_html(variables: list[VarResult]) -> str:
             f"<td>{_fmt(v.d_raw)}</td>"
             f"<td>{_fmt(v.primary_score)}{metric_label}</td>"
             f"<td>{_fmt(v.peak_d_norm)}</td>"
-            f"<td>{'—' if v.plot_html is None else '↓ see below'}</td>"
             f"</tr>\n"
         )
         if v.plot_html is not None:
             rows += (
-                '<tr><td colspan="8" style="padding:0;border-top:none">'
+                '<tr><td colspan="7" style="padding:0;border-top:none">'
                 f'<div class="plot-container">{v.plot_html}</div>'
                 "</td></tr>\n"
             )
@@ -228,6 +227,7 @@ def _section_html(section_label: str, variables: list[VarResult]) -> str:
             f'<p style="color:#888;font-style:italic">No {section_label} variables.</p>'
         )
     table_header = (
+        '<div class="table-wrap">'
         "<table>"
         "<thead><tr>"
         "<th>Status</th><th>Variable</th>"
@@ -236,9 +236,9 @@ def _section_html(section_label: str, variables: list[VarResult]) -> str:
         "<th>Raw Frechet</th>"
         "<th>Score (Normalized Frechet / d_rel)</th>"
         "<th>Peak-sensitive d_norm</th>"
-        "<th>Parameter plot</th>"
         "</tr></thead>"
         f"<tbody>{_var_rows_html(variables)}</tbody></table>"
+        "</div>"
     )
     return f'<h4 style="margin:1em 0 .4em">{section_label} variables</h4>{table_header}'
 
@@ -376,7 +376,8 @@ def render_case_html(report: Report, case: CaseResult) -> str:
   th     {{ background: #f5f5f5; font-weight: 600; }}
   tr:hover td {{ background: #fafafa; }}
   code   {{ background: #f5f5f5; padding: .1em .4em; border-radius: 3px; font-size: 0.9em; }}
-  .case-section {{ max-width: 1600px; margin: 0 auto; }}
+  .table-wrap {{ overflow-x: auto; }}
+  .case-section {{ max-width: 100%; }}
   .case-summary {{ display: flex; align-items: center; gap: .7em; border-bottom: 1px solid #ddd; padding-bottom: .7em; }}
   .case-meta  {{ font-size: 0.8em; color: #666; margin-left: auto; }}
   .case-badge {{ font-size: 0.8em; font-weight: 700; padding: .15em .5em; border-radius: 3px; }}
@@ -444,6 +445,7 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
   code   {{ background: #f5f5f5; padding: .1em .4em; border-radius: 3px; font-size: 0.9em; }}
   .hardware-box {{ background: white; border: 1px solid #d9e2ec; border-radius: 6px;
                    padding: .8em 1.2em; margin: 1em 0; display: inline-block; min-width: 420px; }}
+  .table-wrap {{ overflow-x: auto; }}
   .hw-table {{ margin: 0; font-size: 0.88em; border: none; }}
   .hw-table th, .hw-table td {{ border: none; padding: .2em .7em .2em 0; background: transparent; }}
   .hw-table th {{ width: 140px; color: #555; font-weight: 600; }}
@@ -515,6 +517,7 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
 </div>
 
 <h2>Summary</h2>
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
@@ -525,6 +528,7 @@ MathJax = {{ tex: {{ inlineMath: [['\\\\(','\\\\)']], displayMath: [['\\\\[','\\
   </thead>
   <tbody>{_summary_rows_html(report)}</tbody>
 </table>
+</div>
 
 <div class="case-browser">
   <nav class="case-nav" aria-label="Case reports">

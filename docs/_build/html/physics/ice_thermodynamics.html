@@ -1,0 +1,1002 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Biogeochemistry and FABM Coupling" href="biogeochemistry.html"><link rel="prev" title="Air–Sea Interaction" href="airsea.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Ice Thermodynamics - pyGOTM Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f28d94ff" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">pyGOTM Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <span class="sidebar-brand-text">pyGOTM Documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/configuration.html">Configuration</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User Manual</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user_manual/index.html">User Manual</a><input aria-label="Toggle navigation of User Manual" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/global.html">Global Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/location_time_grid.html">Location, Time, and Grid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/initial_conditions.html">Initial Conditions: Temperature and Salinity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/surface_forcing.html">Surface Forcing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/light_extinction.html">Light Extinction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/turbulence.html">Turbulence Closure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/dynamics.html">Dynamics: Pressure Gradients, Velocities, Waves, and Vertical Advection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/equation_of_state.html">Equation of State and Bottom Boundary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/output.html">Output and Restart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/input_file_formats.html">Input Data File Formats</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics &amp; Methods</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Physics Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="meanflow.html">Mean Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="turbulence.html">Turbulence Closures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="airsea.html">Air–Sea Interaction</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Ice Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="biogeochemistry.html">Biogeochemistry and FABM Coupling</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/driver.html">Driver</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/config.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/gotm.html">GOTM Runtime</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/meanflow.html">Mean Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/turbulence.html">Turbulence</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/airsea.html">Air–Sea Interaction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/observations.html">Observations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/util.html">Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/input.html">Input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/validation.html">Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/stokes_drift.html">Stokes Drift</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/fabm.html">FABM Coupling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/icethm.html">Ice Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/extras.html">Optional Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/cvmix.html">CVMix Interface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Validation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../validation/overview.html">Validation Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../validation/test_cases.html">Test Cases</a><input aria-label="Toggle navigation of Test Cases" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/asics_med.html">Asics Med Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/blacksea.html">Blacksea Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/channel.html">Channel Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/couette.html">Couette Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/entrainment.html">Entrainment Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/estuary.html">Estuary Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/flex.html">Flex Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/gotland.html">Gotland Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/lago_maggiore.html">Lago Maggiore Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/langmuir.html">Langmuir Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/liverpool_bay.html">Liverpool Bay Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/medsea_east.html">Medsea East Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/medsea_west.html">Medsea West Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/nns_annual.html">Nns Annual Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/nns_seasonal.html">Nns Seasonal Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/ows_papa.html">Ows Papa Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/plume.html">Plume Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/resolute.html">Resolute Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/reynolds.html">Reynolds Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/rouse.html">Rouse Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/seagrass.html">Seagrass Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/wave_breaking.html">Wave Breaking Validation Report</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/physics/ice_thermodynamics.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="ice-thermodynamics">
+<h1>Ice Thermodynamics<a class="headerlink" href="#ice-thermodynamics" title="Link to this heading">¶</a></h1>
+<p>pyGOTM provides five distinct sea-ice and lake-ice thermodynamics models (plus
+an option to disable ice entirely) through the <code class="docutils literal notranslate"><span class="pre">pygotm.icethm</span></code> package.  All
+models share a common <code class="xref py py-class docutils literal notranslate"><span class="pre">IceState</span></code> container and a unified
+dispatch function <code class="xref py py-func docutils literal notranslate"><span class="pre">step_ice()</span></code> compiled with Numba.  The
+model is selected at run time via the <code class="docutils literal notranslate"><span class="pre">surface.ice.model</span></code> key in the GOTM
+YAML configuration.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<p>The ice module sits between the atmospheric flux calculation and the ocean
+temperature/salinity update.  At each timestep the dispatcher:</p>
+<ol class="arabic simple">
+<li><p>Receives the surface water temperature <span class="math notranslate nohighlight">\(T_w\)</span> and salinity
+<span class="math notranslate nohighlight">\(S_w\)</span>, the air temperature <span class="math notranslate nohighlight">\(T_\mathrm{air}\)</span>, all four
+atmospheric heat-flux components
+(<span class="math notranslate nohighlight">\(Q_\mathrm{sw}\)</span>, <span class="math notranslate nohighlight">\(Q_l\)</span>, <span class="math notranslate nohighlight">\(Q_h\)</span>, <span class="math notranslate nohighlight">\(Q_e\)</span>),
+precipitation, and friction velocity <span class="math notranslate nohighlight">\(u_*\)</span>.</p></li>
+<li><p>Updates the internal ice state (thicknesses, temperatures, cover flag,
+albedo, transmissivity).</p></li>
+<li><p>Returns a modified upward temperature diffusion flux
+<code class="docutils literal notranslate"><span class="pre">diff_t_up</span></code> that incorporates the latent heat exchanged at the
+ice-ocean interface.</p></li>
+</ol>
+<p>The returned flux modifies the implicit vertical diffusion boundary condition
+in the temperature equation, so ice thermodynamics is coupled to the ocean
+column through the upper boundary condition rather than as a volumetric source
+term.</p>
+<section id="sign-convention">
+<h3>Sign convention<a class="headerlink" href="#sign-convention" title="Link to this heading">¶</a></h3>
+<p>pyGOTM uses the GOTM sign convention: a positive atmospheric heat flux means
+heat is <em>leaving</em> the ocean.  The ice modules report <code class="docutils literal notranslate"><span class="pre">ocean_ice_heat_flux</span></code>
+as <em>positive when ice extracts heat from the ocean</em> (basal freezing or cooling
+of supercooled water).</p>
+</section>
+<section id="state-variables">
+<h3>State variables<a class="headerlink" href="#state-variables" title="Link to this heading">¶</a></h3>
+<p>All models use the same <code class="xref py py-class docutils literal notranslate"><span class="pre">IceState</span></code> dataclass whose
+fields are length-one NumPy arrays for Numba compatibility:</p>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 20.0%" />
+<col style="width: 10.0%" />
+<col style="width: 70.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Unit</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Hice</span></code></p></td>
+<td><p>m</p></td>
+<td><p>Ice thickness (total)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Hsnow</span></code></p></td>
+<td><p>m</p></td>
+<td><p>Snow thickness (Winton only)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Hfrazil</span></code></p></td>
+<td><p>m</p></td>
+<td><p>Frazil ice thickness (MyLake only)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">T1</span></code></p></td>
+<td><p>°C</p></td>
+<td><p>Upper ice layer temperature (Winton only)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">T2</span></code></p></td>
+<td><p>°C</p></td>
+<td><p>Lower ice layer temperature (Winton only)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Tice_surface</span></code></p></td>
+<td><p>°C</p></td>
+<td><p>Ice surface temperature</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fdd</span></code></p></td>
+<td><p>°C·day</p></td>
+<td><p>Accumulated freezing degree days (Lebedev only)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ice_cover</span></code></p></td>
+<td><p>—</p></td>
+<td><p>Cover flag: 0 = open water, 2 = ice-covered</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Tf</span></code></p></td>
+<td><p>°C</p></td>
+<td><p>Local freezing temperature</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">albedo_ice</span></code></p></td>
+<td><p>—</p></td>
+<td><p>Shortwave albedo (ocean or ice value)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">transmissivity</span></code></p></td>
+<td><p>—</p></td>
+<td><p>Fraction of shortwave transmitted through ice</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ocean_ice_flux</span></code></p></td>
+<td><p>W m⁻²</p></td>
+<td><p>Prescribed ocean-to-ice heat flux (Winton input)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ocean_ice_heat_flux</span></code></p></td>
+<td><p>W m⁻²</p></td>
+<td><p>Diagnosed heat flux from ocean to ice</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ocean_ice_salt_flux</span></code></p></td>
+<td><p>psu·m s⁻¹</p></td>
+<td><p>Diagnosed salt flux from ocean to ice</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">surface_ice_energy</span></code></p></td>
+<td><p>J m⁻²</p></td>
+<td><p>Accumulated surface melt energy (Winton)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bottom_ice_energy</span></code></p></td>
+<td><p>J m⁻²</p></td>
+<td><p>Accumulated basal melt energy (Winton)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">melt_rate</span></code></p></td>
+<td><p>m s⁻¹</p></td>
+<td><p>Basal melt rate (basal-melt model only)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">T_melt</span></code></p></td>
+<td><p>°C</p></td>
+<td><p>Interface temperature at basal melt (basal-melt)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">S_melt</span></code></p></td>
+<td><p>psu</p></td>
+<td><p>Interface salinity at basal melt (basal-melt)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="freezing-point-parameterisations">
+<h2>Freezing Point Parameterisations<a class="headerlink" href="#freezing-point-parameterisations" title="Link to this heading">¶</a></h2>
+<p>Three distinct expressions for the seawater freezing temperature are used
+across the model suite.</p>
+<section id="linear-gotm-freezing-point">
+<h3>Linear GOTM freezing point<a class="headerlink" href="#linear-gotm-freezing-point" title="Link to this heading">¶</a></h3>
+<p>The simple and Lebedev models use the linear approximation</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[T_f = -\mu_1 \, S\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(\mu_1 = 0.0575\,{}^\circ\text{C psu}^{-1}\)</span> (<code class="docutils literal notranslate"><span class="pre">FREEZE_SLOPE</span></code> in
+the constants module).  This is the standard GOTM convention and applies to the
+salinity range <span class="math notranslate nohighlight">\(0 \text{–} 40\,\text{psu}\)</span>.</p>
+</section>
+<section id="winton-freezing-point">
+<h3>Winton freezing point<a class="headerlink" href="#winton-freezing-point" title="Link to this heading">¶</a></h3>
+<p>The Winton model uses a slightly different slope</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[T_f = -\mu_{TS} \, S, \qquad \mu_{TS} = 0.054\,{}^\circ\text{C psu}^{-1},\]</div>
+</div>
+<p>matching the value tabulated in Winton (2000) (Table 1, symbol
+<span class="math notranslate nohighlight">\(\mu\)</span>).</p>
+</section>
+<section id="mcdougalljackett-basal-freezing-temperature">
+<h3>McDougall–Jackett basal freezing temperature<a class="headerlink" href="#mcdougalljackett-basal-freezing-temperature" title="Link to this heading">¶</a></h3>
+<p>The basal-melt model uses a pressure-adjusted freezing point derived from
+McDougall et al. (2003):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[T_b = \lambda_1 S_b + \lambda_2 + \lambda_3 H,\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(H\)</span> is the ice draft (m below sea level) used as a proxy for
+pressure, and the empirical coefficients are</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}\lambda_1 &amp;= -5.6705\times10^{-2}\,{}^\circ\text{C psu}^{-1}, \\
+\lambda_2 &amp;= 7.5436\times10^{-2}\,{}^\circ\text{C}, \\
+\lambda_3 &amp;= 7.6829\times10^{-4}\,{}^\circ\text{C m}^{-1}.\end{split}\]</div>
+</div>
+<p>This linear form is valid for <span class="math notranslate nohighlight">\(S_b \in [4, 40]\,\text{psu}\)</span> and
+represents the freezing-point depression due to both salinity and hydrostatic
+pressure.  McDougall et al. (2003) fit this expression to the Feistel–Hagen
+(1995) Gibbs function, providing accuracies of order <span class="math notranslate nohighlight">\(3\times10^{-3}\)</span> kg
+m⁻³ in density and <span class="math notranslate nohighlight">\(4\times10^{-7}\)</span> °C⁻¹ in thermal expansion
+coefficient.</p>
+</section>
+</section>
+<section id="ice-models">
+<h2>Ice Models<a class="headerlink" href="#ice-models" title="Link to this heading">¶</a></h2>
+<section id="no-ice-model-0">
+<h3>NO_ICE (model = 0)<a class="headerlink" href="#no-ice-model-0" title="Link to this heading">¶</a></h3>
+<p>When <code class="docutils literal notranslate"><span class="pre">model</span> <span class="pre">=</span> <span class="pre">0</span></code> the ice module updates the local freezing temperature
+<code class="docutils literal notranslate"><span class="pre">Tf</span></code> using the linear GOTM expression but applies no modification to the
+temperature flux or any state variable.  This is equivalent to running the
+original GOTM configuration with no ice parameterisation.</p>
+</section>
+<section id="simple-model-1">
+<h3>SIMPLE (model = 1)<a class="headerlink" href="#simple-model-1" title="Link to this heading">¶</a></h3>
+<p>The simple model is a <em>boundary-condition limiter</em> rather than a prognostic
+ice model.  It prevents the ocean from warming above the local freezing
+temperature by suppressing upward temperature diffusivity whenever
+<span class="math notranslate nohighlight">\(T_w \leq T_f\)</span> and the unmodified flux is positive (heat flowing into
+the ocean):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}\widetilde{D}_T^{\mathrm{up}} =
+\begin{cases}
+0 &amp; \text{if } T_w \leq T_f \text{ and } D_T^{\mathrm{up}} &gt; 0,\\
+D_T^{\mathrm{up}} &amp; \text{otherwise.}
+\end{cases}\end{split}\]</div>
+</div>
+<p>No ice thickness or surface temperature is tracked.  This model reproduces the
+behaviour of the original GOTM <code class="docutils literal notranslate"><span class="pre">ice_model</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p>
+</section>
+<section id="lebedev-model-3">
+<h3>LEBEDEV (model = 3)<a class="headerlink" href="#lebedev-model-3" title="Link to this heading">¶</a></h3>
+<p>The Lebedev model applies the empirical freezing-degree-day (FDD) relation
+from Lebedev (1938), widely used in lake-ice and sea-ice climatology:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[H_\mathrm{ice} = 0.01 \times f_L \times \mathrm{FDD}^{e_L},\]</div>
+</div>
+<p>where the accumulated FDD is integrated over time as</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}\frac{d\,\mathrm{FDD}}{dt} =
+\begin{cases}
+T_f - T_\mathrm{air} &amp; \text{if } T_\mathrm{air} &lt; T_f, \\
+-(T_\mathrm{air} - T_f) &amp; \text{if } T_\mathrm{air} &gt; T_f,\; \text{floored at 0}.
+\end{cases}\end{split}\]</div>
+</div>
+<p>The constants <span class="math notranslate nohighlight">\(f_L = 1.33\)</span> and <span class="math notranslate nohighlight">\(e_L = 0.58\)</span> are the standard
+Lebedev parameters (<code class="docutils literal notranslate"><span class="pre">LEBEDEV_FAC</span></code>, <code class="docutils literal notranslate"><span class="pre">LEBEDEV_EXP</span></code>).  Once
+<span class="math notranslate nohighlight">\(\mathrm{FDD} &gt; 1\)</span> day·°C and <span class="math notranslate nohighlight">\(T_w \leq T_f\)</span>, ice forms;
+otherwise the column is open water.</p>
+<p>Shortwave optics follow an exponential Beer-Lambert law</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\tau = \exp\!\left(\frac{H_\mathrm{ice}}{l_a}\right),
+\quad l_a = -1.6\,\text{m},\]</div>
+</div>
+<p>with a fixed ice albedo <span class="math notranslate nohighlight">\(\alpha_\mathrm{ice} = 0.545\)</span>
+(<code class="docutils literal notranslate"><span class="pre">LEBEDEV_ALBEDO</span></code>).  The model does not diagnose ocean–ice heat or salt
+fluxes; it modifies only the albedo and shortwave transmissivity seen by the
+pyGOTM surface forcing.</p>
+</section>
+<section id="mylake-slab-ice-model-4">
+<h3>MyLake Slab Ice (model = 4)<a class="headerlink" href="#mylake-slab-ice-model-4" title="Link to this heading">¶</a></h3>
+<p>The MyLake-style model (following Saloranta and Andersen, 2007) represents a
+vertically uniform ice slab with prognostic thickness.  It advances through
+four sequential processes per timestep:</p>
+<p><strong>Frazil formation</strong> — supercooling of the surface water layer drives frazil
+ice accumulation:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\Delta H_\mathrm{frazil} =
+\frac{\rho_w c_{w,v} h_\mathrm{sfc} (T_f - T_w)}{\rho_i L_i},\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(c_{w,v} = 4.18\times10^6\)</span> J m⁻³ K⁻¹ is the volumetric heat
+capacity of seawater, <span class="math notranslate nohighlight">\(\rho_i = 910\)</span> kg m⁻³ is ice density, and
+<span class="math notranslate nohighlight">\(L_i = 333\,500\)</span> J kg⁻¹ is the latent heat of fusion.  When
+<span class="math notranslate nohighlight">\(H_\mathrm{frazil} \geq 0.03\)</span> m and no solid ice exists, frazil
+consolidates into the solid ice slab.</p>
+<p><strong>Conductive surface growth</strong> — when <span class="math notranslate nohighlight">\(T_\mathrm{air} &lt; T_f\)</span>, Stefan’s
+law drives ice growth from the top:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\Delta H_\mathrm{ice} = \frac{K_i (T_f - T_\mathrm{air})\,\Delta t}
+{\rho_i L_i \, \max(H_\mathrm{ice},\, 0.05)},\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(K_i = 2.03\)</span> W m⁻¹ K⁻¹ is the thermal conductivity of ice.</p>
+<p><strong>Surface melt</strong> — net positive surface energy flux melts ice from above:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\Delta H_\mathrm{melt} = \frac{(Q_\mathrm{sw} + Q_h + Q_e + Q_l)\,\Delta t}
+{\rho_i L_i}.\]</div>
+</div>
+<p><strong>Basal melt</strong> — heat stored in a warm surface water layer melts ice from
+below, and the resulting heat flux is reported as <code class="docutils literal notranslate"><span class="pre">ocean_ice_heat_flux</span></code>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Q_\mathrm{oi} = \frac{\rho_w c_{w,v} h_\mathrm{sfc}(T_w - T_f)}{\Delta t}
+\quad [\text{W m}^{-2}].\]</div>
+</div>
+<p>Shortwave transmissivity follows Beer-Lambert with an attenuation coefficient
+of <span class="math notranslate nohighlight">\(5.0\)</span> m⁻¹ (<code class="docutils literal notranslate"><span class="pre">MYLAKE_ATTN</span></code>).  Ice albedo is set to
+<span class="math notranslate nohighlight">\(\alpha_\mathrm{ice} = 0.5826\)</span>.</p>
+</section>
+<section id="ice-shelf-basal-melt-model-2">
+<h3>Ice-Shelf Basal Melt (model = 2)<a class="headerlink" href="#ice-shelf-basal-melt-model-2" title="Link to this heading">¶</a></h3>
+<p>This model implements the <em>three-equation ice-shelf basal-melt closure</em> of
+Holland and Jenkins (1999).  It is appropriate for simulating the thermodynamic
+exchange at the base of a floating ice shelf where the ice-ocean interface
+temperature is constrained to the pressure-dependent freezing point.</p>
+<p class="rubric">Physical framework</p>
+<p>The interface temperature <span class="math notranslate nohighlight">\(T_b\)</span> and salinity <span class="math notranslate nohighlight">\(S_b\)</span> must
+simultaneously satisfy:</p>
+<ol class="arabic">
+<li><p><strong>Freezing point constraint</strong> (McDougall–Jackett):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[T_b = \lambda_1 S_b + \lambda_2 + \lambda_3 H.\]</div>
+</div>
+</li>
+<li><p><strong>Heat conservation</strong> — the turbulent heat flux from ocean to interface
+equals the latent heat of melting plus the conductive heat flux into the
+ice interior.  In the simplified form used here (treating the ice as
+conducting only to the core at a fixed temperature <span class="math notranslate nohighlight">\(T_i = -20\)</span> °C),
+the thermal balance is</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\gamma_T (T_w - T_b) =
+M \!\left[\frac{L_i}{c_w} + \frac{c_i}{c_w}(T_b - T_i)\right],\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(M\)</span> [m s⁻¹] is the melt rate (positive for melting),
+<span class="math notranslate nohighlight">\(c_w = 4180\)</span> J kg⁻¹ K⁻¹, and <span class="math notranslate nohighlight">\(c_i = 1995\)</span> J kg⁻¹ K⁻¹.</p>
+</li>
+<li><p><strong>Salt conservation</strong> — the turbulent salt flux from ocean to interface
+equals the salt rejected by melting ice (treating ice as salt-free):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\gamma_S (S_w - S_b) = M \, S_b.\]</div>
+</div>
+</li>
+</ol>
+<p class="rubric">Turbulent exchange velocities</p>
+<p>Following Holland and Jenkins (1999) and Jenkins (2016), the turbulent
+thermal and haline exchange velocities are parameterised as proportional to
+the local friction velocity <span class="math notranslate nohighlight">\(u_*\)</span>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\gamma_T = \Gamma_T \, u_*, \quad \gamma_S = \Gamma_S \, u_*,\]</div>
+</div>
+<p>with <span class="math notranslate nohighlight">\(\Gamma_T = 10^{-2}\)</span> (<code class="docutils literal notranslate"><span class="pre">GAMMA_T</span></code>) and
+<span class="math notranslate nohighlight">\(\Gamma_S = 5.05\times10^{-5}\)</span> (<code class="docutils literal notranslate"><span class="pre">GAMMA_S</span></code>).  These reproduce the
+canonical values <span class="math notranslate nohighlight">\(\gamma_T \approx 10^{-4}\)</span> m s⁻¹ and
+<span class="math notranslate nohighlight">\(\gamma_S \approx 5\times10^{-7}\)</span> m s⁻¹ at
+<span class="math notranslate nohighlight">\(u_* = 10^{-2}\)</span> m s⁻¹.  When <span class="math notranslate nohighlight">\(u_*\)</span> is unavailable, the default
+value <span class="math notranslate nohighlight">\(u_* = 10^{-2}\)</span> m s⁻¹ (<code class="docutils literal notranslate"><span class="pre">DEFAULT_BASAL_USTAR</span></code>) is applied.</p>
+<p class="rubric">Solution procedure</p>
+<p>Eliminating <span class="math notranslate nohighlight">\(T_b\)</span> and <span class="math notranslate nohighlight">\(M\)</span> from equations 1–3 yields a quadratic
+in <span class="math notranslate nohighlight">\(S_b\)</span>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[q_a S_b^2 + q_b S_b + q_c = 0,\]</div>
+</div>
+<p>where the coefficients depend on <span class="math notranslate nohighlight">\(T_w\)</span>, <span class="math notranslate nohighlight">\(S_w\)</span>, <span class="math notranslate nohighlight">\(H\)</span>,
+<span class="math notranslate nohighlight">\(\gamma_T\)</span>, and <span class="math notranslate nohighlight">\(\gamma_S\)</span>.  The physically admissible root
+(<span class="math notranslate nohighlight">\(0 &lt; S_b &lt; S_w\)</span> for melting, <span class="math notranslate nohighlight">\(S_b &gt; 0\)</span> for freezing) is
+selected, from which <span class="math notranslate nohighlight">\(T_b\)</span> and <span class="math notranslate nohighlight">\(M\)</span> follow directly.  The
+diagnosed fluxes are</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}Q_\mathrm{oi}^T &amp;= \rho_i L_i \, M \quad [\text{W m}^{-2}], \\
+Q_\mathrm{oi}^S &amp;= M (S_b - S_w) \quad [\text{psu m s}^{-1}].\end{split}\]</div>
+</div>
+<p>These are stored in <code class="docutils literal notranslate"><span class="pre">ocean_ice_heat_flux</span></code> and <code class="docutils literal notranslate"><span class="pre">ocean_ice_salt_flux</span></code>
+respectively and subtracted from the ocean column temperature diffusion
+boundary condition.</p>
+</section>
+<section id="winton-three-layer-sea-ice-model-5">
+<h3>Winton Three-Layer Sea Ice (model = 5)<a class="headerlink" href="#winton-three-layer-sea-ice-model-5" title="Link to this heading">¶</a></h3>
+<p>The Winton model (Winton, 2000) provides the most physically complete
+sea-ice thermodynamics available in pyGOTM.  It tracks prognostic snow and
+ice thicknesses and two internal ice temperatures, solves for ice formation and
+melt, and uses a fully implicit time-stepping scheme.</p>
+<p class="rubric">Layer structure</p>
+<p>The model consists of three thermodynamically distinct layers (Fig. 1 of
+Winton, 2000):</p>
+<ul class="simple">
+<li><p><strong>Snow layer</strong> (zero heat capacity): thickness <span class="math notranslate nohighlight">\(h_s\)</span>, zero-heat-capacity
+insulating layer above the ice.</p></li>
+<li><p><strong>Upper ice layer</strong> (variable heat capacity): thickness <span class="math notranslate nohighlight">\(h_i/2\)</span>,
+temperature <span class="math notranslate nohighlight">\(T_1\)</span> at depth <span class="math notranslate nohighlight">\(h_i/4\)</span> below the snow–ice interface.
+Brine inclusions give this layer a variable effective heat capacity.</p></li>
+<li><p><strong>Lower ice layer</strong> (fixed heat capacity): thickness <span class="math notranslate nohighlight">\(h_i/2\)</span>,
+temperature <span class="math notranslate nohighlight">\(T_2\)</span> at depth <span class="math notranslate nohighlight">\(3h_i/4\)</span> below the interface.
+The bottom of the ice is fixed at the freezing temperature <span class="math notranslate nohighlight">\(T_f\)</span>.</p></li>
+</ul>
+<p class="rubric">Variable heat capacity (brine content)</p>
+<p>Sea ice retains brine in pockets whose salinity equals the local freezing
+temperature.  The enthalpy per unit mass is therefore</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[E(T, S) \equiv C(T + \mu S) - L\!\left(1 + \frac{\mu S}{T}\right),\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(C = 2100\)</span> J kg⁻¹ K⁻¹ is the ice heat capacity,
+<span class="math notranslate nohighlight">\(L = 333\,500\)</span> J kg⁻¹ is the latent heat of fusion, and
+<span class="math notranslate nohighlight">\(\mu = 0.054\)</span> °C psu⁻¹ relates freezing temperature to salinity
+(Eq. 1 in Winton, 2000).  Conservation of this enthalpy drives the
+upper-layer temperature evolution and eliminates the need for a separate brine
+variable.</p>
+<p class="rubric">Conductive coupling</p>
+<p>The effective conductivity between the surface and the upper ice layer,
+accounting for the insulating snow layer, is</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[K_{1/2} = \frac{4 K_i K_s}{K_s h_i + 4 K_i h_s},\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(K_i = 2.03\)</span> W m⁻¹ K⁻¹ and <span class="math notranslate nohighlight">\(K_s = 0.31\)</span> W m⁻¹ K⁻¹
+are the thermal conductivities of ice and snow (Eq. 5 in Winton, 2000).
+When <span class="math notranslate nohighlight">\(h_s = 0\)</span>, this reduces to
+<span class="math notranslate nohighlight">\(K_{1/2} = 4K_i/h_i\)</span> (the factor 4 arises from the layer midpoint
+location at <span class="math notranslate nohighlight">\(h_i/4\)</span>).  The inter-layer conductivity between the two ice
+layers is <span class="math notranslate nohighlight">\(K_{3/2} = 2K_i/h_i\)</span>.</p>
+<p class="rubric">Surface temperature</p>
+<p>The surface heat flux is linearised about the previous surface temperature
+<span class="math notranslate nohighlight">\(\hat T_s\)</span>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[F_s(T_s) \approx A + B\,T_s, \qquad B = \frac{\partial F_s}{\partial T_s}.\]</div>
+</div>
+<p>pyGOTM computes <span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(B\)</span> from the pre-computed air-sea flux
+components (Qsw absorbed, Ql, Qh, Qe) and uses a conservative fixed slope
+<span class="math notranslate nohighlight">\(B = -4\)</span> W m⁻² K⁻¹ in the absence of a flux-recalculation callback.
+The surface temperature is then found diagnostically from the heat-balance
+between the linearised surface flux and the conductive flux into the upper ice
+layer (Eq. 6 in Winton, 2000):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[T_s = \frac{K_{1/2} T_1 - A}{K_{1/2} + B}.\]</div>
+</div>
+<p>If <span class="math notranslate nohighlight">\(T_s &gt; 0\)</span> (melting conditions), the surface is clamped to
+<span class="math notranslate nohighlight">\(T_s = 0\)</span> and the excess energy is accumulated in <code class="docutils literal notranslate"><span class="pre">surface_ice_energy</span></code>.</p>
+<p class="rubric">Ice temperature time stepping</p>
+<p>Equations (12) and (13) of Winton (2000) advance <span class="math notranslate nohighlight">\(T_1\)</span> and
+<span class="math notranslate nohighlight">\(T_2\)</span> implicitly.  In pyGOTM’s implementation, <span class="math notranslate nohighlight">\(T_2\)</span> is solved
+first (Eq. 15 of the paper) and <span class="math notranslate nohighlight">\(T_1\)</span> follows from the resulting
+quadratic (Eqs. 16–21).  Temperatures are clamped to zero and excess energy
+routed to the surface or basal energy budgets.</p>
+<p class="rubric">Snow and ice thickness changes</p>
+<p>Four mass-change processes are applied sequentially after the temperature step:</p>
+<ol class="arabic simple">
+<li><p><strong>Snow accumulation</strong> from precipitation when ice exists.</p></li>
+<li><p><strong>Surface melt</strong> — snow melts first, then upper ice, from the accumulated
+<code class="docutils literal notranslate"><span class="pre">surface_ice_energy</span></code>.</p></li>
+<li><p><strong>Basal growth or melt</strong> from the basal energy budget
+<code class="docutils literal notranslate"><span class="pre">bottom_ice_energy</span> <span class="pre">+</span> <span class="pre">ocean_ice_flux</span> <span class="pre">·</span> <span class="pre">Δt</span></code>.</p></li>
+<li><p><strong>Snow flooding</strong> — when freeboard is negative (snow weight pushes the
+ice surface below sea level), excess snow is converted to upper-layer ice.</p></li>
+</ol>
+<p>The layer-equalization step <code class="docutils literal notranslate"><span class="pre">even_up</span></code> ensures that the upper and lower layers
+remain equal in thickness by transferring enthalpy when mass shifts between
+layers (Eqs. 37–40 in Winton, 2000).</p>
+<p class="rubric">Shortwave optics</p>
+<p>Ice albedo depends on snow cover, ice thickness, and surface temperature
+following the parameterisation of Winton (2000):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}\alpha =
+\begin{cases}
+\alpha_\mathrm{snow} = 0.85 &amp; h_s &gt; 0, \\
+f_h \, \alpha_\mathrm{ice} + (1-f_h)\,\alpha_\mathrm{ocean}
+- 0.075 \, \delta_\mathrm{melt} &amp; h_s = 0,
+\end{cases}\end{split}\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(f_h = \min(h_i/0.5, 1)\)</span> is a thickness-based blend factor
+(<span class="math notranslate nohighlight">\(\alpha_\mathrm{ice} = 0.5826\)</span>, <span class="math notranslate nohighlight">\(\alpha_\mathrm{ocean} = 0.06\)</span>)
+and <span class="math notranslate nohighlight">\(\delta_\mathrm{melt}\)</span> is a linear reduction applied when the
+surface temperature exceeds <span class="math notranslate nohighlight">\(-1\)</span> °C.  The penetrating shortwave
+fraction follows</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\tau = P_0 \exp\!\left(-\frac{h_i}{d_0}\right),\]</div>
+</div>
+<p>with penetrating fraction <span class="math notranslate nohighlight">\(P_0 = 0.3\)</span> (<code class="docutils literal notranslate"><span class="pre">PEN_ICE</span></code>) and optical depth
+<span class="math notranslate nohighlight">\(d_0 = 0.67\)</span> m (<code class="docutils literal notranslate"><span class="pre">OPT_DEP_ICE</span></code>).</p>
+<p class="rubric">Ocean–ice coupling</p>
+<p>The basal heat flux diagnosed from ice thickness changes is reported as
+<code class="docutils literal notranslate"><span class="pre">ocean_ice_heat_flux</span></code>.  This is used by the calling layer in
+<code class="xref py py-func docutils literal notranslate"><span class="pre">compute_diff_t_up_from_ice()</span></code> to modify the upward
+temperature diffusion boundary condition:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\widetilde{D}_T^\mathrm{up} = D_T^\mathrm{up}
+- \frac{Q_\mathrm{oi}^T}{\rho_0 c_p},\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(\rho_0\)</span> and <span class="math notranslate nohighlight">\(c_p\)</span> are the ocean reference density and heat
+capacity.</p>
+</section>
+</section>
+<section id="constants-summary">
+<h2>Constants Summary<a class="headerlink" href="#constants-summary" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-given docutils container" id="id1">
+<table class="docutils align-default" id="id1">
+<caption><span class="caption-text">Physical constants used by the ice module</span><a class="headerlink" href="#id1" title="Link to this table">¶</a></caption>
+<colgroup>
+<col style="width: 22.0%" />
+<col style="width: 12.0%" />
+<col style="width: 10.0%" />
+<col style="width: 56.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>Python name</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\rho_i\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">RHO_ICE</span></code></p></td>
+<td><p>910 kg m⁻³</p></td>
+<td><p>Density of sea ice</p></td>
+</tr>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\rho_w\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">RHO_WATER</span></code></p></td>
+<td><p>1025 kg m⁻³</p></td>
+<td><p>Density of seawater</p></td>
+</tr>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\rho_s\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">RHO_SNOW</span></code></p></td>
+<td><p>330 kg m⁻³</p></td>
+<td><p>Density of snow</p></td>
+</tr>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(L_i\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">L_ICE</span></code></p></td>
+<td><p>333 500 J kg⁻¹</p></td>
+<td><p>Latent heat of fusion</p></td>
+</tr>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(K_i\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">K_ICE</span></code></p></td>
+<td><p>2.03 W m⁻¹ K⁻¹</p></td>
+<td><p>Thermal conductivity of sea ice</p></td>
+</tr>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(K_s\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">K_SNOW</span></code></p></td>
+<td><p>0.31 W m⁻¹ K⁻¹</p></td>
+<td><p>Thermal conductivity of snow</p></td>
+</tr>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(C\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">C_ICE</span></code></p></td>
+<td><p>2100 J kg⁻¹ K⁻¹</p></td>
+<td><p>Specific heat capacity of ice</p></td>
+</tr>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\mu_1\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">FREEZE_SLOPE</span></code></p></td>
+<td><p>0.0575 °C psu⁻¹</p></td>
+<td><p>GOTM simple freezing slope</p></td>
+</tr>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\mu_{TS}\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MU_TS</span></code></p></td>
+<td><p>0.054 °C psu⁻¹</p></td>
+<td><p>Winton freezing slope</p></td>
+</tr>
+<tr class="row-odd"><td><p><span class="math notranslate nohighlight">\(\Gamma_T\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GAMMA_T</span></code></p></td>
+<td><p>1.0 × 10⁻²</p></td>
+<td><p>Thermal exchange coefficient (Holland–Jenkins)</p></td>
+</tr>
+<tr class="row-even"><td><p><span class="math notranslate nohighlight">\(\Gamma_S\)</span></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GAMMA_S</span></code></p></td>
+<td><p>5.05 × 10⁻⁵</p></td>
+<td><p>Haline exchange coefficient (Holland–Jenkins)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Winton (2000)</strong> — M. Winton, “A Reformulated Three-Layer Sea Ice Model,”
+<em>J. Atmos. Oceanic Technol.</em> <strong>17</strong>, 525–531.
+DOI: <a class="reference external" href="https://doi.org/10.1175/1520-0426(2000)017%3C0525:ARTLSI%3E2.0.CO;2">10.1175/1520-0426(2000)017&lt;0525:ARTLSI&gt;2.0.CO;2</a></p></li>
+<li><p><strong>Holland and Jenkins (1999)</strong> — D. M. Holland and A. Jenkins,
+“Modeling Thermodynamic Ice–Ocean Interactions at the Base of an Ice Shelf,”
+<em>J. Phys. Oceanogr.</em> <strong>29</strong>, 1787–1800.
+DOI: <a class="reference external" href="https://doi.org/10.1175/1520-0485(1999)029%3C1787:MTIOIA%3E2.0.CO;2">10.1175/1520-0485(1999)029&lt;1787:MTIOIA&gt;2.0.CO;2</a></p></li>
+<li><p><strong>McDougall et al. (2003)</strong> — T. J. McDougall, D. R. Jackett, D. G. Wright,
+and R. Feistel, “Accurate and Computationally Efficient Algorithms for
+Potential Temperature and Density of Seawater,”
+<em>J. Atmos. Oceanic Technol.</em> <strong>20</strong>, 730–741.
+DOI: <a class="reference external" href="https://doi.org/10.1175/1520-0426(2003)20%3C730:AACEFA%3E2.0.CO;2">10.1175/1520-0426(2003)20&lt;730:AACEFA&gt;2.0.CO;2</a></p></li>
+<li><p><strong>Jenkins (2016)</strong> — A. Jenkins, “A Simple Model of the Ice Shelf–Ocean
+Boundary Layer and Current,” <em>J. Phys. Oceanogr.</em> <strong>46</strong>, 1785–1803.
+DOI: <a class="reference external" href="https://doi.org/10.1175/JPO-D-15-0194.1">10.1175/JPO-D-15-0194.1</a></p></li>
+<li><p><strong>Saloranta and Andersen (2007)</strong> — T. M. Saloranta and T. Andersen,
+“MyLake — A multi-year lake simulation model code suitable for uncertainty
+and sensitivity analysis simulations,” <em>Ecol. Modell.</em> <strong>207</strong> (1), 45–60.
+DOI: <a class="reference external" href="https://doi.org/10.1016/j.ecolmodel.2007.03.018">10.1016/j.ecolmodel.2007.03.018</a></p></li>
+</ul>
+</section>
+<section id="see-also">
+<h2>See Also<a class="headerlink" href="#see-also" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="../api/icethm.html"><span class="doc">Ice Thermodynamics</span></a> — ice thermodynamics API reference</p></li>
+<li><p><a class="reference internal" href="airsea.html"><span class="doc">Air–Sea Interaction</span></a> — surface flux calculation that feeds heat components into the ice models</p></li>
+<li><p><a class="reference internal" href="overview.html"><span class="doc">Physics Overview</span></a> — solution sequence showing where ice is called</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="biogeochemistry.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Biogeochemistry and FABM Coupling</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="airsea.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Air–Sea Interaction</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 pyGOTM contributors. Based on GOTM by Lars Umlauf, Hans Burchard, and Karsten Bolding.
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link " href="https://gotm.net" aria-label="GOTM">Based on GOTM by Lars Umlauf, Hans Burchard & Karsten Bolding</a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Ice Thermodynamics</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a><ul>
+<li><a class="reference internal" href="#sign-convention">Sign convention</a></li>
+<li><a class="reference internal" href="#state-variables">State variables</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#freezing-point-parameterisations">Freezing Point Parameterisations</a><ul>
+<li><a class="reference internal" href="#linear-gotm-freezing-point">Linear GOTM freezing point</a></li>
+<li><a class="reference internal" href="#winton-freezing-point">Winton freezing point</a></li>
+<li><a class="reference internal" href="#mcdougalljackett-basal-freezing-temperature">McDougall–Jackett basal freezing temperature</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#ice-models">Ice Models</a><ul>
+<li><a class="reference internal" href="#no-ice-model-0">NO_ICE (model = 0)</a></li>
+<li><a class="reference internal" href="#simple-model-1">SIMPLE (model = 1)</a></li>
+<li><a class="reference internal" href="#lebedev-model-3">LEBEDEV (model = 3)</a></li>
+<li><a class="reference internal" href="#mylake-slab-ice-model-4">MyLake Slab Ice (model = 4)</a></li>
+<li><a class="reference internal" href="#ice-shelf-basal-melt-model-2">Ice-Shelf Basal Melt (model = 2)</a></li>
+<li><a class="reference internal" href="#winton-three-layer-sea-ice-model-5">Winton Three-Layer Sea Ice (model = 5)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#constants-summary">Constants Summary</a></li>
+<li><a class="reference internal" href="#references">References</a></li>
+<li><a class="reference internal" href="#see-also">See Also</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>window.MathJax = {"tex": {"macros": {"partder": ["\\frac{\\partial #1}{\\partial #2}", 2], "frstder": ["\\frac{\\partial}{\\partial #1}", 1], "mean": ["\\overline{#1}", 1], "comma": ",", "point": "."}}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    </body>
+</html>

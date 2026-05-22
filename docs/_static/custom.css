@@ -1,3 +1,12 @@
 .sidebar-caption-text {
     text-transform: none;
 }
+
+/* Widen the content column on large screens.
+ * Furo's default is 46em (~736px); 60em (~960px) gives validation tables
+ * and iframes noticeably more room without hurting text readability. */
+@media (min-width: 82em) {
+    .content {
+        width: 60em;
+    }
+}

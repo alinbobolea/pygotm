@@ -114,6 +114,13 @@ def _make_plot_html(
         yaxis_title=variable,
         height=300,
         hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
     )
     return str(pio.to_html(fig, include_plotlyjs=False, full_html=False))
 

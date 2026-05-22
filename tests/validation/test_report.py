@@ -458,6 +458,39 @@ def test_write_html_reports_writes_index_and_case_pages(tmp_path: Path) -> None:
     assert (tmp_path / "channel-gotm.html").is_file()
 
 
+def test_case_html_tables_have_overflow_wrapper() -> None:
+    """Each variable table must be wrapped in .table-wrap for responsive scrolling."""
+    vars_ = [
+        _make_var(name="temp", section="pygotm"),
+        _make_var(name="oxygen", section="pyfabm"),
+    ]
+    report = _make_report([_make_case("couette", variables=vars_)])
+    html = render_case_html(report, report.cases[0])
+    assert '<div class="table-wrap">' in html
+    # The table must appear inside the wrapper, not before it.
+    wrapper_pos = html.find('<div class="table-wrap">')
+    table_pos = html.find("<table>", wrapper_pos)
+    assert wrapper_pos < table_pos
+
+
+def test_case_html_has_table_wrap_overflow_css() -> None:
+    """The case HTML stylesheet must declare overflow-x: auto for .table-wrap."""
+    report = _make_report([_make_case("couette")])
+    html = render_case_html(report, report.cases[0])
+    assert "table-wrap" in html
+    assert "overflow-x" in html
+
+
+def test_index_html_summary_table_has_overflow_wrapper() -> None:
+    """The summary table in the index report must also be inside .table-wrap."""
+    report = _make_report([_make_case("couette"), _make_case("channel")])
+    html = render_html(report)
+    wrapper_pos = html.find('<div class="table-wrap">')
+    assert wrapper_pos != -1
+    table_pos = html.find("<table>", wrapper_pos)
+    assert wrapper_pos < table_pos
+
+
 def test_fmt_time_seconds() -> None:
     assert _fmt_time(45.7) == "45.7s"
 

@@ -1,0 +1,1230 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Driver" href="../api/driver.html"><link rel="prev" title="Ice Thermodynamics" href="ice_thermodynamics.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Biogeochemistry and FABM Coupling - pyGOTM Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f28d94ff" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">pyGOTM Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <span class="sidebar-brand-text">pyGOTM Documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/configuration.html">Configuration</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User Manual</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user_manual/index.html">User Manual</a><input aria-label="Toggle navigation of User Manual" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/global.html">Global Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/location_time_grid.html">Location, Time, and Grid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/initial_conditions.html">Initial Conditions: Temperature and Salinity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/surface_forcing.html">Surface Forcing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/light_extinction.html">Light Extinction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/turbulence.html">Turbulence Closure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/dynamics.html">Dynamics: Pressure Gradients, Velocities, Waves, and Vertical Advection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/equation_of_state.html">Equation of State and Bottom Boundary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/output.html">Output and Restart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user_manual/input_file_formats.html">Input Data File Formats</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Physics &amp; Methods</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Physics Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="meanflow.html">Mean Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="turbulence.html">Turbulence Closures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="airsea.html">Air–Sea Interaction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ice_thermodynamics.html">Ice Thermodynamics</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Biogeochemistry and FABM Coupling</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/driver.html">Driver</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/config.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/gotm.html">GOTM Runtime</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/meanflow.html">Mean Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/turbulence.html">Turbulence</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/airsea.html">Air–Sea Interaction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/observations.html">Observations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/util.html">Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/input.html">Input</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/validation.html">Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/stokes_drift.html">Stokes Drift</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/fabm.html">FABM Coupling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/icethm.html">Ice Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/extras.html">Optional Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/cvmix.html">CVMix Interface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Validation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../validation/overview.html">Validation Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../validation/test_cases.html">Test Cases</a><input aria-label="Toggle navigation of Test Cases" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/asics_med.html">Asics Med Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/blacksea.html">Blacksea Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/channel.html">Channel Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/couette.html">Couette Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/entrainment.html">Entrainment Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/estuary.html">Estuary Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/flex.html">Flex Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/gotland.html">Gotland Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/lago_maggiore.html">Lago Maggiore Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/langmuir.html">Langmuir Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/liverpool_bay.html">Liverpool Bay Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/medsea_east.html">Medsea East Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/medsea_west.html">Medsea West Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/nns_annual.html">Nns Annual Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/nns_seasonal.html">Nns Seasonal Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/ows_papa.html">Ows Papa Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/plume.html">Plume Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/resolute.html">Resolute Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/reynolds.html">Reynolds Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/rouse.html">Rouse Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/seagrass.html">Seagrass Validation Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation/cases/wave_breaking.html">Wave Breaking Validation Report</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/physics/biogeochemistry.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="biogeochemistry-and-fabm-coupling">
+<h1>Biogeochemistry and FABM Coupling<a class="headerlink" href="#biogeochemistry-and-fabm-coupling" title="Link to this heading">¶</a></h1>
+<p>pyGOTM integrates biogeochemical modelling through the Framework for Aquatic
+Biogeochemical Models (FABM) via its Python front-end, <strong>pyfabm</strong>.  The
+coupling enables any FABM-compatible biogeochemical or ecological model to run
+within a pyGOTM single-column simulation without modifying the pyGOTM physics
+kernel.</p>
+<section id="what-is-fabm">
+<h2>What is FABM?<a class="headerlink" href="#what-is-fabm" title="Link to this heading">¶</a></h2>
+<p>FABM (Framework for Aquatic Biogeochemical Models) is an open-source,
+model-agnostic coupling framework that allows biogeochemical models to be
+compiled once and coupled to different physical ocean and lake models without
+code changes.  Each FABM model describes:</p>
+<ul class="simple">
+<li><p><strong>State variables</strong> — concentrations of biogeochemical quantities (e.g.
+phytoplankton, dissolved oxygen, nutrients).</p></li>
+<li><p><strong>Source/sink rates</strong> — the net production or consumption of each state
+variable due to biological reactions, chemistry, and air-sea exchange.</p></li>
+<li><p><strong>Dependencies</strong> — physical environment fields that the biogeochemical model
+needs from the host (temperature, salinity, light, density, etc.).</p></li>
+<li><p><strong>Diagnostics</strong> — derived quantities the model exposes back to the host
+(e.g. light attenuation, chlorophyll <em>a</em>).</p></li>
+</ul>
+<p><strong>pyfabm</strong> is the Python binding to the FABM shared library.  It exposes the
+FABM model described in a <code class="docutils literal notranslate"><span class="pre">fabm.yaml</span></code> configuration file as a
+<code class="docutils literal notranslate"><span class="pre">pyfabm.Model</span></code> object whose state arrays, rates, diagnostics, and
+dependencies can be read and written from Python.  A wide range of models are
+available — from simple nutrient-phytoplankton-zooplankton (NPZ) models to
+complex biogeochemical models such as ERSEM and HBM-NEMO-PISCES.</p>
+</section>
+<section id="enabling-fabm-in-pygotm">
+<h2>Enabling FABM in pyGOTM<a class="headerlink" href="#enabling-fabm-in-pygotm" title="Link to this heading">¶</a></h2>
+<p>FABM is activated by adding a <code class="docutils literal notranslate"><span class="pre">fabm</span></code> block to the GOTM YAML configuration:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">fabm</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">use</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">config_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fabm.yaml</span><span class="w">     </span><span class="c1"># path to the FABM model YAML, relative to gotm.yaml</span>
+<span class="w">  </span><span class="nt">freshwater_impact</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">    </span><span class="c1"># dilute/concentrate tracers with precipitation</span>
+<span class="w">  </span><span class="nt">repair_state</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">        </span><span class="c1"># clamp negative concentrations to zero</span>
+
+<span class="nt">feedbacks</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">shade</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">               </span><span class="c1"># allow FABM to modify light attenuation</span>
+<span class="w">  </span><span class="nt">albedo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">              </span><span class="c1"># allow FABM to modify surface albedo</span>
+<span class="w">  </span><span class="nt">surface_drag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">        </span><span class="c1"># allow FABM to modify surface drag</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">config_file</span></code> key (also accepted as <code class="docutils literal notranslate"><span class="pre">config</span></code>, <code class="docutils literal notranslate"><span class="pre">yaml</span></code>, or <code class="docutils literal notranslate"><span class="pre">file</span></code>)
+points to the FABM model YAML that specifies which biological models are
+active.  If not supplied, the default <code class="docutils literal notranslate"><span class="pre">fabm.yaml</span></code> in the same directory as
+<code class="docutils literal notranslate"><span class="pre">gotm.yaml</span></code> is used.</p>
+<p>The coupling is completely optional.  If <code class="docutils literal notranslate"><span class="pre">fabm.use:</span> <span class="pre">false</span></code> (the default),
+the physics-only compiled Numba loop runs unchanged and pyfabm is never
+imported.</p>
+</section>
+<section id="coupling-architecture-chunked-interleaved-loop">
+<span id="fabm-coupling-design"></span><h2>Coupling Architecture: Chunked Interleaved Loop<a class="headerlink" href="#coupling-architecture-chunked-interleaved-loop" title="Link to this heading">¶</a></h2>
+<p>A fundamental constraint drives the design of the coupling:</p>
+<blockquote>
+<div><p><strong>Numba-compiled kernels cannot call back into Python</strong>, and pyfabm is
+a Python-level library.  They cannot be interleaved at the sub-timestep
+level.</p>
+</div></blockquote>
+<p>The solution adopted in pyGOTM is a <strong>chunk-based sequential coupling</strong> that
+interleaves physics and biogeochemistry at the granularity of <em>chunks</em> —
+contiguous windows of timesteps large enough to amortise the Python overhead
+while short enough to maintain tight coupling between the physical environment
+and the biological state.</p>
+<section id="chunk-size">
+<h3>Chunk size<a class="headerlink" href="#chunk-size" title="Link to this heading">¶</a></h3>
+<p>The default chunk size is approximately <strong>one day of simulation time</strong>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[N_\mathrm{chunk} = \max\!\left(
+    \left\lfloor \frac{86400\,\mathrm{s}}{\Delta t} \right\rceil, 1
+\right),\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(\Delta t\)</span> is the physics timestep in seconds.  This is then
+rounded up to the nearest multiple of the output interval so that output
+boundaries are always aligned between physics and biogeochemistry.</p>
+<p>The chunk size can be overridden by passing <code class="docutils literal notranslate"><span class="pre">chunk_size</span></code> to
+<code class="xref py py-func docutils literal notranslate"><span class="pre">integrate_gotm_compiled()</span></code>.  There is a natural
+trade-off:</p>
+<ul class="simple">
+<li><p><strong>Smaller chunks</strong> — lower memory for the hydrodynamic state buffers, but
+more Python overhead.</p></li>
+<li><p><strong>Larger chunks</strong> — less Python overhead, but larger scratch arrays (shape
+<span class="math notranslate nohighlight">\((N_\mathrm{chunk}+1) \times (N_\mathrm{lev}+1)\)</span>).  Memory grows as
+approximately <span class="math notranslate nohighlight">\(7 N_\mathrm{chunk} N_\mathrm{lev}\)</span> doubles (<code class="docutils literal notranslate"><span class="pre">float64</span></code>
+arrays for T, S, ρ, h, nuh, radiation, and bottom stress).</p></li>
+<li><p><strong>One-day default</strong> — balances memory and overhead across typical
+timesteps of 60–600 s.</p></li>
+</ul>
+<p>The chunk size has <em>no impact on numerical accuracy</em> for the biological
+equations — the biogeochemistry is advanced at the same timestep <span class="math notranslate nohighlight">\(\Delta t\)</span>
+as the physics within each chunk; chunking only determines how often the stored
+hydrodynamic snapshots are refreshed.</p>
+</section>
+<section id="per-chunk-execution-sequence">
+<h3>Per-chunk execution sequence<a class="headerlink" href="#per-chunk-execution-sequence" title="Link to this heading">¶</a></h3>
+<p>Each chunk k covers timesteps <span class="math notranslate nohighlight">\(k \cdot C \ldots k \cdot C + C - 1\)</span> and
+executes two sequential passes.</p>
+<pre  class="mermaid">
+        flowchart TD
+    start([&quot;Chunk k — timesteps k·C … k·C + C − 1&quot;])
+
+    P[&quot;1 · Physics pass — Numba JIT\nrun_compiled_time_loop(nt=C, hydro_store=ON)&quot;]
+    buf[&quot;Advances T, S, U, V, k, ε by C steps\nStores T, S, ρ, h, nuh, rad, τ_b at every step\n(hydro buffers · shape C+1 × nlev+1)&quot;]
+
+    loop[&quot;2 · FABM pass — Python  (for step = 0 … C)&quot;]
+    fa[&quot;a.  set_environment(T[step], S[step], ρ[step], …)&quot;]
+    fb[&quot;b.  sinking / rising advection  (adv_center)&quot;]
+    fc[&quot;c.  turbulent diffusion  (diff_center)&quot;]
+    fd[&quot;d.  biogeochemical rates  (engine.get_rates)&quot;]
+    fe[&quot;e.  apply source/sink rates:  cc += dt · rates&quot;]
+
+    done([&quot;cc — updated biological state passed to chunk k+1&quot;])
+
+    start --&gt; P --&gt; buf
+    buf   --&gt;|&quot;hydro snapshots&quot;| loop
+    loop  --&gt; fa --&gt; fb --&gt; fc --&gt; fd --&gt; fe --&gt; done
+
+    style start fill:#e8f4e8,stroke:#4a8f4a,color:#1a4a1a
+    style P     fill:#dce8f7,stroke:#3a78b5,color:#1a4a7a
+    style buf   fill:#dce8f7,stroke:#3a78b5,color:#1a4a7a
+    style loop  fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+    style fa    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+    style fb    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+    style fc    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+    style fd    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+    style fe    fill:#fef3cd,stroke:#c8960c,color:#7a5c00
+    </pre><p>The biological state <code class="docutils literal notranslate"><span class="pre">cc</span></code> (shape <code class="docutils literal notranslate"><span class="pre">n_vars</span> <span class="pre">×</span> <span class="pre">nlev</span></code>) is passed from one chunk
+to the next as a direct argument, providing continuity.</p>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="../_images/fabm_coupling.png"><img alt="pyGOTM–pyfabm chunked coupling diagram" src="../_images/fabm_coupling.png" style="width: 90%;" />
+</a>
+<figcaption>
+<p><span class="caption-text"><strong>Figure</strong> — Chunked interleaved coupling between the pyGOTM Numba physics
+kernel and the pyfabm biogeochemical engine.  Each chunk runs the full
+physics for <span class="math notranslate nohighlight">\(N_\mathrm{chunk}\)</span> timesteps, stores snapshots of the
+hydrodynamic state, then drives pyfabm through those same timesteps.
+Variables exchanged at each step are shown as labelled arrows.</span><a class="headerlink" href="#id1" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+<section id="variables-exchanged">
+<h2>Variables Exchanged<a class="headerlink" href="#variables-exchanged" title="Link to this heading">¶</a></h2>
+<section id="pygotm-pyfabm-dependencies">
+<h3>pyGOTM → pyfabm (dependencies)<a class="headerlink" href="#pygotm-pyfabm-dependencies" title="Link to this heading">¶</a></h3>
+<p>At every biogeochemical timestep, pyGOTM sets the following FABM dependencies
+from the stored hydrodynamic snapshots:</p>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 15.0%" />
+<col style="width: 45.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>FABM dependency name</p></th>
+<th class="head"><p>Shape</p></th>
+<th class="head"><p>Source in pyGOTM</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">temperature</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(nlev,)</span></code></p></td>
+<td><p>Potential temperature <span class="math notranslate nohighlight">\(\theta\)</span> [°C] — stored snapshot</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">practical_salinity</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(nlev,)</span></code></p></td>
+<td><p>Practical salinity <span class="math notranslate nohighlight">\(S\)</span> [psu] — stored snapshot</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">density</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(nlev,)</span></code></p></td>
+<td><p>In-situ density <span class="math notranslate nohighlight">\(\rho\)</span> [kg m⁻³] — stored snapshot</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cell_thickness</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(nlev,)</span></code></p></td>
+<td><p>Layer thicknesses <span class="math notranslate nohighlight">\(h_i\)</span> [m] — stored snapshot</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">downwelling_photosynthetic_radiative_flux</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(nlev,)</span></code></p></td>
+<td><p>PAR profile [W m⁻²] — computed from radiation snapshot, updated after
+light-feedback</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">surface_downwelling_photosynthetic_radiative_flux</span></code></p></td>
+<td><p>scalar</p></td>
+<td><p>Surface PAR [W m⁻²] — top-of-column value</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wind_speed</span></code></p></td>
+<td><p>scalar</p></td>
+<td><p>Wind speed <span class="math notranslate nohighlight">\(|\mathbf{u}_{10}|\)</span> [m s⁻¹] from (u10, v10) forcing</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">number_of_days_since_start_of_the_year</span></code></p></td>
+<td><p>scalar</p></td>
+<td><p>Fractional day of year (yearday + secondsofday / 86400)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bottom_stress</span></code></p></td>
+<td><p>scalar</p></td>
+<td><p>Bottom friction velocity <span class="math notranslate nohighlight">\(\tau_b\)</span> [Pa] — stored snapshot</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Dependencies that are not exposed by the particular FABM model are silently
+skipped.  A call to <code class="docutils literal notranslate"><span class="pre">engine.unresolved_dependencies()</span></code> reports any required
+dependencies that have not been set after initialization.</p>
+</section>
+<section id="pyfabm-pygotm-feedbacks-and-diagnostics">
+<h3>pyfabm → pyGOTM (feedbacks and diagnostics)<a class="headerlink" href="#pyfabm-pygotm-feedbacks-and-diagnostics" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 15.0%" />
+<col style="width: 45.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>FABM diagnostic / output</p></th>
+<th class="head"><p>Shape</p></th>
+<th class="head"><p>Effect in pyGOTM</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">attenuation_coefficient_of_photosynthetic_radiative_flux</span></code> (or <code class="docutils literal notranslate"><span class="pre">kc</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(nlev,)</span></code></p></td>
+<td><p>Bio-shading: modifies the PAR profile fed back to FABM at the next
+rates call within the same timestep (light-feedback loop)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Source/sink rates (all state variables)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(n_vars,</span> <span class="pre">nlev)</span></code></p></td>
+<td><p>Applied to biological concentrations: <code class="docutils literal notranslate"><span class="pre">cc</span> <span class="pre">+=</span> <span class="pre">dt</span> <span class="pre">*</span> <span class="pre">rates</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Surface exchange rates</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(n_vars,</span> <span class="pre">nlev)</span></code></p></td>
+<td><p>Added only to the top layer (index <code class="docutils literal notranslate"><span class="pre">−1</span></code>) as air-sea exchange</p></td>
+</tr>
+<tr class="row-odd"><td><p>Bottom exchange rates</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(n_vars,</span> <span class="pre">nlev)</span></code></p></td>
+<td><p>Added only to the bottom layer (index <code class="docutils literal notranslate"><span class="pre">0</span></code>) as sediment flux</p></td>
+</tr>
+<tr class="row-even"><td><p>Vertical movement velocities</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(n_interior,</span> <span class="pre">nlev)</span></code></p></td>
+<td><p>Sinking or rising advection before the diffusion/reaction step</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="within-chunk-fabm-timestep">
+<h2>Within-Chunk FABM Timestep<a class="headerlink" href="#within-chunk-fabm-timestep" title="Link to this heading">¶</a></h2>
+<p>Each biological timestep within a chunk applies the following operations in
+order, which exactly mirrors the sequence used by <code class="docutils literal notranslate"><span class="pre">gotm_fabm.F90</span></code> in the
+reference Fortran GOTM implementation:</p>
+<ol class="arabic">
+<li><p><strong>Set environment</strong> — copy the stored hydrodynamic snapshots into pyfabm
+dependencies (temperature, salinity, density, cell thickness, PAR, wind,
+year-day, bottom stress).</p></li>
+<li><p><strong>Vertical advection</strong> (sinking/rising) — interior state variables with
+non-zero vertical movement velocities are advected using the conservative
+P2-PDM scheme (<code class="docutils literal notranslate"><span class="pre">adv_center</span></code>) with zero-flux boundary conditions at top
+and bottom.  Face velocities are computed by thickness-weighted interpolation
+of cell-centre velocities to interfaces, replicating lines 1161–1199 of
+<code class="docutils literal notranslate"><span class="pre">gotm_fabm.F90</span></code>.</p></li>
+<li><p><strong>Turbulent diffusion</strong> — each interior state variable is diffused
+vertically using the implicit Crank–Nicolson solver (<code class="docutils literal notranslate"><span class="pre">diff_center</span></code>) with
+the turbulent diffusivity <span class="math notranslate nohighlight">\(\nu_h\)</span> from the stored hydrodynamic
+snapshot.  Precipitation dilution is applied as a Neumann surface boundary
+condition:
+<span class="math notranslate nohighlight">\(F_\mathrm{surf} = -c_{n,\mathrm{sfc}} \cdot \text{precip}\)</span>.</p></li>
+<li><p><strong>Biogeochemical rates</strong> — pyfabm <code class="docutils literal notranslate"><span class="pre">getRates()</span></code> is called <em>after</em> the
+transport step so that reaction rates act on the post-transport concentrations.
+The rates are retrieved three times with different surface/bottom flags to
+separate bulk, surface, and bottom contributions:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>bulk_rates  = engine.get_rates(surface=False, bottom=False)
+surf_rates  = engine.get_rates(surface=True,  bottom=False)
+bot_rates   = engine.get_rates(surface=False, bottom=True)
+</pre></div>
+</div>
+</li>
+<li><p><strong>Light feedback</strong> — if <code class="docutils literal notranslate"><span class="pre">attenuation_coefficient_of_photosynthetic_radiative_flux</span></code>
+is exposed by the model, the PAR profile is recomputed from the
+biological attenuation and fed back into FABM before a second rates call
+within the same timestep.  This two-pass approach captures the immediate
+effect of phytoplankton self-shading on the light available for growth.</p></li>
+<li><p><strong>Apply rates</strong> — concentrations are updated:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[c_i^{n+1} = c_i^n
++ \Delta t \cdot R_i^\mathrm{bulk}
++ \Delta t \cdot \delta_{i,\mathrm{top}}
+  \left(R_i^\mathrm{surf} - R_i^\mathrm{bulk}\right)\big|_\mathrm{top}
++ \Delta t \cdot \delta_{i,\mathrm{bot}}
+  \left(R_i^\mathrm{bot}  - R_i^\mathrm{bulk}\right)\big|_\mathrm{bot},\]</div>
+</div>
+<p>where surface and bottom exchange contributions are concentrated in the
+top and bottom cells respectively.  Surface and bottom state variables
+(e.g. sediment fractions exposed by some FABM models) are updated
+separately from their single-layer rate arrays.</p>
+</li>
+</ol>
+</section>
+<section id="par-profile-and-light-feedback">
+<h2>PAR Profile and Light Feedback<a class="headerlink" href="#par-profile-and-light-feedback" title="Link to this heading">¶</a></h2>
+<p>The downwelling photosynthetically active radiation (PAR) at cell-centre depth
+<span class="math notranslate nohighlight">\(z_k\)</span> is computed from the surface radiation snapshot using a
+two-component exponential attenuation:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[I_k = I_0 (1 - A) \exp\!\left(-\frac{z_k}{g_2} - K_\mathrm{bio}(z_k)\right),\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(I_0\)</span> is the surface shortwave, <span class="math notranslate nohighlight">\(A\)</span> is the fraction absorbed
+in the first attenuation component (<code class="docutils literal notranslate"><span class="pre">light_A</span></code>), <span class="math notranslate nohighlight">\(g_2\)</span> is the
+background attenuation depth scale (<code class="docutils literal notranslate"><span class="pre">light_g2</span></code>), and
+<span class="math notranslate nohighlight">\(K_\mathrm{bio}(z_k) = \sum_{k'=k}^{N} k_{c,k'} \Delta h_{k'}\)</span>
+is the cumulative biological attenuation integrated downward from the surface
+using the <code class="docutils literal notranslate"><span class="pre">kc</span></code> (or
+<code class="docutils literal notranslate"><span class="pre">attenuation_coefficient_of_photosynthetic_radiative_flux</span></code>) diagnostic
+exposed by the FABM model.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">light_g2</span> <span class="pre">≤</span> <span class="pre">0</span></code>, light feedback is disabled and the PAR profile is
+the stored GOTM radiation profile unchanged.</p>
+</section>
+<section id="memory-layout">
+<h2>Memory Layout<a class="headerlink" href="#memory-layout" title="Link to this heading">¶</a></h2>
+<p>The hydrodynamic state buffers allocated once per integration are</p>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 15.0%" />
+<col style="width: 25.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Array</p></th>
+<th class="head"><p>Shape</p></th>
+<th class="head"><p>Content</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hydro_T</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(C+1,</span> <span class="pre">nlev+1)</span></code></p></td>
+<td><p>Temperature snapshots (bottom→top, index 0 = initial condition)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hydro_S</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(C+1,</span> <span class="pre">nlev+1)</span></code></p></td>
+<td><p>Salinity snapshots</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hydro_rho</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(C+1,</span> <span class="pre">nlev+1)</span></code></p></td>
+<td><p>Density snapshots</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hydro_h</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(C+1,</span> <span class="pre">nlev+1)</span></code></p></td>
+<td><p>Cell-thickness snapshots</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hydro_nuh</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(C+1,</span> <span class="pre">nlev+1)</span></code></p></td>
+<td><p>Turbulent diffusivity snapshots</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hydro_rad</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(C+1,</span> <span class="pre">nlev+1)</span></code></p></td>
+<td><p>Shortwave radiation snapshots (PAR source)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hydro_taub</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(C+1,)</span></code></p></td>
+<td><p>Bottom stress snapshots (scalar per step)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Row 0 of each buffer holds the state at the <em>start</em> of the chunk (or the
+initial condition on the first chunk).  Rows 1…C hold the state <em>after</em> each
+physics timestep.  The last column (index <code class="docutils literal notranslate"><span class="pre">nlev</span></code>) is the surface interface
+value.</p>
+<p>If the final chunk is smaller than the default chunk size, the buffers are
+reallocated to the smaller size so no stale data is used.</p>
+</section>
+<section id="see-also">
+<h2>See Also<a class="headerlink" href="#see-also" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="../api/fabm.html"><span class="doc">FABM Coupling</span></a> — full FABM module API reference (FABMConfig, FABMEngine, coupling, fabm_loop)</p></li>
+<li><p><a class="reference internal" href="overview.html"><span class="doc">Physics Overview</span></a> — global solution sequence and where biogeochemistry fits</p></li>
+<li><p><a class="reference internal" href="airsea.html"><span class="doc">Air–Sea Interaction</span></a> — surface forcing that provides wind and radiation to the coupling</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="../api/driver.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Driver</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="ice_thermodynamics.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Ice Thermodynamics</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 pyGOTM contributors. Based on GOTM by Lars Umlauf, Hans Burchard, and Karsten Bolding.
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link " href="https://gotm.net" aria-label="GOTM">Based on GOTM by Lars Umlauf, Hans Burchard & Karsten Bolding</a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Biogeochemistry and FABM Coupling</a><ul>
+<li><a class="reference internal" href="#what-is-fabm">What is FABM?</a></li>
+<li><a class="reference internal" href="#enabling-fabm-in-pygotm">Enabling FABM in pyGOTM</a></li>
+<li><a class="reference internal" href="#coupling-architecture-chunked-interleaved-loop">Coupling Architecture: Chunked Interleaved Loop</a><ul>
+<li><a class="reference internal" href="#chunk-size">Chunk size</a></li>
+<li><a class="reference internal" href="#per-chunk-execution-sequence">Per-chunk execution sequence</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#variables-exchanged">Variables Exchanged</a><ul>
+<li><a class="reference internal" href="#pygotm-pyfabm-dependencies">pyGOTM → pyfabm (dependencies)</a></li>
+<li><a class="reference internal" href="#pyfabm-pygotm-feedbacks-and-diagnostics">pyfabm → pyGOTM (feedbacks and diagnostics)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#within-chunk-fabm-timestep">Within-Chunk FABM Timestep</a></li>
+<li><a class="reference internal" href="#par-profile-and-light-feedback">PAR Profile and Light Feedback</a></li>
+<li><a class="reference internal" href="#memory-layout">Memory Layout</a></li>
+<li><a class="reference internal" href="#see-also">See Also</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>window.MathJax = {"tex": {"macros": {"partder": ["\\frac{\\partial #1}{\\partial #2}", 2], "frstder": ["\\frac{\\partial}{\\partial #1}", 1], "mean": ["\\overline{#1}", 1], "comma": ",", "point": "."}}, "options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = `pre.mermaid {
+    /* Same as .mermaid-container > pre */
+    display: block;
+    width: 100%;
+}
+
+pre.mermaid > svg {
+    /* Same as .mermaid-container > pre > svg */
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}`;
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = `.mermaid-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+.mermaid-container > pre {
+    display: block;
+    width: 100%;
+}
+
+.mermaid-container > pre > svg {
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+
+.mermaid-fullscreen-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 95vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-container-fullscreen pre.mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen .mermaid svg {
+    height: 100% !important;
+    width: 100% !important;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}`;
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        all_mermaids.forEach((el) => {
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+        await mermaid.run();
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if ("False" === "True") {
+        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("");
+            if(all_mermaids.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else if(svgs.size() !== mermaids_to_add_zoom) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else {
+                svgs.each(function() {
+                    var svg = d3.select(this);
+                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+                    var inner = svg.select("g");
+                    var zoom = d3.zoom().on("zoom", function(event) {
+                        inner.attr("transform", event.transform);
+                    });
+                    svg.call(zoom);
+                });
+            }
+        }
+    } else if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if ("True" !== "True") return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.style.opacity = '50%';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scroll, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.sdisplay = 'block';
+
+                if ("False" === "True") {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+const load = async () => {
+    initStyles();
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...JSON.parse(
+                    `{"startOnLoad": false}`
+                ),
+                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...JSON.parse(
+        `{"startOnLoad": false}`
+    ),
+    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+    }
+);
+
+window.addEventListener("load", load);
+window.runMermaid = runMermaid;</script>
+    </body>
+</html>

@@ -11,7 +11,10 @@ REPO_ROOT = DOCS_DIR.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(DOCS_DIR))
 
-from _validation_staging import stage_validation_html  # noqa: E402
+from build_docs import (  # noqa: E402
+    stage_validation_html,
+    stage_validation_rst_wrappers,
+)
 
 project = "pyGOTM"
 copyright = (
@@ -44,6 +47,8 @@ stage_validation_html(
     staged_root=_VALIDATION_HTML_STAGING,
 )
 html_extra_path = [str(_VALIDATION_HTML_STAGING.relative_to(DOCS_DIR))]
+
+stage_validation_rst_wrappers(cases_dir=DOCS_DIR / "validation" / "cases")
 
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]

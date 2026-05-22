@@ -58,6 +58,7 @@ validation/
 
 # Sphinx documentation staging for validation HTML reports
 docs/_validation_html/
+docs/validation/cases/
 
 # Other
 todo.md
