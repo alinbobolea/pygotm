@@ -17,6 +17,8 @@ from pygotm.gotm.gotm import (
     integrate_gotm_compiled,
 )
 from pygotm.gotm.runtime_builder import (
+    _copy_absolute_salinity_from_practical,
+    _make_salinity_conversion_cache,
     build_runtime,
     build_runtime_forcing_from_run,
     build_runtime_from_run,
@@ -43,7 +45,7 @@ from pygotm.turbulence.omegaeq import step_omegaeq_single
 from pygotm.turbulence.production import step_production_single
 from pygotm.turbulence.tkeeq import step_tkeeq_single
 from pygotm.turbulence.turbulence import Constant, first_order, omega_eq, tke_keps
-from pygotm.util.gsw import gsw_sp_from_sa
+from pygotm.util.gsw import gsw_sa_from_sp, gsw_sp_from_sa
 from pygotm.validation.reference import (
     open_reference_dataset,
     resolve_reference_case,
@@ -117,6 +119,62 @@ def test_chunked_time_loop_writes_global_output_steps_and_times() -> None:
         np.testing.assert_array_equal(runtime.output.time, [0.0, 86400.0, 172800.0])
     finally:
         finalize_gotm(run)
+
+
+def test_cached_practical_salinity_conversion_matches_gsw() -> None:
+    practical = np.asarray([34.0, 35.0, 36.0], dtype=np.float64)
+    pressure = np.asarray([0.0, 50.0, 100.0], dtype=np.float64)
+    target = np.zeros_like(practical)
+    cache = _make_salinity_conversion_cache(
+        practical.size,
+        longitude=14.5,
+        latitude=43.0,
+    )
+
+    _copy_absolute_salinity_from_practical(
+        practical,
+        pressure,
+        14.5,
+        43.0,
+        target,
+        cache,
+    )
+    expected = np.asarray(gsw_sa_from_sp(practical, pressure, 14.5, 43.0))
+    np.testing.assert_array_equal(target, expected)
+
+    updated_practical = practical + 0.25
+    _copy_absolute_salinity_from_practical(
+        updated_practical,
+        pressure,
+        14.5,
+        43.0,
+        target,
+        cache,
+    )
+    expected = np.asarray(gsw_sa_from_sp(updated_practical, pressure, 14.5, 43.0))
+    np.testing.assert_array_equal(target, expected)
+
+
+def test_cached_practical_salinity_conversion_matches_gsw_for_baltic() -> None:
+    practical = np.asarray([4.0, 7.0, 10.0], dtype=np.float64)
+    pressure = np.asarray([0.0, 10.0, 20.0], dtype=np.float64)
+    target = np.zeros_like(practical)
+    cache = _make_salinity_conversion_cache(
+        practical.size,
+        longitude=20.0,
+        latitude=58.0,
+    )
+
+    _copy_absolute_salinity_from_practical(
+        practical,
+        pressure,
+        20.0,
+        58.0,
+        target,
+        cache,
+    )
+    expected = np.asarray(gsw_sa_from_sp(practical, pressure, 20.0, 58.0))
+    np.testing.assert_array_equal(target, expected)
 
 
 def test_runtime_dataset_derives_teos10_temperature_and_salinity_outputs() -> None:
@@ -710,6 +768,53 @@ def test_compiled_reference_emitted_variables_match_fortran(case_name: str) -> N
             "nucl",
         )
         assert_dataset_variables_allclose(actual, reference, variables)
+    finally:
+        if actual is not None:
+            actual.close()
+        reference.close()
+        finalize_gotm(compiled_run)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("case_name", "max_steps", "sprof_active", "tprof_active"),
+    (
+        ("channel", 360, 0, 0),
+        ("estuary", 30, 1, 0),
+        ("entrainment", 24, 1, 1),
+    ),
+)
+def test_compiled_avh_matches_fortran_for_transport_paths(
+    case_name: str,
+    max_steps: int,
+    sprof_active: int,
+    tprof_active: int,
+) -> None:
+    case = resolve_reference_case(case_name)
+    compiled_run = initialize_gotm(case.yaml_path)
+    reference = open_reference_dataset(case)
+    actual = None
+    try:
+        runtime = integrate_gotm_compiled(
+            compiled_run,
+            max_steps=max_steps,
+            output=True,
+        )
+        actual = runtime_output_to_dataset(compiled_run, runtime)
+        reference_slice = reference.isel(time=slice(0, actual.sizes["time"])).squeeze(
+            drop=True
+        )
+
+        assert runtime.params.sprof_input_active == sprof_active
+        assert runtime.params.tprof_input_active == tprof_active
+        assert "avh" in actual.data_vars
+        assert "avh" in reference_slice.data_vars
+        assert_dataset_variables_allclose(
+            actual,
+            reference_slice,
+            ("avh",),
+            atol=2.0e-9,
+        )
     finally:
         if actual is not None:
             actual.close()

@@ -121,12 +121,54 @@ def test_profile_interpolation_reuses_single_profile_after_eof(tmp_path: Path) -
     profile = ProfileInput(name="temp", method=2, path=str(path), index=1)
     manager.register_profile_input(profile)
     z = np.linspace(0.0, 1.0, 6)
+    assert profile.data is not None
+    data_id = id(profile.data)
     manager.do_input(julian_day(2000, 1, 1), 0, 5, z)
     assert profile.data is not None
+    assert id(profile.data) == data_id
     first = profile.data.copy()
     manager.do_input(julian_day(2000, 1, 2), 0, 5, z)
     assert profile.data is not None
+    assert id(profile.data) == data_id
     assert np.allclose(profile.data, first)
+
+
+def test_profile_interpolation_reuses_data_array_between_updates(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "profile.dat"
+    path.write_text(
+        "\n".join(
+            [
+                "2000-01-01 00:00:00 3 1",
+                "0.0 0.0",
+                "0.5 2.0",
+                "1.0 4.0",
+                "2000-01-01 01:00:00 3 1",
+                "0.0 10.0",
+                "0.5 12.0",
+                "1.0 14.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manager = InputManager(nlev=2)
+    profile = ProfileInput(name="temp", method=2, path=str(path), index=1)
+    manager.register_profile_input(profile)
+    z = np.linspace(0.0, 1.0, 3)
+    assert profile.data is not None
+    data_id = id(profile.data)
+
+    manager.do_input(julian_day(2000, 1, 1), 1800, 2, z)
+    assert profile.data is not None
+    assert id(profile.data) == data_id
+    assert np.allclose(profile.data, np.array([0.0, 7.0, 9.0]))
+
+    manager.do_input(julian_day(2000, 1, 1), 2700, 2, z)
+    assert profile.data is not None
+    assert id(profile.data) == data_id
+    assert np.allclose(profile.data, np.array([0.0, 9.5, 11.5]))
 
 
 def test_do_input_requires_nlev_and_z_for_profile_files(tmp_path: Path) -> None:

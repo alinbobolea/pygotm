@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from pygotm.fabm.coupling import apply_fabm_dependencies, copy_bioshade_feedback
 from pygotm.fabm.fabm_loop import (
@@ -12,6 +13,8 @@ from pygotm.fabm.fabm_loop import (
     _par_with_bioext_from_attenuation,
     _record_fabm_output,
     _set_environment,
+    _try_set,
+    _update_light_from_diagnostics,
 )
 
 
@@ -124,6 +127,65 @@ def test_par_with_bioext_matches_gotm_light_formula() -> None:
         bioext += local_ext[idx] * h[idx + 1] * 0.5
     np.testing.assert_allclose(par, expected)
     assert surface_par == 60.0
+
+
+def test_update_light_uses_targeted_diagnostic_lookup() -> None:
+    class TargetedDiagnosticEngine(RecordingEngine):
+        def __init__(self) -> None:
+            super().__init__()
+            self.requests: list[tuple[str, bool]] = []
+
+        def diagnostics(self) -> dict[str, np.ndarray | float]:
+            raise AssertionError("full diagnostic scan should not be used")
+
+        def diagnostic(
+            self,
+            name: str,
+            *,
+            copy: bool = True,
+        ) -> np.ndarray | float | None:
+            self.requests.append((name, copy))
+            if name == "attenuation_coefficient_of_photosynthetic_radiative_flux":
+                return np.array([0.02, 0.03, 0.04], dtype=np.float64)
+            return None
+
+    engine = TargetedDiagnosticEngine()
+    nlev = 3
+    h = np.array([0.0, 2.0, 2.0, 2.0], dtype=np.float64)
+    rad = np.zeros(nlev + 1, dtype=np.float64)
+    rad[nlev] = 100.0
+
+    _update_light_from_diagnostics(
+        engine,
+        nlev,
+        h,
+        rad,
+        light_A=0.4,
+        light_g2=10.0,
+    )
+
+    assert engine.requests == [
+        ("attenuation_coefficient_of_photosynthetic_radiative_flux", False)
+    ]
+    assert engine.values["surface_downwelling_photosynthetic_radiative_flux"] == 60.0
+    assert "downwelling_photosynthetic_radiative_flux" in engine.values
+
+
+def test_try_set_propagates_real_setter_failures() -> None:
+    class FailingEngine:
+        def set_dependency_if_present(
+            self,
+            name: str,
+            value: np.ndarray,
+        ) -> bool:
+            raise RuntimeError(f"setter failed for {name}")
+
+    with pytest.raises(RuntimeError, match="temperature"):
+        _try_set(
+            FailingEngine(),
+            "temperature",
+            np.ones(3, dtype=np.float64),
+        )
 
 
 def test_record_fabm_output_uses_cached_diagnostics_and_boundary_scalars() -> None:

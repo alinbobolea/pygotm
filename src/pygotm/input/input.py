@@ -170,6 +170,9 @@ class _ProfileFile:
         self.prof1 = np.zeros((nlev + 1, nvar), dtype=np.float64)
         self.prof2 = np.zeros((nlev + 1, nvar), dtype=np.float64)
         self.alpha = np.zeros((nlev + 1, nvar), dtype=np.float64)
+        for variable in self.variables:
+            if variable.data is None or variable.data.shape != (nlev + 1,):
+                variable.data = np.zeros(nlev + 1, dtype=np.float64)
 
     def update(self, jul: int, secs: int, nlev: int, z: np.ndarray) -> None:
         self.initialize(nlev)
@@ -197,7 +200,11 @@ class _ProfileFile:
                     if self.nprofiles == 1:
                         self.one_profile = True
                         for variable in self.variables:
-                            variable.data = self.prof1[:, variable.index - 1].copy()
+                            assert variable.data is not None
+                            np.copyto(
+                                variable.data,
+                                self.prof1[:, variable.index - 1],
+                            )
                         return
                     msg = (
                         f"end of file reached while updating profile inputs from "
@@ -239,7 +246,9 @@ class _ProfileFile:
         t = time_diff(jul, secs, self.jul1, self.secs1)
         for variable in self.variables:
             column = variable.index - 1
-            variable.data = self.prof1[:, column] + t * self.alpha[:, column]
+            assert variable.data is not None
+            np.multiply(self.alpha[:, column], t, out=variable.data)
+            variable.data += self.prof1[:, column]
 
     def close(self) -> None:
         if self.handle is not None:

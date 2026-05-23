@@ -31,6 +31,7 @@ class FABMEngine:
         self._state = np.zeros(0, dtype=np.float64)
         self._rates = np.zeros(0, dtype=np.float64)
         self._dependency_buffers: dict[str, FloatArray] = {}
+        self._dependency_cache: dict[str, Any | None] = {}
 
     def initialize(
         self,
@@ -72,6 +73,7 @@ class FABMEngine:
         except Exception as exc:
             msg = f"failed to initialize pyfabm.Model from {self.config_path}: {exc}"
             raise RuntimeError(msg) from exc
+        self._dependency_cache.clear()
 
         # pyfabm 3.0: cell_thickness is a write-only property setter — use direct
         # assignment so pyfabm registers the array before start() / getRates().
@@ -100,6 +102,27 @@ class FABMEngine:
         """Set one FABM dependency from a scalar or contiguous float64 array."""
 
         dependency = self._require_dependency(name)
+        self._set_dependency_value(name, dependency, value)
+
+    def set_dependency_if_present(
+        self,
+        name: str,
+        value: float | np.ndarray,
+    ) -> bool:
+        """Set one optional FABM dependency and report whether it exists."""
+
+        dependency = self._find_dependency(name)
+        if dependency is None:
+            return False
+        self._set_dependency_value(name, dependency, value)
+        return True
+
+    def _set_dependency_value(
+        self,
+        name: str,
+        dependency: Any,
+        value: float | np.ndarray,
+    ) -> None:
         if isinstance(value, np.ndarray):
             array = np.ascontiguousarray(value, dtype=np.float64)
             existing = self._dependency_buffers.get(name)
@@ -201,14 +224,44 @@ class FABMEngine:
         raw = getattr(model, "diagnostics", None)
         if isinstance(raw, dict):
             for name, value in raw.items():
-                diagnostics[str(name)] = self._copy_diagnostic(value)
+                diagnostics[str(name)] = self._diagnostic_value(value, copy=True)
 
         for variable in self._diagnostic_variables():
             name = str(getattr(variable, "name", getattr(variable, "id", "")))
             if not name:
                 continue
-            diagnostics[name] = self._copy_diagnostic(getattr(variable, "value", 0.0))
+            diagnostics[name] = self._diagnostic_value(
+                getattr(variable, "value", 0.0),
+                copy=True,
+            )
         return diagnostics
+
+    def diagnostic(
+        self,
+        name: str,
+        *,
+        copy: bool = True,
+    ) -> np.ndarray | float | None:
+        """Return one FABM diagnostic by name, or ``None`` when unavailable."""
+
+        model = self._require_model()
+        raw = getattr(model, "diagnostics", None)
+        if isinstance(raw, dict):
+            value = raw.get(name)
+            if value is not None:
+                return self._diagnostic_value(value, copy=copy)
+            for raw_name, raw_value in raw.items():
+                if str(raw_name) == name:
+                    return self._diagnostic_value(raw_value, copy=copy)
+
+        for variable in self._diagnostic_variables():
+            variable_name = str(getattr(variable, "name", getattr(variable, "id", "")))
+            if variable_name == name:
+                return self._diagnostic_value(
+                    getattr(variable, "value", 0.0),
+                    copy=copy,
+                )
+        return None
 
     def unresolved_dependencies(self) -> tuple[str, ...]:
         """Return a best-effort list of pyfabm dependencies still unset."""
@@ -317,6 +370,9 @@ class FABMEngine:
         return ()
 
     def _find_dependency(self, name: str) -> Any | None:
+        if name in self._dependency_cache:
+            return self._dependency_cache[name]
+
         model = self._require_model()
         finder = getattr(model, "findDependency", None)
         if callable(finder):
@@ -325,11 +381,14 @@ class FABMEngine:
             except Exception:
                 dependency = None
             if dependency is not None:
+                self._dependency_cache[name] = dependency
                 return dependency
         for dependency in self._dependencies():
             dependency_name = getattr(dependency, "name", getattr(dependency, "id", ""))
             if str(dependency_name) == name:
+                self._dependency_cache[name] = dependency
                 return dependency
+        self._dependency_cache[name] = None
         return None
 
     def _require_dependency(self, name: str) -> Any:
@@ -355,15 +414,20 @@ class FABMEngine:
         raise RuntimeError(msg)
 
     @staticmethod
-    def _copy_diagnostic(value: object) -> np.ndarray | float:
+    def _diagnostic_value(value: object, *, copy: bool) -> np.ndarray | float:
         if isinstance(value, np.ndarray):
-            return np.ascontiguousarray(value, dtype=np.float64).copy()
+            array = np.asarray(value, dtype=np.float64)
+            if copy:
+                return np.ascontiguousarray(array).copy()
+            return array
         if isinstance(value, (int, float, np.floating)):
             return float(value)
         array = np.asarray(value, dtype=np.float64)
         if array.ndim == 0:
             return float(array)
-        return np.ascontiguousarray(array, dtype=np.float64).copy()
+        if copy:
+            return np.ascontiguousarray(array).copy()
+        return array
 
     @staticmethod
     def _dependency_is_missing(dependency: Any) -> bool:

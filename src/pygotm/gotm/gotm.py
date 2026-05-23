@@ -19,6 +19,7 @@ r"""
 from __future__ import annotations
 
 import json
+import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
@@ -76,6 +77,7 @@ from pygotm.gotm.register_all_variables import (
 )
 from pygotm.gotm.runtime_builder import (
     RuntimeBundle,
+    RuntimePhaseTimings,
     build_runtime_from_run,
 )
 from pygotm.gotm.time_loop import run_compiled_time_loop
@@ -1710,6 +1712,7 @@ def integrate_gotm_compiled(
     max_steps: int | None = None,
     output: bool = True,
     chunk_size: int | None = None,
+    timings: RuntimePhaseTimings | None = None,
 ) -> RuntimeBundle:
     """Advance supported single-column cases through the compiled runtime."""
 
@@ -1717,161 +1720,205 @@ def integrate_gotm_compiled(
         raise RuntimeError("run has not been initialised")
 
     fabm_active = run.fabm_config is not None and run.fabm_config.use
-    bundle = build_runtime_from_run(run, max_steps=max_steps, output=output)
+    build_t0 = time.perf_counter()
+    try:
+        bundle = build_runtime_from_run(
+            run,
+            max_steps=max_steps,
+            output=output,
+            timings=timings,
+        )
+    finally:
+        if timings is not None:
+            timings.runtime_build_s += time.perf_counter() - build_t0
     nt = bundle.params.nt
     nlev = bundle.params.nlev
 
-    if not fabm_active:
-        written = bundle.run()
-        if written < 0:
-            msg = f"compiled GOTM runtime failed with status {written}"
-            raise RuntimeError(msg)
-        if output and written != bundle.output.nout:
-            msg = (
-                f"compiled GOTM runtime wrote {written} outputs, "
-                f"expected {bundle.output.nout}"
-            )
-            raise RuntimeError(msg)
-        _copy_runtime_state_to_run(run, bundle)
+    integration_t0 = time.perf_counter()
+    try:
+        if not fabm_active:
+            compiled_t0 = time.perf_counter()
+            try:
+                written = bundle.run()
+            finally:
+                if timings is not None:
+                    timings.compiled_integration_s += time.perf_counter() - compiled_t0
+            if written < 0:
+                msg = f"compiled GOTM runtime failed with status {written}"
+                raise RuntimeError(msg)
+            if output and written != bundle.output.nout:
+                msg = (
+                    f"compiled GOTM runtime wrote {written} outputs, "
+                    f"expected {bundle.output.nout}"
+                )
+                raise RuntimeError(msg)
+            copy_t0 = time.perf_counter()
+            try:
+                _copy_runtime_state_to_run(run, bundle)
+            finally:
+                if timings is not None:
+                    timings.copy_back_s += time.perf_counter() - copy_t0
+            run.time.update_time(nt)
+            return bundle
+
+        # --- FABM active: chunked interleaved physics+FABM loop ---
+
+        output_every = bundle.output.output_every
+
+        # Determine effective chunk_size
+        if chunk_size is None:
+            chunk_size = max(int(round(86400.0 / bundle.params.dt)), 1)
+        # Snap chunk_size up to nearest multiple of output_every
+        if chunk_size % output_every != 0:
+            chunk_size = (
+                (chunk_size + output_every - 1) // output_every
+            ) * output_every
+        chunk_size = min(chunk_size, nt)
+
+        # Reusable GOTM hydrodynamic state buffers (chunk_size+1 rows per chunk)
+        hydro_T = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_S = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_rho = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_h = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_nuh = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_rad = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_taub = np.zeros((chunk_size + 1,), dtype=np.float64)
+
+        # Initialise FABM engine once
+        assert run.fabm_config is not None
+        assert run.fabm_config.config_path is not None
+        h_initial = np.ascontiguousarray(
+            bundle.state.h[1 : nlev + 1],
+            dtype=np.float64,
+        )
+        engine = FABMEngine(run.fabm_config.config_path)
+        engine.initialize(nlev=nlev, h_col=h_initial, skip_start=True)
+        run.fabm_engine = engine
+
+        cc: np.ndarray | None = None
+        fabm_out_index = 0
+        step_cursor = 0
+
+        while step_cursor < nt:
+            this_chunk = min(chunk_size, nt - step_cursor)
+
+            # Build chunk params with nt=this_chunk
+            chunk_params = dc_replace(bundle.params, nt=this_chunk)
+
+            # Output slot base: step_start // output_every
+            out_slot_base = step_cursor // output_every
+            is_first_physics_chunk = step_cursor == 0
+
+            # For chunks k>0, carry forward accumulated values from the last slot.
+            if is_first_physics_chunk:
+                init_int_precip = 0.0
+                init_int_evap = 0.0
+                init_int_swr = 0.0
+                init_int_heat = 0.0
+                init_int_total = 0.0
+            else:
+                prev_slot = out_slot_base
+                init_int_precip = float(bundle.output.int_precip[prev_slot])
+                init_int_evap = float(bundle.output.int_evap[prev_slot])
+                init_int_swr = float(bundle.output.int_swr[prev_slot])
+                init_int_heat = float(bundle.output.int_heat[prev_slot])
+                init_int_total = float(bundle.output.int_total[prev_slot])
+
+            # Resize hydrodynamic state buffers if last chunk is smaller.
+            if this_chunk < chunk_size:
+                hydro_T = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_S = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_rho = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_h = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_nuh = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_rad = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_taub = np.zeros((this_chunk + 1,), dtype=np.float64)
+
+            # Physics chunk
+            compiled_t0 = time.perf_counter()
+            try:
+                written = run_compiled_time_loop(
+                    chunk_params,
+                    bundle.state,
+                    bundle.work,
+                    bundle.forcing,
+                    bundle.output,
+                    step_offset=step_cursor,
+                    out_slot_base=out_slot_base,
+                    write_ic=1 if is_first_physics_chunk else 0,
+                    init_int_precip=init_int_precip,
+                    init_int_evap=init_int_evap,
+                    init_int_swr=init_int_swr,
+                    init_int_heat=init_int_heat,
+                    init_int_total=init_int_total,
+                    hydro_store=1,
+                    hydro_T=hydro_T,
+                    hydro_S=hydro_S,
+                    hydro_rho=hydro_rho,
+                    hydro_h=hydro_h,
+                    hydro_nuh=hydro_nuh,
+                    hydro_rad=hydro_rad,
+                    hydro_taub=hydro_taub,
+                )
+            finally:
+                if timings is not None:
+                    timings.compiled_integration_s += time.perf_counter() - compiled_t0
+            if written < 0:
+                msg = f"compiled GOTM runtime failed with status {written}"
+                raise RuntimeError(msg)
+
+            if output:
+                # FABM chunk
+                fabm_t0 = time.perf_counter()
+                try:
+                    cc, fabm_out_index = run_fabm_chunk(
+                        engine=engine,
+                        chunk_params=chunk_params,
+                        output=bundle.output,
+                        hydro_T=hydro_T,
+                        hydro_S=hydro_S,
+                        hydro_rho=hydro_rho,
+                        hydro_h=hydro_h,
+                        hydro_nuh=hydro_nuh,
+                        hydro_rad=hydro_rad,
+                        hydro_taub=hydro_taub,
+                        cc_in=cc,
+                        out_index_base=fabm_out_index,
+                        forcing_u10=bundle.forcing.u10[
+                            step_cursor : step_cursor + this_chunk + 1
+                        ],
+                        forcing_v10=bundle.forcing.v10[
+                            step_cursor : step_cursor + this_chunk + 1
+                        ],
+                        forcing_yearday=bundle.forcing.yearday[
+                            step_cursor : step_cursor + this_chunk + 1
+                        ],
+                        forcing_secondsofday=bundle.forcing.secondsofday[
+                            step_cursor : step_cursor + this_chunk + 1
+                        ],
+                        forcing_precip=bundle.forcing.precip[
+                            step_cursor : step_cursor + this_chunk + 1
+                        ],
+                        step_offset=step_cursor,
+                        is_first_chunk=(step_cursor == 0),
+                    )
+                finally:
+                    if timings is not None:
+                        timings.fabm_chunk_s += time.perf_counter() - fabm_t0
+
+            step_cursor += this_chunk
+
+        copy_t0 = time.perf_counter()
+        try:
+            _copy_runtime_state_to_run(run, bundle)
+        finally:
+            if timings is not None:
+                timings.copy_back_s += time.perf_counter() - copy_t0
         run.time.update_time(nt)
         return bundle
-
-    # --- FABM active: chunked interleaved physics+FABM loop ---
-
-    output_every = bundle.output.output_every
-
-    # Determine effective chunk_size
-    if chunk_size is None:
-        chunk_size = max(int(round(86400.0 / bundle.params.dt)), 1)
-    # Snap chunk_size up to nearest multiple of output_every
-    if chunk_size % output_every != 0:
-        chunk_size = ((chunk_size + output_every - 1) // output_every) * output_every
-    chunk_size = min(chunk_size, nt)
-
-    # Reusable GOTM hydrodynamic state buffers (chunk_size+1 rows — one per chunk)
-    hydro_T = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_S = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_rho = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_h = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_nuh = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_rad = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
-    hydro_taub = np.zeros((chunk_size + 1,), dtype=np.float64)
-
-    # Initialise FABM engine once
-    assert run.fabm_config is not None
-    assert run.fabm_config.config_path is not None
-    h_initial = np.ascontiguousarray(bundle.state.h[1 : nlev + 1], dtype=np.float64)  # noqa: E203
-    engine = FABMEngine(run.fabm_config.config_path)
-    engine.initialize(nlev=nlev, h_col=h_initial, skip_start=True)
-    run.fabm_engine = engine
-
-    cc: np.ndarray | None = None
-    fabm_out_index = 0
-    step_cursor = 0
-
-    while step_cursor < nt:
-        this_chunk = min(chunk_size, nt - step_cursor)
-
-        # Build chunk params with nt=this_chunk
-        chunk_params = dc_replace(bundle.params, nt=this_chunk)
-
-        # Output slot base: step_start // output_every
-        out_slot_base = step_cursor // output_every
-        is_first_physics_chunk = step_cursor == 0
-
-        # For chunks k>0: slot out_slot_base already has correct data from chunk k-1.
-        # Read accumulated values to carry forward, then skip the IC write.
-        if is_first_physics_chunk:
-            init_int_precip = 0.0
-            init_int_evap = 0.0
-            init_int_swr = 0.0
-            init_int_heat = 0.0
-            init_int_total = 0.0
-        else:
-            prev_slot = out_slot_base
-            init_int_precip = float(bundle.output.int_precip[prev_slot])
-            init_int_evap = float(bundle.output.int_evap[prev_slot])
-            init_int_swr = float(bundle.output.int_swr[prev_slot])
-            init_int_heat = float(bundle.output.int_heat[prev_slot])
-            init_int_total = float(bundle.output.int_total[prev_slot])
-
-        # Resize hydrodynamic state buffers if last chunk is smaller than chunk_size
-        if this_chunk < chunk_size:
-            hydro_T = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_S = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_rho = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_h = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_nuh = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_rad = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
-            hydro_taub = np.zeros((this_chunk + 1,), dtype=np.float64)
-
-        # Physics chunk
-        written = run_compiled_time_loop(
-            chunk_params,
-            bundle.state,
-            bundle.work,
-            bundle.forcing,
-            bundle.output,
-            step_offset=step_cursor,
-            out_slot_base=out_slot_base,
-            write_ic=1 if is_first_physics_chunk else 0,
-            init_int_precip=init_int_precip,
-            init_int_evap=init_int_evap,
-            init_int_swr=init_int_swr,
-            init_int_heat=init_int_heat,
-            init_int_total=init_int_total,
-            hydro_store=1,
-            hydro_T=hydro_T,
-            hydro_S=hydro_S,
-            hydro_rho=hydro_rho,
-            hydro_h=hydro_h,
-            hydro_nuh=hydro_nuh,
-            hydro_rad=hydro_rad,
-            hydro_taub=hydro_taub,
-        )
-        if written < 0:
-            msg = f"compiled GOTM runtime failed with status {written}"
-            raise RuntimeError(msg)
-
-        if output:
-            # FABM chunk
-            cc, fabm_out_index = run_fabm_chunk(
-                engine=engine,
-                chunk_params=chunk_params,
-                output=bundle.output,
-                hydro_T=hydro_T,
-                hydro_S=hydro_S,
-                hydro_rho=hydro_rho,
-                hydro_h=hydro_h,
-                hydro_nuh=hydro_nuh,
-                hydro_rad=hydro_rad,
-                hydro_taub=hydro_taub,
-                cc_in=cc,
-                out_index_base=fabm_out_index,
-                forcing_u10=bundle.forcing.u10[
-                    step_cursor : step_cursor + this_chunk + 1
-                ],
-                forcing_v10=bundle.forcing.v10[
-                    step_cursor : step_cursor + this_chunk + 1
-                ],
-                forcing_yearday=bundle.forcing.yearday[
-                    step_cursor : step_cursor + this_chunk + 1
-                ],
-                forcing_secondsofday=bundle.forcing.secondsofday[
-                    step_cursor : step_cursor + this_chunk + 1
-                ],
-                forcing_precip=bundle.forcing.precip[
-                    step_cursor : step_cursor + this_chunk + 1
-                ],
-                step_offset=step_cursor,
-                is_first_chunk=(step_cursor == 0),
-            )
-
-        step_cursor += this_chunk
-
-    _copy_runtime_state_to_run(run, bundle)
-    run.time.update_time(nt)
-    return bundle
+    finally:
+        if timings is not None:
+            timings.integration_s += time.perf_counter() - integration_t0
 
 
 def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:

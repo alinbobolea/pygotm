@@ -65,9 +65,15 @@ def _sample_result(
             warmup_s=warmup_s,
             initialization_s=0.0,
             runtime_build_s=0.0,
+            force_build_s=0.0,
             integration_s=0.0,
+            compiled_integration_s=0.0,
+            fabm_chunk_s=0.0,
+            copy_back_s=0.0,
             output_conversion_s=0.0,
             total_s=0.0,
+            steps_per_s=0.0,
+            fabm_steps_per_s=0.0,
         ),
     )
 
@@ -76,6 +82,16 @@ def test_benchmark_compiled_case_records_timings() -> None:
     fake_case = _fake_case("couette")
     fake_run = object()
     fake_bundle = _FakeBundle()
+
+    def fake_integrate(run: object, **kwargs: Any) -> _FakeBundle:
+        assert run is fake_run
+        phase_timings = kwargs["timings"]
+        phase_timings.runtime_build_s += 0.5
+        phase_timings.force_build_s += 0.2
+        phase_timings.integration_s += 0.7
+        phase_timings.compiled_integration_s += 0.6
+        phase_timings.copy_back_s += 0.1
+        return fake_bundle
 
     with ExitStack() as stack:
         stack.enter_context(
@@ -92,8 +108,8 @@ def test_benchmark_compiled_case_records_timings() -> None:
         )
         stack.enter_context(
             patch(
-                "pygotm.execution.benchmark.build_runtime_from_run",
-                return_value=fake_bundle,
+                "pygotm.execution.benchmark.integrate_gotm_compiled",
+                side_effect=fake_integrate,
             )
         )
         stack.enter_context(
@@ -112,7 +128,13 @@ def test_benchmark_compiled_case_records_timings() -> None:
     assert result.n_steps == 4
     assert result.n_output == 2
     assert result.timings.warmup_s == 0.25
+    assert result.timings.runtime_build_s == 0.5
+    assert result.timings.force_build_s == 0.2
     assert result.timings.integration_s >= 0.0
+    assert result.timings.compiled_integration_s == 0.6
+    assert result.timings.fabm_chunk_s == 0.0
+    assert result.timings.copy_back_s == 0.1
+    assert result.timings.steps_per_s == 4.0 / 0.6
     finalize.assert_called_once_with(fake_run)
 
 
@@ -135,7 +157,7 @@ def test_benchmark_compiled_case_reports_unsupported_errors() -> None:
         )
         stack.enter_context(
             patch(
-                "pygotm.execution.benchmark.build_runtime_from_run",
+                "pygotm.execution.benchmark.integrate_gotm_compiled",
                 side_effect=UnsupportedConfigurationError("surface fluxes"),
             )
         )
@@ -225,9 +247,15 @@ def test_save_benchmark_results_writes_only_aggregate_json(tmp_path: Path) -> No
             warmup_s=0.1,
             initialization_s=0.2,
             runtime_build_s=0.3,
+            force_build_s=0.1,
             integration_s=0.4,
+            compiled_integration_s=0.35,
+            fabm_chunk_s=0.0,
+            copy_back_s=0.05,
             output_conversion_s=0.5,
             total_s=2.1,
+            steps_per_s=2.0 / 0.35,
+            fabm_steps_per_s=0.0,
         ),
     )
     path = tmp_path / "validation" / "results.json"
@@ -237,5 +265,9 @@ def test_save_benchmark_results_writes_only_aggregate_json(tmp_path: Path) -> No
     raw = json.loads(path.read_text())
     assert raw["cases"][0]["case_name"] == "couette"
     assert raw["cases"][0]["timings"]["integration_s"] == 0.4
+    assert raw["cases"][0]["timings"]["force_build_s"] == 0.1
+    assert raw["cases"][0]["timings"]["compiled_integration_s"] == 0.35
+    assert raw["cases"][0]["timings"]["copy_back_s"] == 0.05
+    assert raw["cases"][0]["timings"]["steps_per_s"] == 2.0 / 0.35
     assert sorted(p.name for p in path.parent.iterdir()) == ["results.json"]
     assert not list(path.parent.glob("*_benchmark.json"))

@@ -27,12 +27,17 @@ Public interface: :func:`configure_gotm_fabm`, :func:`gotm_fabm_create_model`,
 Original FORTRAN authors: Jorn Bruggeman.
 """
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
+import numba
 import numpy as np
+
+from pygotm.util.adv_center import CONSERVATIVE, FLUX, P2_PDM, adv_center
+from pygotm.util.diff_center import NEUMANN, diff_center
 
 __all__ = [
     "FabmObservation",
@@ -40,6 +45,7 @@ __all__ = [
     "calculate_conserved_quantities",
     "calculate_derived_input",
     "calendar_date_interface",
+    "center_depths_single",
     "clean_gotm_fabm",
     "configure_gotm_fabm",
     "do_gotm_fabm",
@@ -51,6 +57,8 @@ __all__ = [
     "init_gotm_fabm_state",
     "init_var_gotm_fabm",
     "light",
+    "par_from_background_single",
+    "par_with_bioext_from_attenuation_single",
     "register_bulk_observation",
     "register_field",
     "register_horizontal_observation",
@@ -61,6 +69,8 @@ __all__ = [
     "save_diagnostics",
     "set_env_gotm_fabm",
     "start_gotm_fabm",
+    "step_fabm_post_rates_single",
+    "step_fabm_transport_single",
 ]
 
 
@@ -100,6 +110,225 @@ def calendar_date_interface(julian: int) -> tuple[int, int, int]:
 
     current = date(1, 1, 1) + timedelta(days=int(julian) - 1)
     return current.year, current.month, current.day
+
+
+@numba.njit(cache=True)
+def center_depths_single(nlev: int, h: np.ndarray, depth: np.ndarray) -> None:
+    """Calculate local depth below surface from layer height.
+
+    Used internally to compute light field, and may be used by
+    biogeochemical models as well.
+    """
+
+    if nlev <= 0:
+        return
+    depth[nlev - 1] = 0.5 * h[nlev]
+    for idx in range(nlev - 2, -1, -1):
+        depth[idx] = depth[idx + 1] + 0.5 * (h[idx + 1] + h[idx + 2])
+
+
+@numba.njit(cache=True)
+def par_from_background_single(
+    nlev: int,
+    h: np.ndarray,
+    rad: np.ndarray,
+    light_A: float,
+    light_g2: float,
+    depth: np.ndarray,
+    par_col: np.ndarray,
+) -> float:
+    """Calculate photosynthetically active radiation (PAR)."""
+
+    surface_par = float(rad[nlev] * (1.0 - light_A))
+    if nlev <= 0 or light_g2 <= 0.0:
+        for idx in range(nlev):
+            par_col[idx] = 0.0
+        return surface_par
+    center_depths_single(nlev, h, depth)
+    for idx in range(nlev):
+        par_value = surface_par * math.exp(-depth[idx] / light_g2)
+        if par_value < 0.0:
+            par_value = 0.0
+        par_col[idx] = par_value
+    return surface_par
+
+
+@numba.njit(cache=True)
+def par_with_bioext_from_attenuation_single(
+    nlev: int,
+    attenuation: np.ndarray,
+    h: np.ndarray,
+    rad: np.ndarray,
+    light_A: float,
+    light_g2: float,
+    depth: np.ndarray,
+    par_col: np.ndarray,
+) -> float:
+    """Calculate PAR using background and biotic extinction."""
+
+    surface_par = float(rad[nlev] * (1.0 - light_A))
+    if nlev <= 0 or light_g2 <= 0.0:
+        for idx in range(nlev):
+            par_col[idx] = 0.0
+        return surface_par
+    center_depths_single(nlev, h, depth)
+    bioext = 0.0
+    for idx in range(nlev - 1, -1, -1):
+        local_ext = attenuation[idx]
+        if local_ext < 0.0:
+            local_ext = 0.0
+
+        # Add the extinction of the first half of the grid box.
+        bioext += local_ext * h[idx + 1] * 0.5
+
+        # Calculate photosynthetically active radiation (PAR).
+        par_value = surface_par * math.exp(-depth[idx] / light_g2 - bioext)
+        if par_value < 0.0:
+            par_value = 0.0
+        par_col[idx] = par_value
+
+        # Add the extinction of the second half of the grid box.
+        bioext += local_ext * h[idx + 1] * 0.5
+    return surface_par
+
+
+@numba.njit(cache=True)
+def step_fabm_transport_single(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    precip: float,
+    has_vert_move: int,
+    n_interior: int,
+    vert_move: np.ndarray,
+    h_step: np.ndarray,
+    nuh_step: np.ndarray,
+    cc: np.ndarray,
+    y: np.ndarray,
+    ws: np.ndarray,
+    adv_cu: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    tau_r: np.ndarray,
+    y_obs: np.ndarray,
+) -> None:
+    """Vertical advection and residual movement; Vertical diffusion."""
+
+    if has_vert_move != 0 and nlev >= 2:
+        for var in range(n_interior):
+            has_motion = False
+            for k in range(nlev):
+                if vert_move[var, k] != 0.0:
+                    has_motion = True
+                    break
+            if not has_motion:
+                continue
+
+            for k in range(nlev + 1):
+                ws[k] = 0.0
+            for k in range(1, nlev):
+                h_sum = h_step[k] + h_step[k + 1]
+                iweight = 0.5
+                if h_sum != 0.0:
+                    iweight = h_step[k + 1] / h_sum
+                ws[k] = (
+                    iweight * vert_move[var, k - 1]
+                    + (1.0 - iweight) * vert_move[var, k]
+                )
+
+            for k in range(nlev):
+                y[k + 1] = cc[var, k]
+            adv_center(
+                nlev,
+                dt,
+                h_step,
+                h_step,
+                ws,
+                FLUX,
+                FLUX,
+                0.0,
+                0.0,
+                P2_PDM,
+                CONSERVATIVE,
+                y,
+                adv_cu,
+            )
+            for k in range(nlev):
+                cc[var, k] = y[k + 1]
+
+    for var in range(n_interior):
+        for k in range(nlev):
+            y[k + 1] = cc[var, k]
+        surface_flux = -cc[var, nlev - 1] * precip
+        diff_center(
+            nlev,
+            dt,
+            cnpar,
+            0,
+            h_step,
+            NEUMANN,
+            NEUMANN,
+            surface_flux,
+            0.0,
+            nuh_step,
+            l_sour,
+            q_sour,
+            tau_r,
+            y_obs,
+            y,
+            au,
+            bu,
+            cu,
+            du,
+            ru,
+            qu,
+        )
+        for k in range(nlev):
+            cc[var, k] = y[k + 1]
+
+
+@numba.njit(cache=True)
+def step_fabm_post_rates_single(
+    nlev: int,
+    dt: float,
+    n_interior: int,
+    n_surface: int,
+    n_bottom: int,
+    bulk_rates: np.ndarray,
+    surf_rates: np.ndarray,
+    bot_rates: np.ndarray,
+    cc: np.ndarray,
+) -> None:
+    """Add pelagic sink and source terms for all depth levels."""
+
+    for var in range(n_interior):
+        for k in range(nlev):
+            bulk_rate = bulk_rates[var, k]
+            cc[var, k] += dt * bulk_rate
+        cc[var, nlev - 1] += dt * (
+            surf_rates[var, nlev - 1] - bulk_rates[var, nlev - 1]
+        )
+        cc[var, 0] += dt * (bot_rates[var, 0] - bulk_rates[var, 0])
+
+    surface_start = n_interior
+    surface_stop = surface_start + n_surface
+    for var in range(surface_start, surface_stop):
+        value = cc[var, nlev - 1] + dt * surf_rates[var, nlev - 1]
+        for k in range(nlev):
+            cc[var, k] = value
+
+    bottom_start = n_interior + n_surface
+    bottom_stop = bottom_start + n_bottom
+    for var in range(bottom_start, bottom_stop):
+        value = cc[var, 0] + dt * bot_rates[var, 0]
+        for k in range(nlev):
+            cc[var, k] = value
 
 
 def configure_gotm_fabm(

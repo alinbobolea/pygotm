@@ -14,11 +14,11 @@ from typing import Any, Literal
 import click
 import xarray as xr
 
-from pygotm.gotm.gotm import finalize_gotm, initialize_gotm
+from pygotm.gotm.gotm import finalize_gotm, initialize_gotm, integrate_gotm_compiled
 from pygotm.gotm.runtime_builder import (
     RuntimeBundle,
+    RuntimePhaseTimings,
     UnsupportedConfigurationError,
-    build_runtime_from_run,
     runtime_output_to_dataset,
 )
 from pygotm.gotm.time_loop import time_loop_compiled
@@ -44,9 +44,15 @@ class BenchmarkTimings:
     warmup_s: float
     initialization_s: float
     runtime_build_s: float
+    force_build_s: float
     integration_s: float
+    compiled_integration_s: float
+    fabm_chunk_s: float
+    copy_back_s: float
     output_conversion_s: float
     total_s: float
+    steps_per_s: float
+    fabm_steps_per_s: float
 
 
 @dataclass(slots=True, frozen=True)
@@ -67,6 +73,40 @@ def _compiled_function_for_bundle(bundle: RuntimeBundle) -> Any:
     return time_loop_compiled
 
 
+def _steps_per_second(n_steps: int, elapsed_s: float) -> float:
+    if n_steps <= 0 or elapsed_s <= 0.0:
+        return 0.0
+    return float(n_steps) / elapsed_s
+
+
+def _benchmark_timings(
+    *,
+    warmup_s: float,
+    initialization_s: float,
+    phase_timings: RuntimePhaseTimings,
+    output_conversion_s: float,
+    total_s: float,
+    n_steps: int,
+) -> BenchmarkTimings:
+    return BenchmarkTimings(
+        warmup_s=warmup_s,
+        initialization_s=initialization_s,
+        runtime_build_s=phase_timings.runtime_build_s,
+        force_build_s=phase_timings.force_build_s,
+        integration_s=phase_timings.integration_s,
+        compiled_integration_s=phase_timings.compiled_integration_s,
+        fabm_chunk_s=phase_timings.fabm_chunk_s,
+        copy_back_s=phase_timings.copy_back_s,
+        output_conversion_s=output_conversion_s,
+        total_s=total_s,
+        steps_per_s=_steps_per_second(
+            n_steps,
+            phase_timings.compiled_integration_s,
+        ),
+        fabm_steps_per_s=_steps_per_second(n_steps, phase_timings.fabm_chunk_s),
+    )
+
+
 def benchmark_compiled_case(
     case_name: str,
     *,
@@ -79,9 +119,8 @@ def benchmark_compiled_case(
     total_t0 = time.perf_counter()
     warmup_s = 0.0
     initialization_s = 0.0
-    runtime_build_s = 0.0
-    integration_s = 0.0
     output_conversion_s = 0.0
+    phase_timings = RuntimePhaseTimings()
     n_steps = 0
     n_output = 0
     compiled_function = ""
@@ -102,38 +141,32 @@ def benchmark_compiled_case(
         initialization_s = time.perf_counter() - t0
 
         try:
-            t0 = time.perf_counter()
-            bundle = build_runtime_from_run(run, max_steps=max_steps, output=output)
-            runtime_build_s = time.perf_counter() - t0
+            bundle = integrate_gotm_compiled(
+                run,
+                max_steps=max_steps,
+                output=output,
+                timings=phase_timings,
+            )
             n_steps = bundle.params.nt
+            n_output = bundle.output.nout
 
             dispatcher = _compiled_function_for_bundle(bundle)
             compiled_function = str(dispatcher.py_func.__name__)
 
-            t0 = time.perf_counter()
-            written = bundle.run()
-            integration_s = time.perf_counter() - t0
-            n_output = written
             signature_count = len(dispatcher.nopython_signatures)
-            if written != bundle.output.nout:
-                msg = (
-                    f"compiled loop wrote {written} output slots; "
-                    f"expected {bundle.output.nout}"
-                )
-                raise RuntimeError(msg)
 
             if output:
                 t0 = time.perf_counter()
                 actual = runtime_output_to_dataset(run, bundle)
                 output_conversion_s = time.perf_counter() - t0
 
-            timings = BenchmarkTimings(
+            timings = _benchmark_timings(
                 warmup_s=warmup_s,
                 initialization_s=initialization_s,
-                runtime_build_s=runtime_build_s,
-                integration_s=integration_s,
+                phase_timings=phase_timings,
                 output_conversion_s=output_conversion_s,
                 total_s=time.perf_counter() - total_t0,
+                n_steps=n_steps,
             )
             return BenchmarkResult(
                 case_name=result_case_name,
@@ -150,13 +183,13 @@ def benchmark_compiled_case(
                 actual.close()
             finalize_gotm(run)
     except UnsupportedConfigurationError as exc:
-        timings = BenchmarkTimings(
+        timings = _benchmark_timings(
             warmup_s=warmup_s,
             initialization_s=initialization_s,
-            runtime_build_s=runtime_build_s,
-            integration_s=integration_s,
+            phase_timings=phase_timings,
             output_conversion_s=output_conversion_s,
             total_s=time.perf_counter() - total_t0,
+            n_steps=n_steps,
         )
         return BenchmarkResult(
             case_name=result_case_name,
@@ -169,13 +202,13 @@ def benchmark_compiled_case(
             timings=timings,
         )
     except Exception as exc:
-        timings = BenchmarkTimings(
+        timings = _benchmark_timings(
             warmup_s=warmup_s,
             initialization_s=initialization_s,
-            runtime_build_s=runtime_build_s,
-            integration_s=integration_s,
+            phase_timings=phase_timings,
             output_conversion_s=output_conversion_s,
             total_s=time.perf_counter() - total_t0,
+            n_steps=n_steps,
         )
         return BenchmarkResult(
             case_name=result_case_name,
@@ -232,7 +265,10 @@ def _format_result(result: BenchmarkResult) -> str:
         f"{result.status:<11} {result.case_name:<18} "
         f"loop={result.compiled_function or '-'} "
         f"steps={result.n_steps} "
-        f"integrate={timings.integration_s:.3f}s "
+        f"build={timings.runtime_build_s:.3f}s "
+        f"force={timings.force_build_s:.3f}s "
+        f"compiled={timings.compiled_integration_s:.3f}s "
+        f"fabm={timings.fabm_chunk_s:.3f}s "
         f"convert={timings.output_conversion_s:.3f}s "
         f"total={timings.total_s:.3f}s"
     )

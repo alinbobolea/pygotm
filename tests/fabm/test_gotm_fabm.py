@@ -8,6 +8,7 @@ import pytest
 from pygotm.fabm.gotm_fabm import (
     FabmState,
     calculate_conserved_quantities,
+    center_depths_single,
     clean_gotm_fabm,
     configure_gotm_fabm,
     do_gotm_fabm,
@@ -17,6 +18,8 @@ from pygotm.fabm.gotm_fabm import (
     gotm_fabm_create_model,
     init_gotm_fabm,
     light,
+    par_from_background_single,
+    par_with_bioext_from_attenuation_single,
     register_bulk_observation,
     register_field,
     register_horizontal_observation,
@@ -111,6 +114,72 @@ def test_ppdd_repair_light_conserved_and_clean() -> None:
     clean_gotm_fabm(state)
     assert state.cc is None
     assert state.observations == []
+
+
+def test_center_depths_single_handles_empty_and_single_layer() -> None:
+    h_empty = np.zeros(1, dtype=np.float64)
+    depth_empty = np.zeros(0, dtype=np.float64)
+
+    center_depths_single(0, h_empty, depth_empty)
+
+    assert depth_empty.size == 0
+
+    h = np.array([0.0, 4.0], dtype=np.float64)
+    depth = np.zeros(1, dtype=np.float64)
+
+    center_depths_single(1, h, depth)
+
+    np.testing.assert_array_equal(depth, [2.0])
+
+
+def test_compiled_par_helpers_match_light_formula_and_clamp_attenuation() -> None:
+    nlev = 3
+    h = np.array([0.0, 2.0, 2.0, 2.0], dtype=np.float64)
+    rad = np.zeros(nlev + 1, dtype=np.float64)
+    rad[nlev] = 100.0
+    attenuation = np.array([0.02, -0.03, 0.04], dtype=np.float64)
+    depth = np.zeros(nlev, dtype=np.float64)
+    par = np.zeros(nlev, dtype=np.float64)
+
+    surface_par = par_with_bioext_from_attenuation_single(
+        nlev,
+        attenuation,
+        h,
+        rad,
+        0.4,
+        10.0,
+        depth,
+        par,
+    )
+
+    expected_depth = np.array([5.0, 3.0, 1.0], dtype=np.float64)
+    expected = np.zeros(nlev, dtype=np.float64)
+    bioext = 0.0
+    for idx in range(nlev - 1, -1, -1):
+        local_ext = max(float(attenuation[idx]), 0.0)
+        bioext += local_ext * h[idx + 1] * 0.5
+        expected[idx] = 60.0 * np.exp(-expected_depth[idx] / 10.0 - bioext)
+        bioext += local_ext * h[idx + 1] * 0.5
+
+    assert surface_par == 60.0
+    np.testing.assert_allclose(depth, expected_depth)
+    np.testing.assert_allclose(par, expected)
+
+    background = np.zeros(nlev, dtype=np.float64)
+    surface_background = par_from_background_single(
+        nlev,
+        h,
+        rad,
+        0.4,
+        10.0,
+        depth,
+        background,
+    )
+
+    assert surface_background == 60.0
+    np.testing.assert_allclose(background, 60.0 * np.exp(-expected_depth / 10.0))
+    assert par_with_bioext_from_attenuation_single.nopython_signatures
+    assert par_from_background_single.nopython_signatures
 
 
 def test_register_field_and_fatal_error() -> None:

@@ -2082,8 +2082,6 @@ def time_loop_compiled(
                 idpdx,
                 idpdy,
             )
-        for k in range(nlev + 1):
-            avh[k] = work_avh[k]
         step_friction_single(
             nlev,
             kappa,
@@ -2145,8 +2143,6 @@ def time_loop_compiled(
                 qu,
                 adv_cu,
             )
-            for k in range(nlev + 1):
-                avh[k] = work_avh[k]
         if tprof_input_active != 0:
             _copy_profile(nlev, forcing_Tobs[step - 1], Tobs)
             step_temperature_single(
@@ -2190,8 +2186,8 @@ def time_loop_compiled(
                 qu,
                 adv_cu,
             )
-            for k in range(nlev + 1):
-                avh[k] = work_avh[k]
+        for k in range(nlev + 1):
+            avh[k] = work_avh[k]
 
         _copy_profile(nlev, forcing_Sobs[step], Sobs)
         _copy_profile(nlev, forcing_Tobs[step], Tobs)

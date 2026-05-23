@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from pygotm.fabm.gotm_fabm import (
+    center_depths_single,
+    par_from_background_single,
+    par_with_bioext_from_attenuation_single,
+    step_fabm_post_rates_single,
+    step_fabm_transport_single,
+)
 from pygotm.util.adv_center import CONSERVATIVE, FLUX, P2_PDM, adv_center
-from pygotm.util.diff_center import NEUMANN, diff_center
 
 if TYPE_CHECKING:
     from pygotm.fabm.engine import FABMEngine
@@ -193,53 +198,45 @@ def run_fabm_chunk(
         # for other models too).  Calling it before the expensive getRates()
         # keeps the order consistent with gotm_fabm.F90 lines 1161-1199.
         vert_move = engine.get_vertical_movement()
-        if (
+        has_vert_move = (
             vert_move is not None
             and vert_move.ndim == 2
             and vert_move.shape[0] >= n_interior
             and vert_move.shape[1] == nlev
-        ):
-            _apply_sinking(
-                vert_move[:n_interior],
-                h_step,
-                cc,
-                nlev,
-                dt,
-                n_interior,
-                _y,
-                _ws,
-                _adv_cu,
-            )
+        )
 
         # Turbulent diffusion
         precip = float(forcing_precip[step]) if forcing_precip is not None else 0.0
-        for var in range(n_interior):
-            _y[1 : nlev + 1] = cc[var, :]
-            surface_flux = -float(cc[var, -1]) * precip
-            diff_center(
-                nlev,
-                dt,
-                cnpar,
-                0,
-                h_step,
-                NEUMANN,
-                NEUMANN,
-                surface_flux,
-                0.0,
-                nuh_step,
-                _l_sour,
-                _q_sour,
-                _tau_r,
-                _y_obs,
-                _y,
-                _au,
-                _bu,
-                _cu,
-                _du,
-                _ru,
-                _qu,
-            )
-            cc[var, :] = _y[1 : nlev + 1]
+        if has_vert_move:
+            assert vert_move is not None
+            vert_move_arg = vert_move[:n_interior]
+        else:
+            vert_move_arg = cc
+        step_fabm_transport_single(
+            nlev,
+            dt,
+            cnpar,
+            precip,
+            1 if has_vert_move else 0,
+            n_interior,
+            vert_move_arg,
+            h_step,
+            nuh_step,
+            cc,
+            _y,
+            _ws,
+            _adv_cu,
+            _au,
+            _bu,
+            _cu,
+            _du,
+            _ru,
+            _qu,
+            _l_sour,
+            _q_sour,
+            _tau_r,
+            _y_obs,
+        )
 
         is_output = (step % output_every == 0) or (
             force_final and step == nt and nt % output_every != 0
@@ -257,27 +254,19 @@ def run_fabm_chunk(
         ).copy()
         surf_rates = engine.get_rates(surface=True, bottom=False, time=fabm_time).copy()
         bot_rates = engine.get_rates(surface=False, bottom=True, time=fabm_time)
-        output_diagnostics = (
-            _copy_diagnostics(engine.diagnostics()) if is_output else None
-        )
+        output_diagnostics = engine.diagnostics() if is_output else None
 
-        cc[:n_interior] += dt * bulk_rates[:n_interior]
-        cc[:n_interior, -1] += dt * (
-            surf_rates[:n_interior, -1] - bulk_rates[:n_interior, -1]
+        step_fabm_post_rates_single(
+            nlev,
+            dt,
+            n_interior,
+            n_surface,
+            n_bottom,
+            bulk_rates,
+            surf_rates,
+            bot_rates,
+            cc,
         )
-        cc[:n_interior, 0] += dt * (
-            bot_rates[:n_interior, 0] - bulk_rates[:n_interior, 0]
-        )
-        if n_surface:
-            surface_start = n_interior
-            surface_stop = surface_start + n_surface
-            for var in range(surface_start, surface_stop):
-                cc[var, :] = cc[var, -1] + dt * surf_rates[var, -1]
-        if n_bottom:
-            bottom_start = n_interior + n_surface
-            bottom_stop = bottom_start + n_bottom
-            for var in range(bottom_start, bottom_stop):
-                cc[var, :] = cc[var, 0] + dt * bot_rates[var, 0]
         _set_model_state(model, cc)
 
         if is_output:
@@ -371,11 +360,7 @@ def _fabm_day_of_year(
 
 def _center_depths(h: np.ndarray, nlev: int) -> np.ndarray:
     depth = np.zeros(nlev, dtype=np.float64)
-    if nlev == 0:
-        return depth
-    depth[nlev - 1] = 0.5 * h[nlev]
-    for idx in range(nlev - 2, -1, -1):
-        depth[idx] = depth[idx + 1] + 0.5 * (h[idx + 1] + h[idx + 2])
+    center_depths_single(nlev, h, depth)
     return depth
 
 
@@ -389,11 +374,13 @@ def _update_light_from_diagnostics(
 ) -> None:
     if light_g2 <= 0.0:
         return
-    diagnostics = engine.diagnostics()
-    raw_attenuation = diagnostics.get(
-        "attenuation_coefficient_of_photosynthetic_radiative_flux"
+    raw_attenuation = engine.diagnostic(
+        "attenuation_coefficient_of_photosynthetic_radiative_flux",
+        copy=False,
     )
     if raw_attenuation is None:
+        return
+    if not isinstance(raw_attenuation, np.ndarray) or raw_attenuation.ndim == 0:
         return
     attenuation = np.asarray(raw_attenuation, dtype=np.float64)
     if attenuation.shape[0] < nlev:
@@ -420,19 +407,18 @@ def _par_with_bioext_from_attenuation(
     light_A: float,
     light_g2: float,
 ) -> tuple[np.ndarray, float]:
-    depth = _center_depths(h, nlev)
-    h_col = h[1 : nlev + 1]
-    surface_par = float(rad[nlev]) * (1.0 - light_A)
+    depth = np.zeros(nlev, dtype=np.float64)
     par_col = np.zeros(nlev, dtype=np.float64)
-    local_ext = np.maximum(0.0, attenuation[:nlev])
-    bioext = 0.0
-    for idx in range(nlev - 1, -1, -1):
-        bioext += float(local_ext[idx] * h_col[idx] * 0.5)
-        par_col[idx] = max(
-            0.0,
-            surface_par * math.exp(-float(depth[idx]) / light_g2 - bioext),
-        )
-        bioext += float(local_ext[idx] * h_col[idx] * 0.5)
+    surface_par = par_with_bioext_from_attenuation_single(
+        nlev,
+        attenuation,
+        h,
+        rad,
+        light_A,
+        light_g2,
+        depth,
+        par_col,
+    )
     return par_col, surface_par
 
 
@@ -603,11 +589,16 @@ def _set_environment(
     # profile used for other FABM environmental dependencies.
     i_0 = float(rad[nlev])
     if light_g2 > 0.0 and i_0 > 0.0:
-        depth = _center_depths(h, nlev)
-        surface_par = i_0 * (1.0 - light_A)
-        par_col = np.ascontiguousarray(
-            np.maximum(0.0, surface_par * np.exp(-depth / light_g2)),
-            dtype=np.float64,
+        depth = np.zeros(nlev, dtype=np.float64)
+        par_col = np.zeros(nlev, dtype=np.float64)
+        surface_par = par_from_background_single(
+            nlev,
+            h,
+            rad,
+            light_A,
+            light_g2,
+            depth,
+            par_col,
         )
     else:
         par_col = np.ascontiguousarray(rad[1 : nlev + 1], dtype=np.float64)
@@ -630,18 +621,26 @@ def _set_environment(
 
 
 def _try_set(engine: FABMEngine, name: str, value: np.ndarray) -> None:
+    setter = getattr(engine, "set_dependency_if_present", None)
+    if callable(setter):
+        setter(name, value)
+        return
     try:
         if engine.has_dependency(name):
             engine.set_dependency(name, value)
-    except (KeyError, RuntimeError):
+    except KeyError:
         pass
 
 
 def _try_set_scalar(engine: FABMEngine, name: str, value: float) -> None:
+    setter = getattr(engine, "set_dependency_if_present", None)
+    if callable(setter):
+        setter(name, value)
+        return
     try:
         if engine.has_dependency(name):
             engine.set_dependency(name, value)
-    except (KeyError, RuntimeError):
+    except KeyError:
         pass
 
 

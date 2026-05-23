@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,10 +38,13 @@ from pygotm.turbulence.turbulence import (
     tke_MY,
     weak_Eq_Kb_Eq,
 )
-from pygotm.util.gsw import gsw_sa_from_sp, gsw_sp_from_sa
+from pygotm.util.gsw import gsw_sa_from_sp, gsw_saar, gsw_sp_from_sa
+from pygotm.util.gsw.modules.gsw_mod_teos10_constants import gsw_sso, gsw_ups
+from pygotm.util.gsw.toolbox.gsw_sa_from_sp import _is_baltic
 
 __all__ = [
     "RuntimeBundle",
+    "RuntimePhaseTimings",
     "TimeLoopRunner",
     "UnsupportedConfigurationError",
     "build_runtime",
@@ -71,6 +75,18 @@ class TimeLoopRunner(Protocol):
         forcing: RuntimeForcing,
         output: RuntimeOutput,
     ) -> int: ...
+
+
+@dataclass(slots=True)
+class RuntimePhaseTimings:
+    """Optional wall-clock timing accumulator for compiled runtime phases."""
+
+    runtime_build_s: float = 0.0
+    force_build_s: float = 0.0
+    integration_s: float = 0.0
+    compiled_integration_s: float = 0.0
+    fabm_chunk_s: float = 0.0
+    copy_back_s: float = 0.0
 
 
 @dataclass(slots=True)
@@ -478,7 +494,66 @@ def _copy_profile_data(input_: Any | None, target: np.ndarray) -> None:
         target.fill(0.0)
 
 
-def _update_runtime_relaxation_targets(run: Any) -> None:
+@dataclass(slots=True)
+class _SalinityConversionCache:
+    pressure: np.ndarray
+    saar_factor: np.ndarray
+    pressure_valid: bool
+    baltic: bool
+
+
+def _make_salinity_conversion_cache(
+    nlev: int,
+    longitude: float,
+    latitude: float,
+) -> _SalinityConversionCache:
+    return _SalinityConversionCache(
+        pressure=np.empty(nlev, dtype=np.float64),
+        saar_factor=np.empty(nlev, dtype=np.float64),
+        pressure_valid=False,
+        baltic=_is_baltic(float(longitude), float(latitude)),
+    )
+
+
+def _copy_absolute_salinity_from_practical(
+    practical_salinity: np.ndarray,
+    pressure: np.ndarray,
+    longitude: float,
+    latitude: float,
+    target: np.ndarray,
+    cache: _SalinityConversionCache | None,
+) -> None:
+    if cache is None:
+        np.copyto(
+            target,
+            np.asarray(
+                gsw_sa_from_sp(practical_salinity, pressure, longitude, latitude),
+                dtype=np.float64,
+            ),
+        )
+        return
+
+    if cache.baltic:
+        np.multiply((gsw_sso - 0.087) / 35.0, practical_salinity, out=target)
+        target += 0.087
+        return
+
+    if not cache.pressure_valid or not np.array_equal(cache.pressure, pressure):
+        np.copyto(cache.pressure, pressure)
+        np.copyto(
+            cache.saar_factor,
+            1.0 + np.asarray(gsw_saar(cache.pressure, longitude, latitude)),
+        )
+        cache.pressure_valid = True
+
+    np.multiply(gsw_ups, practical_salinity, out=target)
+    target *= cache.saar_factor
+
+
+def _update_runtime_relaxation_targets(
+    run: Any,
+    salinity_cache: _SalinityConversionCache | None = None,
+) -> None:
     meanflow = run.meanflow
     observations = run.observations
 
@@ -495,11 +570,13 @@ def _update_runtime_relaxation_targets(run: Any) -> None:
         and observations.sprof_input.data is not None
     ):
         if observations.initial_salinity_type == 1:
-            meanflow.Sobs[1 : run.nlev + 1] = gsw_sa_from_sp(
+            _copy_absolute_salinity_from_practical(
                 observations.sprof_input.data[1 : run.nlev + 1],
                 pressure,
-                run.longitude,
-                run.latitude,
+                float(run.longitude),
+                float(run.latitude),
+                meanflow.Sobs[1 : run.nlev + 1],
+                salinity_cache,
             )
         else:
             meanflow.Sobs[1 : run.nlev + 1] = observations.sprof_input.data[
@@ -608,6 +685,11 @@ def _populate_runtime_forcing_from_run(
         np.array(meanflow.z, copy=True),
         np.array(meanflow.zi, copy=True),
     )
+    salinity_cache = _make_salinity_conversion_cache(
+        int(run.nlev),
+        float(run.longitude),
+        float(run.latitude),
+    )
     _record_forcing_step(run, forcing, 0)
     try:
         for step in range(1, forcing.nt + 1):
@@ -647,7 +729,7 @@ def _populate_runtime_forcing_from_run(
             if not _run_uses_ice_zeta(run):
                 meanflow.zeta = float(run.observations.zeta_input.value)
             updategrid(meanflow, run.nlev, run.dt, meanflow.zeta)
-            _update_runtime_relaxation_targets(run)
+            _update_runtime_relaxation_targets(run, salinity_cache)
             _record_forcing_step(run, forcing, step)
     finally:
         meanflow.zeta = initial_zeta
@@ -691,6 +773,7 @@ def build_runtime_from_run(
     *,
     max_steps: int | None = None,
     output: bool = False,
+    timings: RuntimePhaseTimings | None = None,
 ) -> RuntimeBundle:
     """Copy an initialized GotmRun object graph into flat runtime containers."""
 
@@ -866,7 +949,12 @@ def build_runtime_from_run(
         ):
             if source is not None:
                 target[: source.shape[0]] = source
-    _populate_runtime_forcing_from_run(run, bundle.forcing)
+    force_t0 = time.perf_counter()
+    try:
+        _populate_runtime_forcing_from_run(run, bundle.forcing)
+    finally:
+        if timings is not None:
+            timings.force_build_s += time.perf_counter() - force_t0
     bundle.state.validate()
     bundle.work.validate()
     return bundle

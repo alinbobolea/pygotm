@@ -32,6 +32,7 @@ class ReadyModel:
         self.state = np.array([1.0, 2.0], dtype=np.float64)
         self.dependencies = [FakeDependency("temperature", 10.0)]
         self.diagnostic_variables = [FakeDiagnostic()]
+        self.find_calls: list[str] = []
 
     def start(self) -> None:
         self.started = True
@@ -40,6 +41,7 @@ class ReadyModel:
         return True
 
     def findDependency(self, name: str) -> FakeDependency | None:
+        self.find_calls.append(name)
         for dependency in self.dependencies:
             if dependency.name == name:
                 return dependency
@@ -98,6 +100,15 @@ def test_engine_initializes_sets_dependencies_and_gets_rates(tmp_path: Path) -> 
     np.testing.assert_allclose(engine.get_rates(), [2.5, 3.5])
     np.testing.assert_allclose(engine.diagnostics()["oxygen"], [1.0, 2.0])
 
+    oxygen = engine.diagnostic("oxygen", copy=False)
+    assert isinstance(oxygen, np.ndarray)
+    assert oxygen is engine.model.diagnostic_variables[0].value
+
+    oxygen_copy = engine.diagnostic("oxygen")
+    assert isinstance(oxygen_copy, np.ndarray)
+    oxygen_copy[0] = 99.0
+    np.testing.assert_allclose(engine.model.diagnostic_variables[0].value, [1.0, 2.0])
+
 
 def test_engine_passes_time_and_boundary_flags_to_get_rates(tmp_path: Path) -> None:
     engine = FABMEngine(_fabm_yaml(tmp_path), model_factory=TimeAwareModel)
@@ -108,6 +119,26 @@ def test_engine_passes_time_and_boundary_flags_to_get_rates(tmp_path: Path) -> N
     assert isinstance(engine.model, TimeAwareModel)
     assert engine.model.rate_calls == [(12.5, False, True)]
     np.testing.assert_allclose(rates, [13.5, 14.5])
+
+
+def test_engine_caches_optional_dependency_lookup(tmp_path: Path) -> None:
+    engine = FABMEngine(_fabm_yaml(tmp_path), model_factory=ReadyModel)
+    engine.initialize()
+    assert isinstance(engine.model, ReadyModel)
+
+    engine.model.find_calls.clear()
+    first = np.array([3.0, 4.0], dtype=np.float64)
+    second = np.array([5.0, 6.0], dtype=np.float64)
+
+    assert engine.set_dependency_if_present("temperature", first)
+    assert engine.set_dependency_if_present("temperature", second)
+    assert not engine.set_dependency_if_present("missing", 1.0)
+    assert not engine.set_dependency_if_present("missing", 2.0)
+
+    assert engine.model.find_calls == ["temperature", "missing"]
+    dependency = engine.model.findDependency("temperature")
+    assert dependency is not None
+    np.testing.assert_allclose(dependency.value, second)
 
 
 def test_engine_reports_every_unresolved_dependency(tmp_path: Path) -> None:
