@@ -32,6 +32,27 @@ Run commands through the environment:
 
    conda run -n pygotm pygotm --help
 
+Environment Contents and Boundaries
+-----------------------------------
+
+``pygotm-conda-env.yml`` is the authoritative conda environment definition for
+local development, validation, documentation, and integration work.  It
+currently includes:
+
+* Python 3.12 and the core scientific stack: Numba, NumPy, SciPy, xarray,
+  NetCDF4, PyYAML, pandas, GSW, and pyfabm.
+* Dask and distributed for multi-case validation and multi-column runtime work.
+* FastAPI, WebSockets, NiceGUI, and Plotly for local API, UI, and charting
+  interfaces.
+* Jinja2, WeasyPrint, markdown-it-py, pybtex, Matplotlib, cmocean, hvplot, and
+  optuna for reports, citations, visualization, and calibration workflows.
+* Developer and documentation tools: pytest, anyio, httpx, Ruff, mypy,
+  pre-commit, hatch, Sphinx, Furo, MyST, MyST-NB, copybutton, and Mermaid.
+
+The broader environment is a development and runtime convenience.  It does not
+change the project boundary: physics and validation code stay in
+``src/pygotm/`` and web/UI code remains outside the scientific kernel.
+
 Verify the Correct Python Interpreter
 --------------------------------------
 
@@ -95,7 +116,7 @@ Running Tests
 
 .. code-block:: bash
 
-   conda run -n pygotm python -m pytest tests/ -v
+   conda run -n pygotm python -m pytest -W error::RuntimeWarning
 
 Building the Documentation
 --------------------------

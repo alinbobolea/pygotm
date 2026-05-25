@@ -4,12 +4,14 @@ channels:
   - nodefaults
 
 dependencies:
-  # Python runtime selected for maximum compatibility with the project
-  # pyproject.toml requires >=3.12 and configures tools for py312.
+  # Python runtime selected for maximum compatibility with pyGOTM and the
+  # planned pyGOTM Studio stack. pyproject.toml requires >=3.12 and configures
+  # tools for py312.
   - python=3.12
 
-  # Project build backend
+  # Project build and release tooling
   - hatchling
+  - hatch
   # Local editable package registration only:
   # conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
   - pip
@@ -27,7 +29,7 @@ dependencies:
   # FABM Python interface from conda-forge
   - pyfabm
 
-  # Web/API/UI stack
+  # Web/API/UI stack shared with pyGOTM Studio
   - fastapi>=0.110
   - uvicorn-standard>=0.27
   - websockets>=12.0
@@ -35,7 +37,17 @@ dependencies:
   - nicegui>=1.4
   - plotly>=5.19
   - python-dotenv>=1.0
+  - httpx>=0.27
+
+  # pyGOTM Studio reports, citations, and visualization
   - jinja2>=3.1
+  - weasyprint
+  - markdown-it-py
+  - pybtex
+  - matplotlib>=3.8
+  - cmocean
+  - hvplot
+  - optuna
 
   # CLI / terminal utilities
   - click>=8.1
@@ -48,7 +60,6 @@ dependencies:
   # Development dependencies
   - pytest>=8.0
   - anyio>=4.3
-  - httpx>=0.27
   - ruff>=0.3
   - mypy>=1.9
   - pre-commit>=3.7
@@ -59,6 +70,6 @@ dependencies:
   - sphinx-autodoc-typehints>=2.0
   - furo>=2024.0
   - myst-parser>=4.0
+  - myst-nb>=1.1
   - sphinx-copybutton>=0.5.2
-  - matplotlib>=3.8
   - sphinxcontrib-mermaid>=0.9

@@ -472,6 +472,11 @@ Useful suite options include ``--exclude``, ``--device``, ``--workers``,
 ``--dashboard-port``, ``--output-dir``, ``--no-run``, ``--no-warmup``, and
 ``--debug-turbulence``.
 
+The default case set (``couette,channel,entrainment``) is expected to pass.
+The current full 22-case suite completes all cases but returns a nonzero exit
+status because the generated snapshot is ``PARTIAL PARITY``: 15 cases pass and
+7 cases fail.
+
 Output files:
 
 * ``validation/report.html`` - human-readable HTML index with one frame per

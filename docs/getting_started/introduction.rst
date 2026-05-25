@@ -65,7 +65,7 @@ Key differences from the Fortran GOTM:
      - NetCDF (CF conventions, xarray-compatible)
    * - Deployment
      - Compile from source
-     - Conda environment plus editable local install; browser SaaS planned
+     - Conda environment plus editable local install
 
 **Scientific parity:** pyGOTM must pass every official GOTM test case using a
 discrete Fréchet distance comparison against Fortran GOTM 6.0.7 reference
@@ -102,6 +102,9 @@ A case has status **PASS** only when every compared variable passes.  Fréchet
 thresholds, normalization settings, and per-variable magnitude floors are
 configured in ``src/pygotm/validation/tolerances.py``; see
 :doc:`../validation/overview` for the full pipeline and scoring details.
+The latest generated full-suite snapshot is **PARTIAL PARITY**: 15 of 22
+official reference cases pass, and the seven remaining failures are documented
+in :doc:`../validation/test_cases`.
 
 Execution Model
 ---------------

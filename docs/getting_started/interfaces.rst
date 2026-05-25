@@ -62,6 +62,11 @@ reports:
 
    conda run -n pygotm pygotm validate --cases couette,channel
 
+The default case set is ``couette,channel,entrainment``.  The current default
+set exits successfully.  ``--all`` completes all 22 cases but exits nonzero
+until the known full-suite ``PARTIAL PARITY`` cases are resolved; see
+:doc:`../validation/test_cases`.
+
 Options:
 
 ``--cases NAMES``
@@ -70,7 +75,9 @@ Options:
    for example ``--cases couette``.
 
 ``--all``
-   Run all 22 GOTM reference cases.
+   Run all 22 GOTM reference cases.  Current full-suite validation is expected
+   to complete but return a failure exit status because 7 of 22 cases remain
+   non-PASS.
 
 ``--group {all,default,non-stim}``
    Run a named case group.

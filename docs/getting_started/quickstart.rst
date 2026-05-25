@@ -85,6 +85,12 @@ Compare pyGOTM output against the official Fortran GOTM reference cases:
 
 Output: ``validation/report.html`` plus one per-case HTML report.
 
+The default validation set is ``couette,channel,entrainment`` and should exit
+successfully.  Running all 22 reference cases currently completes every case
+but exits nonzero because the generated full-suite snapshot is still
+``PARTIAL PARITY``: 15 cases pass and 7 cases fail.  See
+:doc:`../validation/test_cases` for the current case summary.
+
 See :doc:`interfaces` for the full user and developer command surfaces.
 
 Python API Summary

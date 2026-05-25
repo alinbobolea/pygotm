@@ -3,7 +3,7 @@ Test Cases
 
 pyGOTM is validated against the 22 official GOTM 6.0.7 test cases.  The table
 below summarizes the latest generated ``validation/report.html`` snapshot,
-generated at ``2026-05-22T15:19:19Z``.
+generated at ``2026-05-25T12:19:59Z``.
 
 Case status is aggregated from Frechet variable statuses:
 
@@ -14,7 +14,7 @@ Case status is aggregated from Frechet variable statuses:
   a complete variable table could be produced.
 
 The snapshot verdict is ``PARTIAL PARITY``: 15 cases pass and 7 cases fail.
-Across all cases, the variable totals are 2329 ``PASS``, 59 ``MARGINAL``, 26
+Across all cases, the variable totals are 2316 ``PASS``, 67 ``MARGINAL``, 31
 ``DISCREPANT``, and 0 ``BROKEN``.
 
 Each case name in the table below links to its full per-case report
@@ -77,8 +77,8 @@ and rebuild the documentation.
      - FLEX experiment.
    * - :doc:`gotland <cases/gotland>`
      - FAIL
-     - 79
-     - 9
+     - 74
+     - 14
      - 16
      - 0
      - Baltic Sea Gotland Deep.
@@ -112,8 +112,8 @@ and rebuild the documentation.
      - Eastern Mediterranean.
    * - :doc:`medsea_west <cases/medsea_west>`
      - FAIL
-     - 125
-     - 14
+     - 128
+     - 11
      - 1
      - 0
      - Western Mediterranean.
@@ -147,9 +147,9 @@ and rebuild the documentation.
      - Freshwater plume.
    * - :doc:`resolute <cases/resolute>`
      - FAIL
-     - 103
-     - 11
-     - 1
+     - 92
+     - 17
+     - 6
      - 0
      - Arctic mixing.
    * - :doc:`reynolds <cases/reynolds>`
