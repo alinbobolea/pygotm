@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
@@ -1713,6 +1714,7 @@ def integrate_gotm_compiled(
     output: bool = True,
     chunk_size: int | None = None,
     timings: RuntimePhaseTimings | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> RuntimeBundle:
     """Advance supported single-column cases through the compiled runtime."""
 
@@ -1907,6 +1909,8 @@ def integrate_gotm_compiled(
                         timings.fabm_chunk_s += time.perf_counter() - fabm_t0
 
             step_cursor += this_chunk
+            if progress_callback is not None:
+                progress_callback(step_cursor, nt)
 
         copy_t0 = time.perf_counter()
         try:

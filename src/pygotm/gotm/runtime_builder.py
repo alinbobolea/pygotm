@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -1112,7 +1112,12 @@ def _reference_z_profile_output_names(
     return tuple(name for name in names if name in available)
 
 
-def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
+def runtime_output_to_dataset(
+    run: Any,
+    bundle: RuntimeBundle,
+    *,
+    attrs: Mapping[str, str | int | float] | None = None,
+) -> xr.Dataset:
     """Convert dense compiled output buffers to an xarray dataset after a run."""
 
     output = bundle.output
@@ -1306,14 +1311,20 @@ def runtime_output_to_dataset(run: Any, bundle: RuntimeBundle) -> xr.Dataset:
             }
         )
 
-    return xr.Dataset(
-        data_vars=data_vars,
-        coords=coords,
-        attrs={
+    dataset_attrs = (
+        dict(attrs)
+        if attrs is not None
+        else {
             "title": str(run.settings.title),
             "source_yaml": str(run.yaml_path),
             "nlev": int(nlev),
             "dt": float(bundle.params.dt),
             "runtime": "compiled",
-        },
+        }
+    )
+
+    return xr.Dataset(
+        data_vars=data_vars,
+        coords=coords,
+        attrs=dataset_attrs,
     )

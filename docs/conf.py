@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from importlib import metadata
 from pathlib import Path
 
 DOCS_DIR = Path(__file__).parent.resolve()
@@ -22,8 +23,12 @@ copyright = (
     "Based on GOTM by Lars Umlauf, Hans Burchard, and Karsten Bolding."
 )
 author = "pyGOTM contributors"
-release = "0.1.0"
-version = "0.1"
+
+try:
+    release = metadata.version("pygotm")
+except metadata.PackageNotFoundError:
+    release = "unavailable"
+version = ".".join(release.split(".")[:2]) if release != "unavailable" else release
 
 extensions = [
     "sphinx.ext.autodoc",

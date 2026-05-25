@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ import xarray as xr
 
 from pygotm.config import ConfigLike, coerce_config
 from pygotm.config.pygotm_conf import load_pygotm_conf
+from pygotm.errors import EXIT_SUCCESS, error_code_for_exception
 from pygotm.gotm.gotm import (
     GotmRun,
     finalize_gotm,
@@ -17,7 +20,13 @@ from pygotm.gotm.gotm import (
     integrate_gotm_compiled,
 )
 from pygotm.gotm.register_all_variables import FieldRecord
+from pygotm.gotm.run_metadata import (
+    build_run_attrs,
+    collect_config_hashes,
+    utc_timestamp,
+)
 from pygotm.gotm.runtime_builder import runtime_output_to_dataset
+from pygotm.progress import ProgressReporter
 
 __all__ = ["GotmDriver"]
 
@@ -157,7 +166,11 @@ def _dataset_from_run(run: GotmRun) -> xr.Dataset:
     return xr.Dataset(data_vars=data_vars, coords=coords, attrs=_dataset_attrs(run))
 
 
-def _empty_dataset_from_run(run: GotmRun) -> xr.Dataset:
+def _empty_dataset_from_run(
+    run: GotmRun,
+    *,
+    attrs: Mapping[str, str | int | float] | None = None,
+) -> xr.Dataset:
     coords: dict[str, Any] = {
         "time": np.array([], dtype="datetime64[s]"),
         "lat": float(run.latitude),
@@ -167,7 +180,10 @@ def _empty_dataset_from_run(run: GotmRun) -> xr.Dataset:
     assert run.meanflow.zi is not None
     coords["z"] = np.asarray(run.meanflow.z[1:], dtype=np.float64)
     coords["zi"] = np.asarray(run.meanflow.zi, dtype=np.float64)
-    return xr.Dataset(coords=coords, attrs=_dataset_attrs(run))
+    return xr.Dataset(
+        coords=coords,
+        attrs=dict(attrs) if attrs is not None else _dataset_attrs(run),
+    )
 
 
 def _dataset_attrs(run: GotmRun) -> dict[str, str | int | float]:
@@ -191,33 +207,74 @@ class GotmDriver:
         max_steps: int | None = None,
         output_path: str | Path | None = None,
         output: bool = True,
+        progress: ProgressReporter | None = None,
     ) -> xr.Dataset:
         """Execute a single-column run and return the resulting dataset."""
 
-        yaml_path = self.config.source_path or Path("gotm.yaml")
-        pygotm_conf = load_pygotm_conf(yaml_path)
-        chunk_size = pygotm_conf.fabm.chunk_size
-
-        run = initialize_gotm_from_settings(
-            self.config.resolved_settings(),
-            yaml_path=yaml_path,
-            document=self.config.resolved_document(),
-        )
+        started_at = utc_timestamp()
+        wall_clock_t0 = time.perf_counter()
+        run: GotmRun | None = None
         try:
+            if progress is not None:
+                progress.started("initializing")
+
+            config_hashes = collect_config_hashes(self.config)
+            yaml_path = self.config.source_path or Path("gotm.yaml")
+            pygotm_conf = load_pygotm_conf(yaml_path)
+            chunk_size = pygotm_conf.fabm.chunk_size
+
+            if progress is not None:
+                progress.phase("building_runtime")
+            run = initialize_gotm_from_settings(
+                self.config.resolved_settings(),
+                yaml_path=yaml_path,
+                document=self.config.resolved_document(),
+            )
+            fabm_active = run.fabm_config is not None and run.fabm_config.use
+            if progress is not None:
+                progress.phase(
+                    "integrating",
+                    progress_mode="determinate" if fabm_active else "indeterminate",
+                )
+
             bundle = integrate_gotm_compiled(
-                run, max_steps=max_steps, output=output, chunk_size=chunk_size
+                run,
+                max_steps=max_steps,
+                output=output,
+                chunk_size=chunk_size,
+                progress_callback=progress.progress
+                if progress is not None and fabm_active
+                else None,
+            )
+            finished_at = utc_timestamp()
+            attrs = build_run_attrs(
+                run,
+                source_yaml_sha256=config_hashes.source_yaml_sha256,
+                effective_yaml_sha256=config_hashes.effective_yaml_sha256,
+                started_at=started_at,
+                finished_at=finished_at,
+                wall_clock_seconds=time.perf_counter() - wall_clock_t0,
             )
             dataset = (
-                runtime_output_to_dataset(run, bundle)
+                runtime_output_to_dataset(run, bundle, attrs=attrs)
                 if output
-                else _empty_dataset_from_run(run)
+                else _empty_dataset_from_run(run, attrs=attrs)
             )
+            if output_path is not None:
+                self.write_dataset(dataset, output_path)
+            if progress is not None:
+                progress.finished(exit_code=EXIT_SUCCESS, output_path=output_path)
+            return dataset
+        except Exception as exc:
+            if progress is not None:
+                progress.failed(
+                    exit_code=error_code_for_exception(exc),
+                    message=str(exc),
+                )
+            raise
         finally:
-            finalize_gotm(run)
-
-        if output_path is not None:
-            self.write_dataset(dataset, output_path)
-        return dataset
+            if run is not None:
+                finalize_gotm(run)
 
     @staticmethod
     def write_dataset(dataset: xr.Dataset, path: str | Path) -> None:

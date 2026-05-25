@@ -31,6 +31,111 @@ separate NetCDF file.
 Output is implemented in :mod:`pygotm.gotm.runtime_output` and scheduled
 via :class:`pygotm.gotm.runtime_params.RuntimeParams`.
 
+NetCDF Global Attributes
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Every real output and empty ``output=False`` dataset carries the same Studio
+provenance contract. The attributes are stable machine-readable metadata; use
+``pygotm schema netcdf-attrs --json`` for the JSON form.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 20 45
+
+   * - Attribute
+     - Type
+     - Meaning
+   * - ``title``
+     - string
+     - Simulation title.
+   * - ``source_yaml``
+     - string
+     - Source YAML path recorded for the run.
+   * - ``nlev``
+     - integer
+     - Number of vertical layers.
+   * - ``dt``
+     - float
+     - Integration time step in seconds.
+   * - ``runtime``
+     - string
+     - Runtime backend, currently ``compiled``.
+   * - ``pygotm_version``
+     - string
+     - Installed pyGOTM package version.
+   * - ``pygotm_git_commit``
+     - string
+     - Short Git commit or ``unavailable``.
+   * - ``pygotm_config_schema_version``
+     - string
+     - Config contract version.
+   * - ``pygotm_output_schema_version``
+     - string
+     - Output contract version.
+   * - ``python_version``
+     - string
+     - Python runtime version.
+   * - ``numpy_version``
+     - string
+     - NumPy version.
+   * - ``numba_version``
+     - string
+     - Numba version.
+   * - ``xarray_version``
+     - string
+     - xarray version.
+   * - ``netcdf4_version``
+     - string
+     - netCDF4 package version or ``unavailable``.
+   * - ``gsw_version``
+     - string
+     - GSW package version.
+   * - ``pyfabm_version``
+     - string
+     - pyfabm package version or ``unavailable``.
+   * - ``platform``
+     - string
+     - Operating system and machine architecture.
+   * - ``source_yaml_sha256``
+     - string
+     - SHA-256 of raw source YAML bytes, or ``unavailable``.
+   * - ``effective_yaml_sha256``
+     - string
+     - SHA-256 of canonical materialized YAML, portable across paths.
+   * - ``fabm_yaml_sha256``
+     - string
+     - SHA-256 of resolved FABM YAML bytes, or ``unavailable``.
+   * - ``started_at``
+     - string
+     - UTC ISO-8601 run start timestamp.
+   * - ``finished_at``
+     - string
+     - UTC ISO-8601 run finish timestamp.
+   * - ``wall_clock_seconds``
+     - float
+     - End-to-end driver wall-clock duration.
+   * - ``turbulence_method``
+     - string
+     - Raw normalized GOTM turbulence method token.
+   * - ``tke_method``
+     - string
+     - Raw normalized TKE method token.
+   * - ``len_scale_method``
+     - string
+     - Raw normalized length-scale method token.
+   * - ``turbulence_closure``
+     - string
+     - Derived closure label such as ``k-epsilon``, ``k-omega``, or ``GLS``.
+   * - ``ice_model``
+     - string
+     - Raw normalized ice model token, or ``off``.
+   * - ``fabm_active``
+     - string
+     - ``true`` or ``false``.
+   * - ``fabm_models``
+     - string
+     - JSON-encoded list of FABM ``instances.*.model`` paths.
+
 Stream Name
 ~~~~~~~~~~~
 

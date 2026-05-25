@@ -20,6 +20,9 @@ modelling with no Fortran compiler required.
    getting_started/installation
    getting_started/quickstart
    getting_started/interfaces
+   getting_started/stability
+   getting_started/serve
+   getting_started/citations
    getting_started/configuration
 
 .. toctree::

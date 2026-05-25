@@ -47,7 +47,8 @@ Each validation run follows the same implementation path:
 6. ``compare_nc(py_path, ref_path, case_name)`` opens both NetCDF files and
    compares all numeric reference variables.
 7. Each case report is written directly from the reference and pyGOTM NetCDF
-   files. The final index is written to ``validation/report.html``.
+   files. The final index is written to ``validation/report.html`` and the
+   structured report dataclasses are serialized to ``validation/report.json``.
 
 The comparison is reference-driven.  A numeric variable present in the
 reference but missing from pyGOTM is ``BROKEN``.  Extra numeric variables in the
@@ -481,6 +482,8 @@ Output files:
 
 * ``validation/report.html`` - human-readable HTML index with one frame per
   case.
+* ``validation/report.json`` - structured report JSON that round-trips through
+  :func:`pygotm.validation.report.load_json`.
 * ``validation/<run_name>.html`` - per-case report generated directly from the
   reference and pyGOTM NetCDF files, with embedded Plotly plots for marginal
   and discrepant variables.

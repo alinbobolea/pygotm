@@ -55,8 +55,42 @@ Options:
 ``--max-steps N``
    Optional integer limit on integration steps.
 
+``--progress {none,json,plain}``
+   Emit run-progress events to stderr. ``json`` is the stable
+   machine-readable mode used by Studio; hydro-only runs currently report
+   ``progress_mode: "indeterminate"`` during integration because the compiled
+   hydro loop runs as one call.
+
+``--debug``
+   Show tracebacks for developer debugging. Without this flag, known errors
+   are reported as concise stderr messages with documented exit codes.
+
+``pygotm version`` prints human-readable runtime versions. ``pygotm version
+--json`` emits manifest-shaped keys, including ``pygotm_version``,
+``pygotm_git_commit``, dependency versions, and ``platform``.
+
+``pygotm schema`` emits Studio-facing schema records:
+
+.. code-block:: bash
+
+   conda run -n pygotm pygotm schema config --json
+   conda run -n pygotm pygotm schema output --json --config path/to/gotm.yaml
+   conda run -n pygotm pygotm schema netcdf-attrs --json
+
+``pygotm cite`` emits curated bibliography records:
+
+.. code-block:: bash
+
+   conda run -n pygotm pygotm cite --all
+   conda run -n pygotm pygotm cite --for-config path/to/gotm.yaml --json
+   conda run -n pygotm pygotm cite --for-output result.nc --json
+
+``pygotm serve`` starts the warm stdin/stdout JSON-RPC daemon used by Studio.
+RPC responses are written only to stdout; progress events and diagnostics go
+to stderr.
+
 ``pygotm validate`` runs the official Frechet parity suite and writes HTML
-reports:
+and JSON reports:
 
 .. code-block:: bash
 
@@ -95,7 +129,8 @@ Options:
    Dask dashboard port. Default: ``8787``.
 
 ``--output-dir DIR``
-   Directory for generated NetCDF runs and HTML reports. Default:
+   Directory for generated NetCDF runs plus ``report.html`` and
+   ``report.json``. Default:
    ``validation``.
 
 ``--no-run``

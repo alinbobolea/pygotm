@@ -202,7 +202,7 @@ def test_run_cases_renders_single_case_no_run_directly(
     assert calls == ["couette"]
 
 
-def test_run_validation_cli_writes_html_without_results_json(
+def test_run_validation_cli_writes_html_and_report_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -245,5 +245,6 @@ def test_run_validation_cli_writes_html_without_results_json(
 
     assert result.exit_code == 0
     assert (tmp_path / "report.html").is_file()
+    assert (tmp_path / "report.json").is_file()
     assert not (tmp_path / "results.json").exists()
-    assert "JSON" not in result.output
+    assert f"JSON  : {tmp_path / 'report.json'}" in result.output

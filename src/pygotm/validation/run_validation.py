@@ -31,7 +31,7 @@ import click
 from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
 from pygotm.validation.reference import REFERENCE_CASE_NAMES
-from pygotm.validation.report import CaseResult, Report, write_html_index
+from pygotm.validation.report import CaseResult, Report, save_json, write_html_index
 from pygotm.validation.runner import validate_case_to_html
 from pygotm.validation.warmup import trigger_numba_jit
 
@@ -304,12 +304,15 @@ def cli(
     )
 
     html_path = output_dir / "report.html"
+    json_path = output_dir / "report.json"
     write_html_index(report, output_dir)
+    save_json(report, json_path)
 
     print()
     print("pyGOTM validation complete")
     print(f"  Cases completed: {n_cases}/{len(case_list)}")
     print(f"  HTML  : {html_path}")
+    print(f"  JSON  : {json_path}")
 
     raise SystemExit(0 if verdict == "FULL PARITY" else 1)
 
