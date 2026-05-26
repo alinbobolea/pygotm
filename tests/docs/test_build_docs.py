@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS_DIR = REPO_ROOT / "docs"
@@ -13,8 +17,10 @@ if str(DOCS_DIR) not in sys.path:
 
 from build_docs import (  # noqa: E402
     GOTM_CASES,
+    prepare_figure_cache,
     stage_validation_html,
     stage_validation_rst_wrappers,
+    stage_validation_test_cases_summary,
 )
 
 
@@ -136,3 +142,88 @@ def test_rst_wrappers_refresh_on_second_call(tmp_path: Path) -> None:
 
     assert not stale.exists()
     assert len(list(cases_dir.glob("*.rst"))) == len(GOTM_CASES)
+
+
+# ---------------------------------------------------------------------------
+# stage_validation_test_cases_summary
+# ---------------------------------------------------------------------------
+
+
+def test_validation_test_cases_summary_uses_report_json_timestamp(
+    tmp_path: Path,
+) -> None:
+    report_json = tmp_path / "validation" / "report.json"
+    out = tmp_path / "docs" / "validation" / "_generated" / "test_cases_summary.inc"
+    report_json.parent.mkdir(parents=True)
+    report_json.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-26T13:40:37Z",
+                "verdict": "PARTIAL PARITY",
+                "cases": [
+                    {
+                        "case_name": "couette",
+                        "status": "PASS",
+                        "n_pass": 100,
+                        "n_marginal": 0,
+                        "n_discrepant": 0,
+                        "n_broken": 0,
+                    },
+                    {
+                        "case_name": "gotland",
+                        "status": "FAIL",
+                        "n_pass": 74,
+                        "n_marginal": 14,
+                        "n_discrepant": 16,
+                        "n_broken": 0,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    generated = stage_validation_test_cases_summary(
+        report_json=report_json,
+        output_path=out,
+    )
+
+    assert generated == out
+    content = out.read_text(encoding="utf-8")
+    assert "generated at ``2026-05-26T13:40:37Z``" in content
+    assert "The snapshot verdict is ``PARTIAL PARITY``: 1 cases pass" in content
+    assert "Across all cases, the variable totals are 174 ``PASS``" in content
+    assert ":doc:`couette <cases/couette>`" in content
+    assert ":doc:`gotland <cases/gotland>`" in content
+    assert "Baltic Sea Gotland Deep." in content
+
+
+def test_validation_test_cases_summary_handles_missing_report(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "docs" / "validation" / "_generated" / "test_cases_summary.inc"
+
+    generated = stage_validation_test_cases_summary(
+        report_json=tmp_path / "validation" / "report.json",
+        output_path=out,
+    )
+
+    assert generated == out
+    content = out.read_text(encoding="utf-8")
+    assert "No generated validation report is available" in content
+    assert "2026-05-25T12:58:49Z" not in content
+
+
+def test_prepare_figure_cache_sets_writable_cache_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MPLCONFIGDIR", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+
+    root = prepare_figure_cache(tmp_path / "docs-cache")
+
+    assert root == tmp_path / "docs-cache"
+    assert (root / "matplotlib").is_dir()
+    assert os.environ["XDG_CACHE_HOME"] == str(root)
+    assert os.environ["MPLCONFIGDIR"] == str(root / "matplotlib")

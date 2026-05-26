@@ -57,7 +57,7 @@ Options:
 
 ``--progress {none,json,plain}``
    Emit run-progress events to stderr. ``json`` is the stable
-   machine-readable mode used by Studio; hydro-only runs currently report
+   machine-readable mode; hydro-only runs currently report
    ``progress_mode: "indeterminate"`` during integration because the compiled
    hydro loop runs as one call.
 
@@ -69,7 +69,7 @@ Options:
 --json`` emits manifest-shaped keys, including ``pygotm_version``,
 ``pygotm_git_commit``, dependency versions, and ``platform``.
 
-``pygotm schema`` emits Studio-facing schema records:
+``pygotm schema`` emits machine-readable schema records:
 
 .. code-block:: bash
 
@@ -85,9 +85,8 @@ Options:
    conda run -n pygotm pygotm cite --for-config path/to/gotm.yaml --json
    conda run -n pygotm pygotm cite --for-output result.nc --json
 
-``pygotm serve`` starts the warm stdin/stdout JSON-RPC daemon used by Studio.
-RPC responses are written only to stdout; progress events and diagnostics go
-to stderr.
+``pygotm serve`` starts the warm stdin/stdout JSON-RPC daemon. RPC responses
+are written only to stdout; progress events and diagnostics go to stderr.
 
 ``pygotm validate`` runs the official Frechet parity suite and writes HTML
 and JSON reports:
@@ -100,6 +99,18 @@ The default case set is ``couette,channel,entrainment``.  The current default
 set exits successfully.  ``--all`` completes all 22 cases but exits nonzero
 until the known full-suite ``PARTIAL PARITY`` cases are resolved; see
 :doc:`../validation/test_cases`.
+
+Validation runs serially by default.  ``--all`` only selects the 22-case set;
+it does not enable Dask or open a dashboard.  To run the full suite through a
+local Dask cluster and print the dashboard URL, request more than one worker:
+
+.. code-block:: bash
+
+   conda run -n pygotm pygotm validate --all --workers 4 --dashboard-port 8787
+
+The dashboard URL is shown only when ``--workers`` is greater than ``1`` and
+more than one case is selected.  Serial runs and single-case runs do not create
+a Dask cluster.
 
 Options:
 
@@ -123,10 +134,12 @@ Options:
    Execution backend label. The current Numba validation backend is ``cpu``.
 
 ``--workers N``
-   Dask worker count for multi-case validation. Defaults to detected CPU count.
+   Validation worker count. Default: ``1``. Values greater than ``1`` run
+   cases through a local Dask cluster.
 
 ``--dashboard-port PORT``
-   Dask dashboard port. Default: ``8787``.
+   Dask dashboard port used only when ``--workers`` is greater than ``1``.
+   Default: ``8787``.
 
 ``--output-dir DIR``
    Directory for generated NetCDF runs plus ``report.html`` and
@@ -157,6 +170,14 @@ canonical command used by quality gates and optimization acceptance checks:
    conda run -n pygotm python -m pygotm.validation.run_validation \
        --cases couette,channel,entrainment
 
+The same serial/Dask rule applies to the module command.  Use ``--workers`` to
+request Dask explicitly:
+
+.. code-block:: bash
+
+   conda run -n pygotm python -m pygotm.validation.run_validation \
+       --all --workers 4 --dashboard-port 8787
+
 Report regeneration
 ~~~~~~~~~~~~~~~~~~~
 
@@ -183,10 +204,12 @@ Options:
    Comma-separated case names to omit.
 
 ``--workers N``
-   Dask worker count for multi-case report rendering.
+   Report worker count. Default: ``1``. Values greater than ``1`` render
+   cases through a local Dask cluster.
 
 ``--dashboard-port PORT``
-   Dask dashboard port. Default: ``8787``.
+   Dask dashboard port used only when ``--workers`` is greater than ``1``.
+   Default: ``8787``.
 
 ``--output-dir DIR``
    Directory containing ``runs/`` and receiving report HTML. Default:

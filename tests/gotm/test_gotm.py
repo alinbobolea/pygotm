@@ -19,8 +19,6 @@ from pygotm.gotm.gotm import (
 from pygotm.icethm import IceModelEnum
 
 _COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
-_NNS_SEASONAL_CONFIG = Path("validation/reference/nns_seasonal/gotm.yaml")
-_REYNOLDS_CONFIG = Path("validation/reference/reynolds/gotm.yaml")
 
 
 def _write_config(path: Path) -> None:
@@ -57,6 +55,32 @@ def _write_short_couette_config(path: Path) -> None:
     )
     config_text = config_text.replace("nlev: 100", "nlev: 8", 1)
     path.write_text(config_text, encoding="utf-8")
+
+
+def _write_vertical_advection_config(path: Path) -> None:
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 7,
+                "location": {"latitude": 55.0, "longitude": 12.0, "depth": 10.0},
+                "time": {
+                    "start": "2000-01-01 00:00:00",
+                    "stop": "2000-01-01 00:01:00",
+                    "dt": 60.0,
+                },
+                "grid": {"nlev": 8},
+                "temperature": {"method": "off"},
+                "salinity": {"method": "off"},
+                "mimic_3d": {
+                    "w": {
+                        "max": {"method": "constant", "constant_value": 1.0e-4},
+                        "height": {"method": "constant", "constant_value": -5.0},
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_initialize_and_finalize_gotm(tmp_path: Path) -> None:
@@ -120,8 +144,9 @@ def test_integrate_gotm_rejects_fabm_active_case_before_zero_output(
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("config_path", [_NNS_SEASONAL_CONFIG, _REYNOLDS_CONFIG])
-def test_integrate_gotm_accepts_active_vertical_advection(config_path: Path) -> None:
+def test_integrate_gotm_accepts_active_vertical_advection(tmp_path: Path) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_vertical_advection_config(config_path)
     run = initialize_gotm(config_path)
     try:
         integrate_gotm(run, max_steps=1, output=False)

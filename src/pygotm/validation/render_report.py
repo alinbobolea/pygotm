@@ -49,10 +49,11 @@ from pygotm.validation.run_validation import (
 )
 @click.option(
     "--workers",
-    default=None,
+    default=1,
+    show_default=True,
     type=int,
     metavar="N",
-    help="Dask worker count for multi-case report rendering.",
+    help="Report worker count. Use N>1 to render cases through Dask.",
 )
 @click.option(
     "--dashboard-port",
@@ -73,14 +74,14 @@ def cli(
     run_all: bool,
     group: str | None,
     exclude: str | None,
-    workers: int | None,
+    workers: int,
     dashboard_port: int,
     output_dir: Path,
 ) -> None:
     """Regenerate validation HTML from existing run/reference NetCDF files."""
 
     platform_info = detect_platform()
-    n_workers = workers if workers is not None else platform_info.cpu_count
+    n_workers = max(1, workers)
     case_list = _select_case_list(
         cases=cases,
         run_all=run_all,

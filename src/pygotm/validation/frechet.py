@@ -1,7 +1,5 @@
 """Discrete Frechet distance and dynamic normalization for validation."""
 
-from __future__ import annotations
-
 from typing import TypedDict
 
 import numpy as np

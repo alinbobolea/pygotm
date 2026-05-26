@@ -5,8 +5,6 @@ model. It computes the linear freezing point ``Tf = -0.0575 S`` and suppresses
 warming temperature flux into water that is already at or below freezing.
 """
 
-from __future__ import annotations
-
 import numba
 import numpy as np
 

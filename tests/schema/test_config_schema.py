@@ -1,4 +1,4 @@
-"""Tests for Studio-facing config schema overlays."""
+"""Tests for config schema overlays."""
 
 from __future__ import annotations
 

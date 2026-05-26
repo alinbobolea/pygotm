@@ -20,6 +20,9 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# Documentation build output
+docs/build/
+
 # Taichi
 .ti/
 ti_cache/
@@ -49,6 +52,7 @@ Thumbs.db
 *.nc
 *.hdf5
 gotm-model/
+papers/
 
 # Validation outputs and external reference data
 validation/
@@ -59,6 +63,7 @@ validation/
 # Sphinx documentation staging for validation HTML reports
 docs/_validation_html/
 docs/validation/cases/
+docs/validation/_generated/
 
 # Other
 todo.md

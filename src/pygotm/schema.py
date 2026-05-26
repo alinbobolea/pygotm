@@ -1,4 +1,4 @@
-"""Machine-readable schema helpers for Studio-facing integrations."""
+"""Machine-readable schema helpers for external integrations."""
 
 from __future__ import annotations
 
@@ -874,7 +874,7 @@ _REFERENCE_Z_PROFILE_VARIABLES: tuple[OutputVariable, ...] = tuple(
 
 
 def config_schema() -> dict[str, Any]:
-    """Return the curated GOTM config JSON Schema used by Studio editors."""
+    """Return the curated GOTM config JSON Schema for editor integrations."""
 
     schema = GotmSettings.model_json_schema()
     schema["$id"] = "https://pygotm.org/schema/config/gotm-6.x-pygotm-1"

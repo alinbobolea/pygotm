@@ -117,7 +117,7 @@ def test_init_observations_keeps_top_level_vertical_velocity_compatibility() -> 
     assert state.w_adv_input.index == 4
 
 
-def test_init_observations_handles_legacy_height_only_w_adv_file() -> None:
+def test_init_observations_disables_legacy_shared_vertical_velocity_file() -> None:
     settings = GotmSettings.model_validate(
         {
             "mimic_3d": {
@@ -137,6 +137,27 @@ def test_init_observations_handles_legacy_height_only_w_adv_file() -> None:
     assert state.w_adv_input.index == 1
     assert state.w_height_input.path == "w_adv.dat"
     assert state.w_height_input.index == 1
+
+
+def test_init_observations_activates_constant_vertical_advection() -> None:
+    settings = GotmSettings.model_validate(
+        {
+            "mimic_3d": {
+                "w": {
+                    "max": {"method": "constant", "constant_value": 1.0e-4},
+                    "height": {"method": "constant", "constant_value": -5.0},
+                }
+            }
+        }
+    )
+    state = ObservationsState()
+
+    init_observations(state, settings)
+
+    assert state.w_adv_input.method == 1
+    assert state.w_adv_input.constant_value == pytest.approx(1.0e-4)
+    assert state.w_height_input.method == 0
+    assert state.w_height_input.constant_value == pytest.approx(-5.0)
 
 
 def test_init_observations_uses_real_case_nested_zeta_period() -> None:

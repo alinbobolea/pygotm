@@ -4,9 +4,8 @@ channels:
   - nodefaults
 
 dependencies:
-  # Python runtime selected for maximum compatibility with pyGOTM and the
-  # planned pyGOTM Studio stack. pyproject.toml requires >=3.12 and configures
-  # tools for py312.
+  # Python runtime selected for pyGOTM and its development tooling.
+  # pyproject.toml requires >=3.12 and configures tools for py312.
   - python=3.12
 
   # Project build and release tooling
@@ -25,33 +24,17 @@ dependencies:
   - pyyaml>=6.0
   - pandas>=2.2
   - gsw>=3.6.0
+  - pydantic>=2.6
+  - click>=8.1
 
   # FABM Python interface from conda-forge
   - pyfabm
 
-  # Web/API/UI stack shared with pyGOTM Studio
-  - fastapi>=0.110
-  - uvicorn-standard>=0.27
-  - websockets>=12.0
-  - pydantic>=2.6
-  - nicegui>=1.4
-  - plotly>=5.19
-  - python-dotenv>=1.0
-  - httpx>=0.27
-
-  # pyGOTM Studio reports, citations, and visualization
-  - jinja2>=3.1
-  - weasyprint
-  - markdown-it-py
+  # Citation parsing and documentation figures
   - pybtex
   - matplotlib>=3.8
-  - cmocean
-  - hvplot
-  - optuna
-
-  # CLI / terminal utilities
-  - click>=8.1
-  - rich>=13.7
+  # Frechet validation report plots
+  - plotly>=5.19
 
   # Parallel/distributed runtime corresponding to dask[distributed]
   - dask>=2024.4
@@ -62,6 +45,7 @@ dependencies:
   - anyio>=4.3
   - ruff>=0.3
   - mypy>=1.9
+  - types-pyyaml>=6.0
   - pre-commit>=3.7
   - git-filter-repo
 

@@ -48,8 +48,6 @@ turbulence closures.
 Author (original Fortran): Lars Umlauf.
 """
 
-from __future__ import annotations
-
 import numba
 import numpy as np
 

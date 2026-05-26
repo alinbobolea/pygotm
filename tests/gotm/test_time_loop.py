@@ -58,7 +58,6 @@ _FLEX_CONFIG = Path("validation/reference/flex/gotm.yaml")
 _LANGMUIR_CONFIG = Path("validation/reference/langmuir/gotm.yaml")
 _LIVERPOOL_BAY_CONFIG = Path("validation/reference/liverpool_bay/gotm.yaml")
 _MEDSEA_WEST_CONFIG = Path("validation/reference/medsea_west/gotm.yaml")
-_NNS_SEASONAL_CONFIG = Path("validation/reference/nns_seasonal/gotm.yaml")
 _PLUME_CONFIG = Path("validation/reference/plume/gotm.yaml")
 _REYNOLDS_CONFIG = Path("validation/reference/reynolds/gotm.yaml")
 _RESOLUTE_CONFIG = Path("validation/reference/resolute/gotm.yaml")
@@ -82,6 +81,37 @@ _AIRSEA_FIRST_SLOT_VARIABLES = (
     "I_0",
     "albedo",
 )
+
+
+def _write_vertical_advection_config(path: Path) -> None:
+    path.write_text(
+        """
+version: 7
+location:
+  latitude: 55.0
+  longitude: 12.0
+  depth: 10.0
+time:
+  start: 2000-01-01 00:00:00
+  stop: 2000-01-01 00:01:00
+  dt: 60.0
+grid:
+  nlev: 8
+temperature:
+  method: off
+salinity:
+  method: off
+mimic_3d:
+  w:
+    max:
+      method: constant
+      constant_value: 1.0e-4
+    height:
+      method: constant
+      constant_value: -5.0
+""".lstrip(),
+        encoding="utf-8",
+    )
 
 
 def test_chunked_time_loop_writes_global_output_steps_and_times() -> None:
@@ -482,10 +512,11 @@ def test_runtime_forcing_precomputes_langmuir_stokes_series() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("config_path", [_NNS_SEASONAL_CONFIG, _REYNOLDS_CONFIG])
 def test_runtime_forcing_precomputes_vertical_advection_series(
-    config_path: Path,
+    tmp_path: Path,
 ) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_vertical_advection_config(config_path)
     run = initialize_gotm(config_path)
     try:
         runtime = integrate_gotm_compiled(run, max_steps=1, output=False)
@@ -496,9 +527,6 @@ def test_runtime_forcing_precomputes_vertical_advection_series(
     assert np.any(runtime.forcing.w_adv != 0.0)
     assert np.any(runtime.forcing.w_height != 0.0)
     assert np.any(runtime.state.w[1 : runtime.params.nlev] != 0.0)
-    if config_path == _REYNOLDS_CONFIG:
-        assert runtime.params.vel_relax_ramp == pytest.approx(86400.0)
-        assert np.all(np.isfinite(runtime.work.vel_relax_tau_eff[1:]))
 
 
 @pytest.mark.slow

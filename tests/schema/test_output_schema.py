@@ -1,4 +1,4 @@
-"""Tests for Studio-facing output schema metadata."""
+"""Tests for output schema metadata."""
 
 from __future__ import annotations
 

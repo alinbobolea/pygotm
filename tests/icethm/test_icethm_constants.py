@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pygotm.icethm import constants as ice_constants
 from pygotm.icethm.constants import (
     ALB_ICE,
     FREEZE_SLOPE,
@@ -19,6 +20,14 @@ def test_constants_are_float64_compatible_values() -> None:
     assert MU_TS == 0.054
     assert 0.0 < ALB_ICE < 1.0
     assert LAMBDA1 < 0.0
+
+
+def test_constants_document_external_papers_location() -> None:
+    doc = ice_constants.__doc__ or ""
+    package_papers_path = "src/pygotm/icethm" + "/papers"
+
+    assert package_papers_path not in doc
+    assert "papers/" in doc
 
 
 def test_params_and_state_defaults() -> None:

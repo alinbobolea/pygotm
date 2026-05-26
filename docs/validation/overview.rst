@@ -9,10 +9,8 @@ HTML report page per case.
 
 The current parity gate is the Frechet suite in
 ``src/pygotm/validation/run_validation.py`` and
-``src/pygotm/validation/compare.py``.  The older pointwise tolerance metrics
-(``P99``, Birge ratio, normalized signed bias, ``rtol``/``atol`` pass bands,
-RMSE, NRMSE, and mean/max absolute or relative errors) are not status-driving
-validation indicators for the current suite.
+``src/pygotm/validation/compare.py``. Status is driven by the Frechet
+indicators described below.
 
 Reference Data Distribution
 ---------------------------
@@ -20,15 +18,16 @@ Reference Data Distribution
 Top-level ``validation/`` data is intentionally excluded from normal Git
 history. Generated reports and ``validation/runs`` outputs are reproducible, and
 the official Fortran reference NetCDF files are large enough that they should be
-distributed as release/data artifacts rather than committed to the source repo.
+kept outside the source repository.
 
-Download the reference-data release asset and unpack it so the working tree has
-``validation/reference/<case>/`` directories before running validation. The
-planned public asset path is:
-
-.. code-block:: text
-
-   https://github.com/<org>/pygotm/releases/download/reference-data-v0.1.0/pygotm-validation-reference.tar.zst
+To run the full validation suite, provide a local GOTM reference-data tree under
+``validation/reference/<case>/``. Each case directory must contain the GOTM YAML
+input files and the Fortran reference NetCDF outputs used by the validation
+runner. The pyGOTM source repository does not currently publish, vendor, or
+assume a hosted reference-data archive. Maintainers may distribute a separate
+reference-data archive through a release artifact or scientific data repository
+in the future, but validation only requires that the files exist locally in the
+documented tree layout.
 
 Validation Pipeline
 -------------------
@@ -387,61 +386,64 @@ time-series visualization.
 Interpreting Remaining Differences
 ----------------------------------
 
-The remaining non-PASS reference cases are dominated by two different classes
-of difference: chaotic amplification in the physical turbulence trajectory and
-localized active-tail differences in biogeochemical or diagnostic variables.
+The current 22-case snapshot has seven non-PASS reference cases and no
+``BROKEN`` variables. The generated case HTML reports show the following
+non-PASS rows.
 
 ``gotland``
-   The first 20 simulation days match the Fortran reference to near machine
-   precision. A small turbulence difference appears around day 21, grows by
-   roughly an order of magnitude by day 22, and reaches order-one decorrelation
-   by about day 27. The inferred amplification rate is consistent with
-   stratified turbulence near the mixed-layer base. Once the trajectory has
-   decorrelated, localized peak timing in ``tke``, ``G``, ``NNT`` and related
-   turbulence diagnostics can differ even when means and 1st/99th percentile
-   distributions remain close.
+   The report contains 13 PyGOTM ``MARGINAL`` rows, 16 PyGOTM ``DISCREPANT``
+   rows, and one PyFABM ``MARGINAL`` row. The PyFABM row is ``qh``. The
+   non-PASS PyGOTM rows are ``mld_surf``, ``u``, ``v``, ``num``, ``nuh``,
+   ``nus``, ``tke``, ``eps``, ``SS``, ``P``, ``uu``, ``vv``, ``ww``, ``NN``,
+   ``NNT``, ``NNS``, ``kb``, ``G``, ``avh``, ``Rig``, ``L``, ``cmue1``,
+   ``cmue2``, ``an``, ``as``, ``at``, ``taux``, ``tauy``, and ``Eturb``.
+   In ``validation/runs/gotland/turbulence_debug.json``, ``tke`` has
+   ``max_abs_err`` no larger than ``2.5894818603364984e-6`` through time index
+   20; indices 21-30 include values up to ``8.138172948438899e-5``; the case
+   summary reports the largest ``tke`` ``max_abs_err`` as
+   ``6.560663751105973e-4``.
 
-``ows_papa`` and ``resolute``
-   These cases show the same practical issue in a weaker form: broad
-   distributions and budgets are close, but localized peaks in turbulence,
-   mixed-layer-depth and integrated diagnostic variables are not exactly
-   time-aligned after nonlinear amplification. The status-driving
-   ``frechet_k = 200`` metric keeps these differences mostly marginal while
-   the peak-sensitive diagnostic still exposes them for debugging.
+``ows_papa``
+   The report contains two non-PASS rows: PyGOTM ``taux`` is ``MARGINAL`` and
+   PyGOTM ``tauy`` is ``DISCREPANT``.
+
+``resolute``
+   The report contains 17 PyGOTM ``MARGINAL`` rows and 6 PyGOTM
+   ``DISCREPANT`` rows, with no PyFABM non-PASS rows. The non-PASS rows are
+   ``int_total``, ``mld_surf``, ``v``, ``tke``, ``eps``, ``SS``, ``P``,
+   ``uu``, ``vv``, ``ww``, ``NN``, ``NNT``, ``NNS``, ``kb``, ``epsb``, ``G``,
+   ``Rig``, ``L``, ``an``, ``as``, ``at``, ``taux``, and ``Eturb``.
 
 ``langmuir``
-   Most core variables are close. Remaining differences are concentrated in a
-   small number of Langmuir/Stokes or diagnostic outputs where localized
-   structure differs more than the broad trajectory.
+   The report contains 111 ``PASS`` rows and two non-PASS rows. The non-PASS
+   rows are PyGOTM ``NNS`` at ``MARGINAL`` and PyFABM ``ds`` at
+   ``DISCREPANT``.
 
-``medsea_east``, ``medsea_west`` and ``nns_annual``
-   These are mostly PyFABM or biogeochemical active-tail differences, such as
-   ``jrc_med_ergom_OFL`` and ``npzd_*`` variables. The wide robust PyFABM
-   normalization is intended to avoid classifying isolated outliers as
-   structural failure while still reporting persistent shape differences.
+``medsea_east``
+   The report contains 16 non-PASS rows, all PyGOTM ``MARGINAL`` rows. The
+   rows are ``num``, ``nuh``, ``nus``, ``SS``, ``P``, ``ww``, ``G``, ``avh``,
+   ``L``, ``cmue1``, ``cmue2``, ``an``, ``as``, ``at``, ``taux``, and
+   ``tauy``.
 
-Known numerical sources that can seed these differences include compiler
-reassociation and fused-multiply-add choices in gfortran versus Numba/LLVM,
-Fortran unsuffixed literals stored through GOTM's precision model, Python
-``float`` constants that are naturally double precision, and small differences
-between the GSW C-library path and Fortran-library calculations used by the
-reference executable. Air-sea bulk formula constants, including Kondo and
-Fairall coefficients, are especially sensitive because small forcing
-differences can seed turbulence divergence that later grows chaotically.
+``medsea_west``
+   The report contains 11 PyGOTM ``MARGINAL`` rows and one PyFABM
+   ``DISCREPANT`` row. The PyGOTM rows are ``num``, ``nuh``, ``nus``, ``tke``,
+   ``ww``, ``NN``, ``NNT``, ``G``, ``Rig``, ``L``, and ``an``. The PyFABM row
+   is ``jrc_med_ergom_OFL``.
 
-Two precision-matching iterations have already been tested in the turbulence
-equations and Kondo bulk coefficients. They did not materially change the
-remaining Frechet scores for ``gotland``, ``ows_papa`` or ``resolute``. That
-indicates the current residuals are not isolated to one obvious constant or
-single equation. Achieving bit-identical trajectories would likely require a
-broader project to align Fortran literal precision, library calls and compiler
-operation ordering across the model.
+``nns_annual``
+   The report contains three PyGOTM ``MARGINAL`` rows, four PyFABM
+   ``MARGINAL`` rows, and six PyFABM ``DISCREPANT`` rows. The PyGOTM rows are
+   ``mld_surf``, ``v``, and ``tke``. The PyFABM rows are ``npzd_nut``,
+   ``npzd_phy``, ``npzd_zoo``, ``npzd_det``, ``u_taub``, ``npzd_PPR``,
+   ``npzd_NPR``, ``npzd_PAR``,
+   ``attenuation_coefficient_of_photosynthetic_radiative_flux``, and
+   ``total_nitrogen``.
 
-The validation policy therefore keeps strict structural checks and a
-peak-sensitive diagnostic, but uses a status-driving metric that is less
-dominated by post-decorrelation peak timing. This is intended to identify real
-schema and trajectory errors without labeling physically plausible chaotic
-decorrelation as a broken translation.
+The generated reports identify variable status, Frechet metrics, full-precision
+reference and calculated values at the largest aligned absolute difference, and
+comparison plots for ``MARGINAL`` and ``DISCREPANT`` rows. They do not identify
+root causes for the remaining differences.
 
 Running the Validation Suite
 ----------------------------

@@ -31,8 +31,10 @@ reviewed, stop and review it before proceeding.
 - Preserve the Fortran folder/file mapping exactly under `src/pygotm/`.
 - Preserve Fortran comments in Python module/function docstrings.
 - No hidden simulation state. Results must be reproducible from YAML config.
-- The kernel is the product. Keep `src/pygotm/` free of web/UI concerns.
-- API and UI are wrappers around the pyGOTM package.
+- The kernel is the product. Keep `src/pygotm/` free of web, GUI, and
+  application-layer concerns.
+- External applications integrate through the CLI, JSON-RPC daemon, files, or
+  package APIs. They do not live inside the pyGOTM kernel package.
 - No unsupported fallback to legacy Python timestep logic during parity runs.
 
 ## Conda Environment Rule

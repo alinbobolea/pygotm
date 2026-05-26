@@ -6,8 +6,6 @@ layer over two sea-ice layers; the upper layer has the Winton brine heat-capacit
 term and the lower layer has fixed heat capacity.
 """
 
-from __future__ import annotations
-
 import math
 
 import numba

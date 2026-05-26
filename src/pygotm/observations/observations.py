@@ -121,9 +121,9 @@ def _profile_method(name: str, *, analytical_constant: bool) -> int:
     raise ValueError(f"unsupported profile method {name!r}")
 
 
-def _scalar_method(name: str) -> int:
+def _scalar_method(name: str, *, constant_method: int = 0) -> int:
     if name == "constant":
-        return 0
+        return constant_method
     if name == "file":
         return FROMFILE
     if name == "off":
@@ -539,12 +539,13 @@ def init_observations(
     )
     state.w_adv_input = _scalar_input(
         name="w_adv",
-        method=_scalar_method(w_adv_setting.method),
+        method=_scalar_method(w_adv_setting.method, constant_method=CONSTANT),
         path=w_adv_setting.path,
         index=w_adv_setting.column,
         constant_value=w_adv_setting.constant_value,
         scale_factor=w_adv_setting.scale_factor,
         add_offset=w_adv_setting.add_offset,
+        method_constant=CONSTANT,
     )
     state.w_height_input = _scalar_input(
         name="w_height",

@@ -71,8 +71,8 @@ Selects the overall turbulence closure level.
 
 ``cvmix``
    CVMix community parameterisation library interface
-   (:mod:`pygotm.cvmix.gotm_cvmix`).  **[legacy only]** in the
-   current compiled runtime.
+   (:mod:`pygotm.cvmix.gotm_cvmix`). **[unsupported in compiled runtime]**
+   in the current release.
 
 .. _yaml-turb-tke:
 
@@ -255,7 +255,7 @@ Upper boundary layer parameterisation.
 ``tke_injection``
    Wave-breaking TKE injection following Craig and Banner (1994).  Requires
    wave height input via the ``waves`` section.
-   **[legacy only]** in the current compiled runtime.
+   **[unsupported in compiled runtime]** in the current release.
 
 ``turbulence.bc.lbc_type``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

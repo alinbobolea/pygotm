@@ -23,7 +23,7 @@ def _write_short_couette_config(path: Path) -> None:
     path.write_text(config_text.replace("nlev: 100", "nlev: 8", 1), encoding="utf-8")
 
 
-def test_real_netcdf_output_has_required_studio_attrs(tmp_path: Path) -> None:
+def test_real_netcdf_output_has_required_provenance_attrs(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
     output_path = tmp_path / "result.nc"
     _write_short_couette_config(config_path)

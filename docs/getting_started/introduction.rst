@@ -54,9 +54,6 @@ Key differences from the Fortran GOTM:
    * - Timestep loop
      - Compiled Fortran
      - Compiled Numba JIT (``@numba.njit``)
-   * - Multi-column parallel
-     - No
-     - Numba ``prange`` within batch + Dask across batches
    * - Configuration
      - YAML (gotm.yaml)
      - GOTM-compatible YAML (same files)
@@ -145,13 +142,12 @@ Design Principles
    Fortran GOTM. No accuracy tradeoffs before parity is established.
 2. **Reproducibility is a feature.** Every simulation result is fully
    reproducible from its YAML config. No hidden state.
-3. **The kernel is the product.** The API and UI are wrappers. The physics
-   lives in ``src/pygotm/``.
+3. **The kernel is the product.** The physics and validation runtime live in
+   ``src/pygotm/``.
 4. **Double precision everywhere.** ``np.float64`` throughout — GOTM uses ``REAL(8)``.
-5. **Parallelism is horizontal, not vertical.** Each vertical column
-   (:math:`N_\mathrm{lev} \approx 100`) is solved serially (Thomas algorithm).
-   Parallelism comes from Numba ``prange`` across columns in a batch, and Dask
-   across batches.
+5. **The compiled runtime is single-column.** Each vertical column
+   (:math:`N_\mathrm{lev} \approx 100`) is solved serially through the
+   parity-tested Numba timestep loop.
 6. **Fail loudly on science errors.** NaN or physical-bounds violations
    raise immediately with a diagnostic message.
 7. **Unsupported configurations fail at setup.** No silent fallback to a

@@ -1,7 +1,5 @@
 """Ice-shelf basal melt closure translated from STIM ``stim_basal_melt.F90``."""
 
-from __future__ import annotations
-
 import math
 
 import numba

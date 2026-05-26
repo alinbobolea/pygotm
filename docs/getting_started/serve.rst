@@ -2,9 +2,8 @@ Warm Daemon Protocol
 ====================
 
 ``pygotm serve`` starts a warm kernel subprocess that speaks newline-delimited
-JSON-RPC over stdin and stdout. It is not an HTTP server. Studio owns any local
-FastAPI or WebSocket user interface; the kernel daemon remains behind process
-and file boundaries.
+JSON-RPC over stdin and stdout. It is not a network server. The kernel daemon
+stays behind process and file boundaries.
 
 Framing
 -------
@@ -39,7 +38,7 @@ Methods
    validation reference data.
 
 ``schema_config``
-   Returns the curated GOTM config schema used by visual editors.
+   Returns the curated GOTM config schema used by external tools.
 
 ``schema_output``
    Returns output variable metadata. Passing ``params.config_path`` allows the

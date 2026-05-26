@@ -1,16 +1,16 @@
 User Manual
 ===========
 
-This section is the complete reference for every key in the ``gotm.yaml``
-configuration file understood by pyGOTM.  Each section below corresponds to
-a top-level YAML block and documents every parameter: its type, units, valid
-values, default value, and what physics it controls.
+This section documents the GOTM-compatible ``gotm.yaml`` keys recognized by
+pyGOTM. Each section below corresponds to a top-level YAML block and records
+the parameter type, units, valid values, default value, and the physics it
+controls where that information is available.
 
 Every parameter listed here is implemented in the pyGOTM source.
-Parameters that are currently supported only by the legacy Python time-step
-loop (and not yet by the compiled Numba runtime) are marked with
-**[legacy only]**.  Parameters not yet implemented at all are
-marked **[not implemented]**.
+Parameters recognized by the source but not supported by the current compiled
+Numba runtime are marked **[unsupported in compiled runtime]**. Unsupported
+compiled-runtime configurations fail during setup; pyGOTM does not silently
+fall back to a legacy Python timestep loop during parity runs.
 
 .. note::
 

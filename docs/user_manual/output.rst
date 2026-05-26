@@ -34,7 +34,7 @@ via :class:`pygotm.gotm.runtime_params.RuntimeParams`.
 NetCDF Global Attributes
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Every real output and empty ``output=False`` dataset carries the same Studio
+Every real output and empty ``output=False`` dataset carries the same kernel
 provenance contract. The attributes are stable machine-readable metadata; use
 ``pygotm schema netcdf-attrs --json`` for the JSON form.
 
@@ -204,10 +204,10 @@ How the output quantity is temporally aggregated over the output interval.
 
 ``mean``
    Time-average of the variable over the output interval.
-   **[legacy only]**.
+   **[unsupported in compiled runtime]**.
 
 ``integrated``
-   Time-integral of the variable.  **[legacy only]**.
+   Time-integral of the variable. **[unsupported in compiled runtime]**.
 
 ``output.<name>.variables``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -369,7 +369,7 @@ Seagrass canopy drag parameterisation.
    Seagrass canopy geometry and density are read from ``seagrass.file``.
    The canopy drag is added to the bottom boundary layer of the turbulence
    model.  Implemented in :mod:`pygotm.extras.seagrass.seagrass`.
-   **[legacy only]** in the current compiled runtime.
+   **[unsupported in compiled runtime]** in the current release.
 
 ``seagrass.file``
 ~~~~~~~~~~~~~~~~~

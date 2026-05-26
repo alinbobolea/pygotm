@@ -1,4 +1,4 @@
-"""Run provenance helpers for NetCDF global attributes and Studio manifests."""
+"""Run provenance helpers for NetCDF global attributes and manifests."""
 
 from __future__ import annotations
 

@@ -1,139 +1,283 @@
 # pyGOTM
 
-**Python reimplementation of the General Ocean Turbulence Model (GOTM) using
-Numba-compiled CPU physics.**
+pyGOTM is a Python reimplementation of the General Ocean Turbulence Model
+(GOTM) with Numba-compiled CPU physics. It is a substantial source-level
+translation of the Fortran model into a Python package while preserving GOTM's
+scientific structure, YAML configuration style, and NetCDF validation target.
 
-GOTM is a widely used 1D ocean turbulence model. pyGOTM translates the Fortran
-source layout into Python while keeping scientific validation against GOTM
-reference cases at the center of development.
+The project mirrors the GOTM source layout, reads GOTM-compatible YAML
+configuration files, runs supported single-column cases through a compiled
+runtime, and validates NetCDF output against GOTM 6.0.7 reference results.
 
-## What it does
+## Current Status
 
-- Simulates the vertical structure of temperature, salinity, and turbulence in an ocean water column or lake
-- Supports six turbulence closure models: k-ε, k-ω, GLS, Mellor-Yamada 2.5, KPP
-- Reads GOTM 6.x YAML configuration files natively
-- All 22 official GOTM validation cases built in
-- Runs single-column physics through a compiled Numba runtime
-- Outputs NetCDF (CF conventions) compatible with xarray, MATLAB, and all ocean toolboxes
+pyGOTM is usable as a simulation kernel and validation target, but it is not yet
+a complete replacement for every GOTM configuration.
 
-## Why it exists
+- Runtime: compiled single-column Numba execution.
+- Configuration: GOTM 6.x YAML files, parsed through the pyGOTM config layer.
+- Output: xarray/NetCDF datasets with reproducibility metadata.
+- CLI: `run`, `validate`, `version`, `schema`, `cite`, and `serve`.
+- Integration surface: `pygotm serve`, a warm stdin/stdout JSON-RPC daemon for
+  external tools. It is not a network server.
+- Validation: the default Frechet validation set (`couette`, `channel`,
+  `entrainment`) passes.
+- Full reference suite: all 22 official cases execute, with the current local
+  snapshot at partial parity: 15 PASS and 7 FAIL. The failures are documented in
+  `docs/validation/test_cases.rst` and generated validation reports.
+- Full-suite variable totals in the latest snapshot: 2316 PASS, 67 MARGINAL,
+  31 DISCREPANT, and 0 BROKEN.
+- Representative current validation wall times on the local 8-core Ryzen
+  validation host: `couette` 3.0 s, `channel` 3.0 s, and `entrainment` 2.5 s.
 
-Fortran GOTM requires: a Fortran compiler, CMake, NetCDF libraries, Conda
-environment, command-line expertise. pyGOTM requires: a browser (SaaS) or a
-reproducible Conda environment plus a local editable package install.
+The current parity achievement is strong for a Python translation of a mature
+Fortran ocean model: every official case runs, most cases pass outright, and
+the remaining differences are documented as deterministic Frechet deviations
+rather than missing output schema. See `docs/validation/overview.rst` for the
+validation method and `docs/validation/test_cases.rst` for the case table.
 
-Target users: aquaculture site engineers, limnologists, coastal ocean researchers, environmental consultancies.
+## What It Does
 
-## Key Features
+- Simulates one-dimensional vertical water-column physics for ocean and lake
+  cases.
+- Advances temperature, salinity, horizontal velocity, density, turbulence
+  quantities, ice thermodynamics, and supported FABM coupling paths.
+- Supports the current compiled-runtime GOTM turbulence paths used by the
+  validated reference cases, including first-order and second-order closures
+  such as k-epsilon, k-omega, GLS, and Mellor-Yamada variants where supported by
+  the selected configuration.
+- Reads time series, vertical profiles, and reference-case forcing files.
+- Writes NetCDF output compatible with xarray and standard ocean-analysis tools.
+- Produces Frechet-distance HTML and JSON validation reports against Fortran
+  GOTM reference NetCDF files, including per-variable scores and case reports.
 
-| Feature | Description |
-|---------|-------------|
-| Compiled runtime | Numba JIT single-column timestep loop with flat float64 arrays |
-| GOTM parity | Validated against Fortran GOTM 6.0.7 with the Frechet validation suite |
-| Built-in cases | All 22 official GOTM test cases loadable in one click |
-| REST API | FastAPI with async job submission + WebSocket progress streaming |
-| Browser UI | NiceGUI + Plotly interactive vertical profiles and Hövmoller diagrams |
-| Export | NetCDF, CSV, interactive HTML reports |
+Unsupported compiled-runtime configurations fail during setup with an explicit
+error. pyGOTM does not silently fall back to a legacy Python timestep loop during
+parity runs.
 
-## Architecture
+## Integrated Science Modules
 
-```
-┌──────────────────────────────────────┐
-│  NiceGUI UI (port 8080)              │
-│  Plotly charts, YAML form editor     │
-└────────────────┬─────────────────────┘
-                 │ HTTP / WebSocket
-┌────────────────▼─────────────────────┐
-│  FastAPI REST API (port 8000)        │
-│  POST /api/simulations               │
-│  GET  /api/results/{id}              │
-│  WS   /ws/{id} (live progress)       │
-└────────────────┬─────────────────────┘
-                 │ Python import
-┌────────────────▼─────────────────────┐
-│  GotmDriver (driver.py)              │
-│  YAML → Pydantic config              │
-│  Runtime setup → compiled loop       │
-│  xarray output → NetCDF writer       │
-└────────────────┬─────────────────────┘
-                 │ Numba call
-┌────────────────▼─────────────────────┐
-│  gotm/time_loop.py                   │
-│  compiled timestep runner            │
-│  direct 1D physics routines          │
-│  dense output buffers                │
-│  post-run xarray conversion          │
-└──────────────────────────────────────┘
-```
+pyGOTM is not just a minimal hydrodynamic runner. The translation includes
+substantial coupled physics and ecosystem machinery from GOTM's broader model
+family.
+
+**FABM / pyfabm biogeochemistry**
+
+- Optional FABM coupling through `pyfabm`, driven by `fabm.yaml` next to the
+  GOTM configuration.
+- A chunked interleaved architecture: the Numba hydro loop advances a window of
+  timesteps and stores hydrodynamic snapshots, then pyfabm advances biological
+  state through the same timesteps with those physical dependencies.
+- pyGOTM supplies FABM dependencies such as temperature, salinity, density, cell
+  thickness, PAR/light, wind speed, day-of-year, and bottom stress.
+- pyfabm state variables receive pyGOTM-owned vertical movement, sinking/rising
+  advection, turbulent diffusion, surface exchange, bottom exchange, and
+  source/sink rate updates.
+- Bio-shading feedback is supported through FABM light-attenuation diagnostics,
+  allowing biological attenuation to modify the PAR profile within the coupling
+  loop.
+- When `fabm.use: false`, pyfabm is not imported and the physics-only compiled
+  runtime remains unchanged.
+
+See `docs/physics/biogeochemistry.rst` and `docs/api/fabm.rst` for the coupling
+design and API.
+
+**Ice thermodynamics**
+
+- Five ice modes are available through `pygotm.icethm`: no ice, the GOTM simple
+  limiter, ice-shelf basal melt, Lebedev freezing-degree-day ice, MyLake slab
+  ice, and Winton three-layer sea ice.
+- The ice dispatcher is Numba-compiled and shares a common `IceState`
+  container across models.
+- Ice thermodynamics is coupled back into the ocean through the upper
+  temperature boundary condition, albedo, transmissivity, and diagnosed
+  ocean-ice heat and salt fluxes where the selected model provides them.
+- The basal-melt implementation uses the Holland-Jenkins three-equation
+  ice-shelf closure with McDougall-Jackett pressure-adjusted freezing
+  temperature.
+- The Winton model tracks snow, upper/lower ice layers, internal ice
+  temperatures, surface melt, basal growth/melt, flooding, albedo, and
+  penetrating shortwave radiation.
+
+See `docs/physics/ice_thermodynamics.rst` and `docs/api/icethm.rst` for the
+full model descriptions and references.
+
+## Documentation and Validation System
+
+The documentation is a compact technical collection that combines the pieces a
+serious model user or developer needs in one place:
+
+- Theory and methods pages for mean flow, turbulence, air-sea exchange, ice
+  thermodynamics, and FABM/pyfabm coupling.
+- A GOTM-compatible YAML user manual, including file formats, forcing inputs,
+  output variables, and unsupported compiled-runtime paths.
+- API reference pages generated from the pyGOTM package.
+- Validation pages that summarize the current Frechet parity snapshot and link
+  to generated per-case HTML reports.
+
+The validation system is also a core part of the translation. It compares
+pyGOTM NetCDF output against Fortran GOTM reference output with a discrete
+Frechet-distance pipeline. The comparison aligns time axes, checks variable
+presence and structure, computes raw and normalized Frechet distances, switches
+to a relative raw score for tiny-signal variables, and reports PASS, MARGINAL,
+DISCREPANT, or BROKEN statuses per variable. A separate peak-sensitive
+diagnostic keeps localized turbulence differences visible without letting
+post-decorrelation peak timing dominate the primary verdict.
+
+See `docs/validation/overview.rst` for the algorithm and
+`docs/validation/test_cases.rst` for the current 22-case result table.
 
 ## Quick Start
 
+From a fresh checkout:
+
 ```bash
-# Clone and create the conda environment
-git clone https://github.com/<org>/pygotm.git
-cd pygotm
 conda env create -f pygotm-conda-env.yml
-
-# Register this checkout as the pygotm package.
-# Conda owns dependencies; pip is used only for this no-dependency install.
 conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
-
-# Confirm the package and CLI resolve from the conda environment
-conda run -n pygotm python -c "import pygotm; print(pygotm.__file__)"
 conda run -n pygotm pygotm --help
 ```
 
-Validation reference data is distributed outside normal Git history because the
-NetCDF files are large. Download the reference-data release asset and unpack it
-so `validation/reference/couette/gotm.yaml` exists before running validation
-cases. The planned release asset path is:
+The top-level `validation/` directory is intentionally excluded from normal Git
+history. To run official validation cases, provide a local reference-data tree
+so this file exists:
 
 ```text
-https://github.com/<org>/pygotm/releases/download/reference-data-v0.1.0/pygotm-validation-reference.tar.zst
+validation/reference/couette/gotm.yaml
 ```
+
+The source repository does not currently publish or vendor those data files.
+Maintainers may distribute a separate reference-data archive in the future, but
+pyGOTM only assumes the files are present locally in the documented layout.
+
+Run one case:
 
 ```bash
-# Run a single-column YAML configuration and write NetCDF output
 conda run -n pygotm pygotm run validation/reference/couette/gotm.yaml \
   --output couette.nc
-
-# Run official Frechet validation for supported reference cases
-conda run -n pygotm pygotm validate --cases couette,channel
 ```
 
-## Example Use Cases
+Run the default validation set:
 
-- **Aquaculture:** Model thermal stratification and oxygen profiles for salmon farm site assessment
-- **Lake management:** Predict algal bloom timing in drinking water reservoirs
-- **Coastal research:** Standalone validation testbed for turbulence closure schemes
-- **Education:** Interactive water column physics without installing Fortran
+```bash
+conda run -n pygotm pygotm validate
+```
 
-## Tech Stack
+Validation runs serially by default for deterministic command-line behavior.
+Use `--workers N` with `N > 1` when you want multi-case validation through a
+local Dask cluster.
 
-| Component | Technology |
-|-----------|-----------|
-| Physics kernels | [Numba](https://numba.pydata.org/) >= 0.59 |
-| API | [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn |
-| UI | [NiceGUI](https://nicegui.io/) |
-| Charts | [Plotly](https://plotly.com/python/) |
-| Data I/O | xarray + NetCDF4 |
-| Config | Pydantic v2 + PyYAML |
-| Reports | Jinja2 |
+Run selected validation cases:
+
+```bash
+conda run -n pygotm pygotm validate --cases couette,channel,entrainment
+```
+
+`pygotm validate --all` currently completes the 22-case suite but exits with a
+nonzero status because the full-suite verdict is partial parity. The detailed
+case results are documented in `docs/validation/test_cases.rst`.
+
+## Python API
+
+```python
+from pygotm.driver import GotmDriver
+
+driver = GotmDriver("validation/reference/couette/gotm.yaml")
+ds = driver.run(output_path="couette.nc")
+
+print(ds)
+print(list(ds.data_vars))
+```
+
+For performance checks that should exercise the compiled loop without material
+NetCDF output:
+
+```python
+from pygotm.driver import GotmDriver
+
+ds = GotmDriver("validation/reference/couette/gotm.yaml").run(output=False)
+```
+
+## Command Surface
+
+```bash
+conda run -n pygotm pygotm run CONFIG --output result.nc
+conda run -n pygotm pygotm validate --cases couette,channel
+conda run -n pygotm pygotm version --json
+conda run -n pygotm pygotm schema config --json
+conda run -n pygotm pygotm schema output --json --config CONFIG
+conda run -n pygotm pygotm schema netcdf-attrs --json
+conda run -n pygotm pygotm cite --all
+conda run -n pygotm pygotm serve
+```
+
+`pygotm serve` speaks newline-delimited JSON-RPC on stdin/stdout. Progress
+events and diagnostics go to stderr so stdout remains protocol-only.
+
+## Development Gates
+
+Run Python commands through the `pygotm` conda environment:
+
+```bash
+conda run -n pygotm python -m pytest -W error::RuntimeWarning
+conda run -n pygotm mypy src/
+conda run -n pygotm ruff format .
+conda run -n pygotm ruff check .
+conda run -n pygotm sphinx-build -W -b html docs docs/build
+```
+
+The conda environment owns third-party dependencies. The only permitted `pip`
+use is the no-dependency editable install of the local checkout:
+
+```bash
+conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
+```
+
+## Repository Layout
+
+```text
+src/pygotm/      Python package and translated GOTM modules
+tests/           Unit, integration, validation, docs, and CLI tests
+docs/            Sphinx documentation source
+validation/      External reference data and generated validation output
+gotm-model/      External Fortran GOTM checkout and reference cases
+```
+
+`validation/` and `gotm-model/` are intentionally not part of normal Git
+history. They are local data used for validation and translation work.
+
+## Build Documentation
+
+Build the docs with:
+
+```bash
+conda run -n pygotm sphinx-build -W -b html docs docs/build
+```
+
+Open `docs/build/index.html` after a successful build.
 
 ## Upstream
 
-Based on [GOTM](https://github.com/gotm-model/code) — the General Ocean Turbulence Model (Fortran 90).
+pyGOTM is based on GOTM, the General Ocean Turbulence Model:
+
+- Project: https://gotm.net
+- Source: https://github.com/gotm-model/code
+
+The original GOTM authors are Lars Umlauf, Hans Burchard, and Karsten Bolding.
+GOTM remains the scientific authority for the equations, constants, and
+reference behavior translated here.
 
 ## License
 
-GPL-2.0 — same as the original GOTM Fortran model.
+GPL-2.0-only, matching the original GOTM licensing. See `LICENSE`.
+
+The citation database in `src/pygotm/citations/` carries its own CC0 license
+notice for bibliography metadata.
 
 ## Roadmap
 
-- [x] Phase 1: Numba infrastructure and core utility kernels
-- [x] Phase 2: Compiled Couette/channel runner for core emitted fields
-- [ ] Phase 3: Expand compiled runtime forcing and profile-input support
-- [ ] Phase 4: All turbulence closures validated
-- [ ] Phase 5: Multi-column Dask + Numba batch mode
-- [ ] Phase 6: FastAPI + NiceGUI web application
-- [ ] Phase 7: SaaS deployment
+- [x] Numba infrastructure and core utility kernels.
+- [x] Compiled single-column runtime for supported GOTM reference cases.
+- [x] CLI, schema, citation, validation, and warm daemon surfaces.
+- [x] Sphinx documentation and generated validation report integration.
+- [ ] Resolve remaining full-suite parity cases.
+- [ ] Continue performance and validation hardening of the compiled runtime.

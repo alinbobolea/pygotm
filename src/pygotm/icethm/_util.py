@@ -1,7 +1,5 @@
 """Shared scalar utilities for ice thermodynamics kernels."""
 
-from __future__ import annotations
-
 import math
 
 import numba

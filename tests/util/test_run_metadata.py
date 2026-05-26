@@ -1,4 +1,4 @@
-"""Tests for Studio-facing run metadata helpers."""
+"""Tests for run metadata helpers."""
 
 from __future__ import annotations
 

@@ -10,7 +10,7 @@ from click.testing import CliRunner
 from pygotm.__main__ import cli
 
 
-def test_public_cli_exposes_studio_integration_commands() -> None:
+def test_public_cli_exposes_supported_commands() -> None:
     result = CliRunner().invoke(cli, ["--help"])
 
     assert result.exit_code == 0

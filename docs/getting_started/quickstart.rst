@@ -12,17 +12,17 @@ Create the conda environment and register this checkout as the importable
    conda env create -f pygotm-conda-env.yml
    conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
 
-Before running the bundled reference cases, download the validation reference
-data release and unpack it so ``validation/reference/couette/gotm.yaml`` exists.
-Top-level ``validation/`` data is intentionally not tracked in normal Git
-history.
+Before running official validation cases, provide a local reference-data tree
+so ``validation/reference/couette/gotm.yaml`` exists. Top-level
+``validation/`` data is intentionally not tracked in normal Git history, and
+the source repository does not currently publish or vendor those files.
 
 Run a Single-Column Simulation
 -------------------------------
 
 The simplest way to run pyGOTM is with a GOTM-compatible YAML configuration
 file. The official GOTM test cases are available in the external validation
-reference-data bundle:
+reference-data tree when it is present locally:
 
 .. code-block:: python
 

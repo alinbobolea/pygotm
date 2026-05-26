@@ -1,7 +1,7 @@
 """Constants for pyGOTM ice thermodynamics kernels.
 
-Values in this module come from the model papers bundled in
-``src/pygotm/icethm/papers``:
+Values in this module come from the model papers kept outside the package tree
+under the local ``papers/`` directory:
 
 * Winton (2000), "A Reformulated Three-Layer Sea Ice Model", for the three-layer
   sea-ice heat-capacity and optics constants.
@@ -16,8 +16,6 @@ the ice modules report positive ``ocean_ice_heat_flux`` when ice extracts heat
 from the ocean.  See :doc:`/physics/ice_thermodynamics` for the full sign
 convention description.
 """
-
-from __future__ import annotations
 
 RHO_ICE: float = 910.0
 RHO_WATER: float = 1025.0

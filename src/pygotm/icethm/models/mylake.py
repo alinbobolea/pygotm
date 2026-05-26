@@ -7,8 +7,6 @@ and positive surface or basal energy melts existing ice. The kernel exposes the
 same state variables as the other pyGOTM ice models for shared diagnostics.
 """
 
-from __future__ import annotations
-
 import math
 
 import numba

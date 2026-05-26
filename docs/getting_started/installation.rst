@@ -21,8 +21,7 @@ updating the environment, install the local checkout in editable mode with
 
 .. code-block:: bash
 
-   git clone https://github.com/<org>/pygotm.git
-   cd pygotm
+   # From the repository root:
    conda env create -f pygotm-conda-env.yml
    conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
 
@@ -40,18 +39,17 @@ local development, validation, documentation, and integration work.  It
 currently includes:
 
 * Python 3.12 and the core scientific stack: Numba, NumPy, SciPy, xarray,
-  NetCDF4, PyYAML, pandas, GSW, and pyfabm.
-* Dask and distributed for multi-case validation and multi-column runtime work.
-* FastAPI, WebSockets, NiceGUI, and Plotly for local API, UI, and charting
-  interfaces.
-* Jinja2, WeasyPrint, markdown-it-py, pybtex, Matplotlib, cmocean, hvplot, and
-  optuna for reports, citations, visualization, and calibration workflows.
-* Developer and documentation tools: pytest, anyio, httpx, Ruff, mypy,
-  pre-commit, hatch, Sphinx, Furo, MyST, MyST-NB, copybutton, and Mermaid.
+  NetCDF4, PyYAML, pandas, Pydantic, Click, GSW, and pyfabm.
+* Dask and distributed for multi-case validation orchestration.
+* pybtex for citation parsing, Matplotlib for documentation figures, and
+  Plotly for embedded Frechet validation report plots.
+* Developer and documentation tools: pytest, anyio, Ruff, mypy, PyYAML type
+  stubs, pre-commit, hatch, Sphinx, Furo, MyST, MyST-NB, copybutton, and
+  Mermaid.
 
 The broader environment is a development and runtime convenience.  It does not
-change the project boundary: physics and validation code stay in
-``src/pygotm/`` and web/UI code remains outside the scientific kernel.
+change the project boundary: physics, execution, validation, schemas, and
+citations stay in ``src/pygotm/``.
 
 Verify the Correct Python Interpreter
 --------------------------------------
@@ -84,19 +82,18 @@ Validation Reference Data
 
 The source repository does not track top-level ``validation/`` data. Generated
 reports and runs are reproducible outputs, and the official Fortran reference
-NetCDF files are too large for normal Git hosting. Download the reference-data
-release asset and unpack it so the tree contains:
+NetCDF files are too large for normal Git hosting. To run the official
+validation cases, provide a local reference-data tree that contains:
 
 .. code-block:: text
 
    validation/reference/couette/gotm.yaml
    validation/reference/couette/couette.nc
 
-The planned release asset path is:
-
-.. code-block:: text
-
-   https://github.com/<org>/pygotm/releases/download/reference-data-v0.1.0/pygotm-validation-reference.tar.zst
+The pyGOTM source repository does not currently publish or vendor these data
+files. If maintainers later distribute a separate reference-data archive, unpack
+it into the repository root so the ``validation/reference/<case>/`` directories
+exist locally.
 
 Numba JIT Compilation
 ---------------------

@@ -1,15 +1,14 @@
 Kernel Stability Contract
 =========================
 
-pyGOTM exposes a small kernel surface for tools such as pyGOTM Studio. The
-kernel remains a simulation package; Studio and other applications interact
-through commands, stdin/stdout JSON-RPC, and NetCDF files.
+pyGOTM exposes a small kernel surface for external tools. The kernel remains a
+simulation package; tools interact through commands, stdin/stdout JSON-RPC, and
+NetCDF files.
 
 Stable Public Surface
 ---------------------
 
-The following contracts are stable after the first Studio-supported kernel
-release:
+The following contracts are stable after the first public kernel release:
 
 * Public CLI command names and documented flags.
 * JSON keys from ``pygotm version --json``.

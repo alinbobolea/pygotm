@@ -1,4 +1,4 @@
-"""Line-oriented JSON-RPC daemon used by pyGOTM Studio subprocesses."""
+"""Line-oriented JSON-RPC daemon for subprocess integrations."""
 
 from __future__ import annotations
 

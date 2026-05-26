@@ -6,8 +6,6 @@ ice applications: accumulated freezing degree days produce ice thickness
 transmissivity decays exponentially with thickness.
 """
 
-from __future__ import annotations
-
 import math
 
 import numba

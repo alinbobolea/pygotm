@@ -78,7 +78,8 @@ Selects how heat and momentum fluxes at the sea surface are computed.
 
    .. note::
       The compiled Numba runtime currently supports ``fairall`` for the
-      profile path.  The ``kondo`` method requires the legacy Python loop.
+      profile path. The ``kondo`` method is currently
+      **[unsupported in compiled runtime]**.
 
 ``surface.fluxes.heat``
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -434,4 +435,4 @@ contribution).  These are passed through to the Stokes drift module
 
 .. note::
    Full Stokes drift integration (Craig–Banner wave-breaking BC) is
-   **[legacy only]** in the current release.
+   **[unsupported in compiled runtime]** in the current release.

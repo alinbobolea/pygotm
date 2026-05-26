@@ -318,7 +318,7 @@ Parsed by :class:`pygotm.config.settings.WaveSettings`.
 
 .. note::
    Full Stokes drift integration (Craig–Banner TKE injection) is
-   **[legacy only]** in the current compiled Numba runtime.  The
+   **[unsupported in compiled runtime]** in the current release. The
    ``stokes_active`` flag in :class:`pygotm.gotm.runtime_params.RuntimeParams`
    must be non-zero to activate this path.
 

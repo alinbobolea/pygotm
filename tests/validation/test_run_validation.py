@@ -17,6 +17,7 @@ from pygotm.validation.run_validation import (
     _make_on_result,
     _run_cases,
     _select_case_list,
+    _validate_case_list,
 )
 
 
@@ -69,6 +70,10 @@ def test_explicit_cases_take_precedence_over_default_group() -> None:
     assert tuple(selected) != DEFAULT_CASES
 
 
+def test_validate_case_list_accepts_case_yaml_specs() -> None:
+    _validate_case_list(["entrainment/gotm_keps"])
+
+
 def test_on_result_reports_completed_case_counts(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -106,7 +111,7 @@ def test_on_result_reports_completed_case_counts(
     ]
 
 
-def test_run_cases_renders_multi_case_no_run_with_dask(
+def test_run_cases_renders_multi_case_no_run_with_dask_when_workers_requested(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -143,6 +148,63 @@ def test_run_cases_renders_multi_case_no_run_with_dask(
     )
 
     assert results == [_case_result(), _case_result()]
+
+
+def test_run_cases_renders_multi_case_serially_with_one_worker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fail_run_cases_parallel(**kwargs: object) -> list[CaseResult]:
+        raise AssertionError("one-worker validation should not enter Dask")
+
+    def fake_validate_case_to_html(
+        case_name: str,
+        runs_dir: Path,
+        output_dir: Path,
+        *,
+        generated_at: str,
+        hardware: dict[str, str],
+        skip_run: bool = False,
+        debug_turbulence: bool = False,
+    ) -> CaseResult:
+        assert runs_dir == tmp_path / "runs"
+        assert output_dir == tmp_path
+        assert generated_at == "2026-05-22T00:00:00Z"
+        assert hardware == {"execution_backend": "cpu"}
+        assert skip_run
+        assert not debug_turbulence
+        calls.append(case_name)
+        return _case_result()
+
+    monkeypatch.setattr(
+        run_validation,
+        "run_cases_parallel",
+        fail_run_cases_parallel,
+    )
+    monkeypatch.setattr(
+        run_validation,
+        "validate_case_to_html",
+        fake_validate_case_to_html,
+    )
+
+    results = _run_cases(
+        case_list=["couette", "channel"],
+        runs_dir=tmp_path / "runs",
+        output_dir=tmp_path,
+        selected_arch="cpu",
+        n_workers=1,
+        dashboard_port=8787,
+        generated_at="2026-05-22T00:00:00Z",
+        hardware={"execution_backend": "cpu"},
+        skip_run=True,
+        debug_turbulence=False,
+        on_result=lambda result: None,
+    )
+
+    assert results == [_case_result(), _case_result()]
+    assert calls == ["couette", "channel"]
 
 
 def test_run_cases_renders_single_case_no_run_directly(
@@ -219,6 +281,7 @@ def test_run_validation_cli_writes_html_and_report_json(
 
     def fake_run_cases(**kwargs: object) -> list[CaseResult]:
         assert kwargs["skip_run"] is True
+        assert kwargs["n_workers"] == 1
         output_dir = kwargs["output_dir"]
         assert isinstance(output_dir, Path)
         (output_dir / "couette-gotm.html").write_text("case", encoding="utf-8")
@@ -248,3 +311,39 @@ def test_run_validation_cli_writes_html_and_report_json(
     assert (tmp_path / "report.json").is_file()
     assert not (tmp_path / "results.json").exists()
     assert f"JSON  : {tmp_path / 'report.json'}" in result.output
+
+
+def test_run_validation_cli_reports_unknown_case_without_traceback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        run_validation,
+        "detect_platform",
+        lambda: PlatformInfo(
+            cpu_count=2,
+            gpu_count=0,
+            available_archs=["cpu"],
+            hardware={"cpu_count": "2"},
+        ),
+    )
+    monkeypatch.setattr(
+        run_validation,
+        "trigger_numba_jit",
+        lambda: pytest.fail("unknown cases should fail before warmup"),
+    )
+
+    result = CliRunner().invoke(
+        run_validation.cli,
+        [
+            "--cases",
+            "does_not_exist",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "ERROR: unknown GOTM reference case 'does_not_exist'" in result.output
+    assert "Traceback" not in result.output
+    assert "pyGOTM validation starting" not in result.output

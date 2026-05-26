@@ -15,6 +15,7 @@ sys.path.insert(0, str(DOCS_DIR))
 from build_docs import (  # noqa: E402
     stage_validation_html,
     stage_validation_rst_wrappers,
+    stage_validation_test_cases_summary,
 )
 
 project = "pyGOTM"
@@ -54,6 +55,10 @@ stage_validation_html(
 html_extra_path = [str(_VALIDATION_HTML_STAGING.relative_to(DOCS_DIR))]
 
 stage_validation_rst_wrappers(cases_dir=DOCS_DIR / "validation" / "cases")
+stage_validation_test_cases_summary(
+    report_json=REPO_ROOT / "validation" / "report.json",
+    output_path=DOCS_DIR / "validation" / "_generated" / "test_cases_summary.inc",
+)
 
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]

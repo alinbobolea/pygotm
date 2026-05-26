@@ -3,7 +3,7 @@
 Workflow:
   1. Detect platform (CPU count, GPU availability)
   2. Warm up Numba kernels once before timed runs
-  4. Run validation cases in parallel via Dask (dashboard at --dashboard-port)
+  4. Run validation cases serially or through Dask when --workers > 1
   5. Compare each run against Fortran reference NetCDF
   6. Write validation/report.html + per-case reports
 
@@ -30,7 +30,7 @@ import click
 
 from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
-from pygotm.validation.reference import REFERENCE_CASE_NAMES
+from pygotm.validation.reference import REFERENCE_CASE_NAMES, resolve_reference_case
 from pygotm.validation.report import CaseResult, Report, save_json, write_html_index
 from pygotm.validation.runner import validate_case_to_html
 from pygotm.validation.warmup import trigger_numba_jit
@@ -73,6 +73,13 @@ def _select_case_list(
     if excluded:
         case_list = [case for case in case_list if case not in excluded]
     return case_list
+
+
+def _validate_case_list(case_list: list[str]) -> None:
+    """Fail before warmup/execution if any requested case cannot be resolved."""
+
+    for case_name in case_list:
+        resolve_reference_case(case_name)
 
 
 def _fmt_duration(s: float) -> str:
@@ -120,7 +127,7 @@ def _run_cases(
     if not case_list:
         return []
 
-    if len(case_list) == 1:
+    if len(case_list) == 1 or n_workers <= 1:
         results: list[CaseResult] = []
         for case_name in case_list:
             result = validate_case_to_html(
@@ -187,10 +194,11 @@ def _run_cases(
 )
 @click.option(
     "--workers",
-    default=None,
+    default=1,
+    show_default=True,
     type=int,
     metavar="N",
-    help="Dask worker count for simulation runs. Defaults to detected CPU count.",
+    help="Validation worker count. Use N>1 to run cases through Dask.",
 )
 @click.option(
     "--dashboard-port",
@@ -229,7 +237,7 @@ def cli(
     group: str | None,
     exclude: str | None,
     device: str | None,
-    workers: int | None,
+    workers: int,
     dashboard_port: int,
     output_dir: Path,
     skip_run: bool,
@@ -240,7 +248,7 @@ def cli(
     # 1. Detect platform
     platform_info = detect_platform()
     arch_choices = platform_info.available_archs
-    n_workers = workers if workers is not None else platform_info.cpu_count
+    n_workers = max(1, workers)
 
     selected_arch = device or "cpu"
     if selected_arch not in arch_choices:
@@ -258,6 +266,11 @@ def cli(
         group=group,
         exclude=exclude,
     )
+    try:
+        _validate_case_list(case_list)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
     runs_dir = output_dir / "runs"
     print(f"pyGOTM validation starting ({len(case_list)} cases)")

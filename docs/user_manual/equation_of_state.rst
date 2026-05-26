@@ -301,7 +301,7 @@ value.
 If ``true``, use the Charnock (1955) relation to derive the surface roughness
 length from the surface friction velocity:
 :math:`z_{0s} = \alpha_c u_{\tau s}^2 / g`.
-**[legacy only]** in the current compiled runtime.
+**[unsupported in compiled runtime]** in the current release.
 
 ``meanflow.MaxItz0b``
 ~~~~~~~~~~~~~~~~~~~~~~
