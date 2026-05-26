@@ -137,17 +137,21 @@ conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
 conda run -n pygotm pygotm --help
 ```
 
+Seven canonical reference cases are vendored under `tests/fixtures/cases/`
+(couette, channel, asics_med, rouse, seagrass, wave_breaking, entrainment) so
+the test suite runs on a clean checkout with no external download required.
 The top-level `validation/` directory is intentionally excluded from normal Git
-history. To run official validation cases, provide a local reference-data tree
-so this file exists:
+history; it is used by `pygotm validate` to drive the full 22-case sweep
+against Fortran reference output. To run that full sweep locally, provide the
+external reference-data tree so files like this exist:
 
 ```text
 validation/reference/couette/gotm.yaml
 ```
 
-The source repository does not currently publish or vendor those data files.
-Maintainers may distribute a separate reference-data archive in the future, but
-pyGOTM only assumes the files are present locally in the documented layout.
+Maintainers may distribute a separate reference-data archive. For the in-tree
+regression gate on a fresh checkout, use `python -m pytest` (everything
+resolves through the bundled fixtures).
 
 Run one case:
 
@@ -225,6 +229,9 @@ conda run -n pygotm ruff check .
 conda run -n pygotm sphinx-build -W -b html docs docs/build
 ```
 
+The full pytest suite is the regression gate and runs entirely from
+`tests/fixtures/cases/`. No external reference-data download is required.
+
 The conda environment owns third-party dependencies. The only permitted `pip`
 use is the no-dependency editable install of the local checkout:
 
@@ -235,11 +242,13 @@ conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
 ## Repository Layout
 
 ```text
-src/pygotm/      Python package and translated GOTM modules
-tests/           Unit, integration, validation, docs, and CLI tests
-docs/            Sphinx documentation source
-validation/      External reference data and generated validation output
-gotm-model/      External Fortran GOTM checkout and reference cases
+src/pygotm/             Python package and translated GOTM modules
+tests/                  Unit, integration, validation, docs, and CLI tests
+tests/fixtures/cases/   Vendored reference cases used by the test suite
+docs/                   Sphinx documentation source
+docs/_intersphinx/      Vendored intersphinx inventories for offline builds
+validation/             External reference data and generated validation output
+gotm-model/             External Fortran GOTM checkout and reference cases
 ```
 
 `validation/` and `gotm-model/` are intentionally not part of normal Git

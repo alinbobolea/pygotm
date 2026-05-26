@@ -315,9 +315,7 @@ def frechet_raw_and_normalized(
     if d_raw < abs_tolerance:
         return {"d_raw": 0.0, "d_norm": 0.0, "normalization_mode": "abs_tolerance"}
 
-    signal_scale = max(
-        float(np.max(np.abs(a))), float(np.max(np.abs(b))), eps_floor
-    )
+    signal_scale = max(float(np.max(np.abs(a))), float(np.max(np.abs(b))), eps_floor)
     if d_raw < rel_tolerance * signal_scale:
         return {"d_raw": d_raw, "d_norm": 0.0, "normalization_mode": "rel_tolerance"}
 

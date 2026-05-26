@@ -13,23 +13,12 @@ from pygotm.gotm.gotm import (
     integrate_gotm_compiled,
 )
 from pygotm.gotm.runtime_builder import (
-    build_runtime_from_run,
     runtime_output_to_dataset,
 )
 from pygotm.validation.compare import compare_nc
-from pygotm.validation.reference import (
-    REFERENCE_CASE_NAMES,
-    discover_reference_cases,
-    open_reference_dataset,
-    resolve_reference_case,
-)
+from pygotm.validation.reference import open_reference_dataset
 from tests.dataset_assertions import assert_dataset_variables_allclose
-
-# ---------------------------------------------------------------------------
-# pytest marks
-# ---------------------------------------------------------------------------
-# slow: full-run case validation — deselect with:  pytest -m "not slow"
-# Run the full gate with:  pytest -m slow tests/integration/
+from tests.fixtures import BUNDLED_CASE_NAMES, bundled_case
 
 _COMPILED_VALIDATED_VARIABLES = (
     "u",
@@ -61,22 +50,17 @@ _COMPILED_VALIDATED_VARIABLES = (
 )
 
 
-def test_reference_case_inventory_matches_declared_suite() -> None:
-    discovered = tuple(case.name for case in discover_reference_cases())
-    assert discovered == REFERENCE_CASE_NAMES
-
-
-@pytest.mark.parametrize("case_name", REFERENCE_CASE_NAMES)
+@pytest.mark.parametrize("case_name", BUNDLED_CASE_NAMES)
 def test_case_assets_are_present(case_name: str) -> None:
-    case = resolve_reference_case(case_name)
+    case = bundled_case(case_name)
     assert case.directory.is_dir()
     assert case.yaml_path.is_file()
     assert case.reference_path.is_file()
 
 
-@pytest.mark.parametrize("case_name", REFERENCE_CASE_NAMES)
+@pytest.mark.parametrize("case_name", BUNDLED_CASE_NAMES)
 def test_reference_dataset_self_comparison_is_exact(case_name: str) -> None:
-    case = resolve_reference_case(case_name)
+    case = bundled_case(case_name)
     results = compare_nc(case.reference_path, case.reference_path, case_name=case.name)
     failures = [result for result in results if result.status != "PASS"]
 
@@ -84,7 +68,7 @@ def test_reference_dataset_self_comparison_is_exact(case_name: str) -> None:
 
 
 def test_couette_driver_matches_reference_for_full_hourly_slice() -> None:
-    case = resolve_reference_case("couette")
+    case = bundled_case("couette")
     actual = GotmDriver(case.yaml_path).run(max_steps=360)
     expected = open_reference_dataset(case)
     try:
@@ -101,7 +85,7 @@ def test_couette_driver_matches_reference_for_full_hourly_slice() -> None:
 
 
 def test_couette_driver_advances_velocity_and_turbulence() -> None:
-    case = resolve_reference_case("couette")
+    case = bundled_case("couette")
     dataset = GotmDriver(case.yaml_path).run(max_steps=360)
     try:
         assert dataset.sizes["time"] == 2
@@ -119,45 +103,17 @@ def test_couette_driver_advances_velocity_and_turbulence() -> None:
         dataset.close()
 
 
-@pytest.mark.parametrize(
-    ("case_name", "expected_zeta"),
-    (("plume", -338.5714 * 910.0 / 1027.0), ("resolute", -910.0 / 1027.0)),
-)
-def test_ice_cases_initialize_grid_with_ice_displacement(
-    case_name: str,
-    expected_zeta: float,
-) -> None:
-    case = resolve_reference_case(case_name)
-    cfg = load_config(case.yaml_path)
-
-    run = initialize_gotm_from_settings(
-        cfg.resolved_settings(),
-        yaml_path=case.yaml_path,
-        document=cfg.resolved_document(),
-    )
-    bundle = build_runtime_from_run(run, max_steps=1, output=True)
-
-    assert run.meanflow.zeta == pytest.approx(expected_zeta)
-    assert run.meanflow.depth == pytest.approx(run.depth + expected_zeta)
-    assert run.meanflow.zi[run.nlev] == pytest.approx(expected_zeta)
-    assert bundle.forcing.zeta[0] == pytest.approx(expected_zeta)
-    assert bundle.forcing.zeta[1] == pytest.approx(expected_zeta)
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("case_name", REFERENCE_CASE_NAMES)
+@pytest.mark.parametrize("case_name", BUNDLED_CASE_NAMES)
 def test_full_case_matches_reference(case_name: str, tmp_path: Path) -> None:
     """Release gate: full simulation must pass Frechet validation.
 
     Compares every numeric variable in the Fortran reference. Missing pyGOTM
     outputs are validation failures because release parity requires matching
     NetCDF structure and content.
-
-    Run with:  python -m pytest -m slow tests/integration/
     """
     from pygotm.driver import GotmDriver
 
-    case = resolve_reference_case(case_name)
+    case = bundled_case(case_name)
     py_path = tmp_path / f"{case.run_name}.nc"
     actual = GotmDriver(case.yaml_path).run(output_path=py_path)
     actual.close()
@@ -186,7 +142,7 @@ def test_full_case_matches_reference(case_name: str, tmp_path: Path) -> None:
 
 def test_non_fabm_case_unaffected_by_chunk_size() -> None:
     """Non-FABM cases must produce identical output regardless of chunk_size."""
-    case = resolve_reference_case("couette")
+    case = bundled_case("couette")
     cfg = load_config(case.yaml_path)
 
     def _run(chunk_size: int | None) -> xr.Dataset:
@@ -212,42 +168,3 @@ def test_non_fabm_case_unaffected_by_chunk_size() -> None:
     finally:
         ds_default.close()
         ds_24.close()
-
-
-@pytest.mark.slow
-def test_fabm_physics_identical_across_chunk_sizes() -> None:
-    """Physics variables must be identical regardless of chunk_size in a FABM run.
-
-    The end-of-chunk physics state is passed in-place to the next chunk, so
-    chunking must not alter physics trajectories.
-    """
-    case = resolve_reference_case("blacksea")
-    cfg = load_config(case.yaml_path)
-
-    def _run(chunk_size: int) -> xr.Dataset:
-        run = initialize_gotm_from_settings(
-            cfg.resolved_settings(),
-            yaml_path=case.yaml_path,
-            document=cfg.resolved_document(),
-        )
-        bundle = integrate_gotm_compiled(run, max_steps=48, chunk_size=chunk_size)
-        return runtime_output_to_dataset(run, bundle)
-
-    ds_1chunk = _run(chunk_size=48)  # one chunk = single-pass FABM loop
-    ds_2chunk = _run(chunk_size=24)  # two chunks
-
-    try:
-        np.testing.assert_array_equal(
-            ds_1chunk["time"].values, ds_2chunk["time"].values
-        )
-        for var in ("temp", "salt", "u", "v"):
-            if var in ds_1chunk.data_vars and var in ds_2chunk.data_vars:
-                np.testing.assert_array_almost_equal(
-                    ds_1chunk[var].values,
-                    ds_2chunk[var].values,
-                    decimal=12,
-                    err_msg=f"Physics variable {var!r} differs between chunk_size=48 and chunk_size=24",
-                )
-    finally:
-        ds_1chunk.close()
-        ds_2chunk.close()

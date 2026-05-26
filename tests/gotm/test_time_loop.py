@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace as dc_replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,7 +19,6 @@ from pygotm.gotm.runtime_builder import (
     _copy_absolute_salinity_from_practical,
     _make_salinity_conversion_cache,
     build_runtime,
-    build_runtime_forcing_from_run,
     build_runtime_from_run,
     runtime_output_to_dataset,
 )
@@ -46,23 +44,13 @@ from pygotm.turbulence.production import step_production_single
 from pygotm.turbulence.tkeeq import step_tkeeq_single
 from pygotm.turbulence.turbulence import Constant, first_order, omega_eq, tke_keps
 from pygotm.util.gsw import gsw_sa_from_sp, gsw_sp_from_sa
-from pygotm.validation.reference import (
-    open_reference_dataset,
-    resolve_reference_case,
-)
+from pygotm.validation.reference import open_reference_dataset
 from tests.dataset_assertions import assert_dataset_variables_allclose
+from tests.fixtures import bundled_case, bundled_case_path
 
-_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
-_ESTUARY_CONFIG = Path("validation/reference/estuary/gotm.yaml")
-_FLEX_CONFIG = Path("validation/reference/flex/gotm.yaml")
-_LANGMUIR_CONFIG = Path("validation/reference/langmuir/gotm.yaml")
-_LIVERPOOL_BAY_CONFIG = Path("validation/reference/liverpool_bay/gotm.yaml")
-_MEDSEA_WEST_CONFIG = Path("validation/reference/medsea_west/gotm.yaml")
-_PLUME_CONFIG = Path("validation/reference/plume/gotm.yaml")
-_REYNOLDS_CONFIG = Path("validation/reference/reynolds/gotm.yaml")
-_RESOLUTE_CONFIG = Path("validation/reference/resolute/gotm.yaml")
-_SEAGRASS_CONFIG = Path("validation/reference/seagrass/gotm.yaml")
-_WAVE_BREAKING_CONFIG = Path("validation/reference/wave_breaking/gotm.yaml")
+_COUETTE_CONFIG = bundled_case_path("couette")
+_SEAGRASS_CONFIG = bundled_case_path("seagrass")
+_WAVE_BREAKING_CONFIG = bundled_case_path("wave_breaking")
 _AIRSEA_FIRST_SLOT_VARIABLES = (
     "es",
     "ea",
@@ -112,43 +100,6 @@ mimic_3d:
 """.lstrip(),
         encoding="utf-8",
     )
-
-
-def test_chunked_time_loop_writes_global_output_steps_and_times() -> None:
-    """Chunked calls must keep output metadata on the full-run timeline."""
-
-    run = initialize_gotm(Path("validation/reference/blacksea/gotm.yaml"))
-    try:
-        runtime = build_runtime_from_run(run, max_steps=48, output=True)
-        chunk_params = dc_replace(runtime.params, nt=24)
-
-        first_written = run_compiled_time_loop(
-            chunk_params,
-            runtime.state,
-            runtime.work,
-            runtime.forcing,
-            runtime.output,
-            step_offset=0,
-            out_slot_base=0,
-            write_ic=1,
-        )
-        second_written = run_compiled_time_loop(
-            chunk_params,
-            runtime.state,
-            runtime.work,
-            runtime.forcing,
-            runtime.output,
-            step_offset=24,
-            out_slot_base=1,
-            write_ic=0,
-        )
-
-        assert first_written == 2
-        assert second_written == 2
-        np.testing.assert_array_equal(runtime.output.output_step, [0, 24, 48])
-        np.testing.assert_array_equal(runtime.output.time, [0.0, 86400.0, 172800.0])
-    finally:
-        finalize_gotm(run)
 
 
 def test_cached_practical_salinity_conversion_matches_gsw() -> None:
@@ -419,99 +370,6 @@ def test_compiled_initial_output_populates_simple_ice_tf_reference() -> None:
     assert runtime.output.reference_scalars["Tf"][0] == pytest.approx(-0.0575 * 32.8)
 
 
-def test_compiled_loop_steps_basal_melt_ice_model() -> None:
-    run = initialize_gotm(_PLUME_CONFIG)
-    try:
-        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
-    finally:
-        finalize_gotm(run)
-
-    assert runtime.params.ice_model == 2
-    assert runtime.output.nout == 2
-    # On the first step ustar is zero (quiescent start), so step_basal_melt
-    # returns early with ocean_ice_heat_flux = 0.0 (no turbulent transfer).
-    assert runtime.state.ocean_ice_heat_flux[0] == 0.0
-    assert runtime.output.reference_scalars["Hice"][1] == pytest.approx(338.5714)
-    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] == 0.0
-
-
-def test_compiled_loop_steps_winton_ice_model() -> None:
-    run = initialize_gotm(_RESOLUTE_CONFIG)
-    try:
-        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
-    finally:
-        finalize_gotm(run)
-
-    assert runtime.params.ice_model == 5
-    assert runtime.output.nout == 2
-    assert runtime.output.reference_scalars["Hice"][1] > 0.0
-    assert runtime.output.reference_scalars["T1"][1] < 0.0
-    # The Winton model does not populate ocean_ice_heat_flux on the first step;
-    # the value 10.0 in resolute's YAML is ocean_ice_flux (a mass-flux init
-    # parameter), not the heat flux, and these are separate fields.
-    assert runtime.output.reference_scalars["ocean_ice_heat_flux"][1] == 0.0
-
-
-@pytest.mark.slow
-def test_runtime_forcing_precomputes_medsea_profile_and_airsea_series() -> None:
-    run = initialize_gotm(_MEDSEA_WEST_CONFIG)
-    try:
-        forcing = build_runtime_forcing_from_run(run, max_steps=1)
-    finally:
-        finalize_gotm(run)
-
-    assert forcing.nt == 1
-    assert forcing.Tobs.shape == (2, 401)
-    assert forcing.Sobs.shape == (2, 401)
-    assert np.isfinite(forcing.Tobs).all()
-    assert np.isfinite(forcing.Sobs).all()
-    assert forcing.airp[0] > 90_000.0
-    assert forcing.airp[1] > 90_000.0
-    assert forcing.u10[0] != 0.0
-    assert forcing.v10[0] != 0.0
-    assert 0.0 <= forcing.cloud[0] <= 1.0
-    assert forcing.yearday.tolist() == [15, 15]
-
-
-@pytest.mark.slow
-def test_flex_runtime_uses_lagged_targets_and_raw_profile_outputs() -> None:
-    run = initialize_gotm(_FLEX_CONFIG)
-    try:
-        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
-    finally:
-        finalize_gotm(run)
-
-    assert runtime.forcing.Sprof[0, 1] == pytest.approx(35.13075471698114)
-    assert runtime.forcing.Tprof[0, 1] == pytest.approx(6.21958071278826)
-    assert runtime.forcing.light_A[0] == pytest.approx(0.62)
-    assert runtime.forcing.light_g1[0] == pytest.approx(0.6)
-    assert runtime.forcing.light_g2[0] == pytest.approx(22.47189)
-    assert runtime.forcing.light_g2[1] != pytest.approx(runtime.forcing.light_g2[0])
-    assert runtime.forcing.Sobs[0, 1] == pytest.approx(0.0)
-    assert runtime.forcing.Sobs[1, 1] > 35.0
-    assert runtime.output.Sobs[0, 1] == pytest.approx(runtime.forcing.Sprof[0, 1])
-    assert runtime.output.Tobs[0, 1] == pytest.approx(runtime.forcing.Tprof[0, 1])
-    assert runtime.output.S[1, 1] < runtime.output.S[0, 1] - 0.05
-
-
-@pytest.mark.slow
-def test_runtime_forcing_precomputes_langmuir_stokes_series() -> None:
-    run = initialize_gotm(_LANGMUIR_CONFIG)
-    try:
-        forcing = build_runtime_forcing_from_run(run, max_steps=1)
-    finally:
-        finalize_gotm(run)
-
-    assert forcing.us0[0] != 0.0
-    assert forcing.vs0[0] != 0.0
-    assert forcing.ds[0] > 0.0
-    assert np.any(forcing.us[0] != 0.0)
-    assert np.any(forcing.vs[0] != 0.0)
-    assert np.any(forcing.dusdz[0] != 0.0)
-    assert np.any(forcing.dvsdz[0] != 0.0)
-
-
-@pytest.mark.slow
 def test_runtime_forcing_precomputes_vertical_advection_series(
     tmp_path: Path,
 ) -> None:
@@ -529,38 +387,9 @@ def test_runtime_forcing_precomputes_vertical_advection_series(
     assert np.any(runtime.state.w[1 : runtime.params.nlev] != 0.0)
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize(
-    ("config_path", "expected_mode"),
-    [(_LIVERPOOL_BAY_CONFIG, 1), (_REYNOLDS_CONFIG, 2)],
-)
-def test_compiled_external_pressure_modes_run_with_forcing(
-    config_path: Path,
-    expected_mode: int,
-) -> None:
-    run = initialize_gotm(config_path)
-    try:
-        runtime = integrate_gotm_compiled(run, max_steps=1, output=False)
-    finally:
-        finalize_gotm(run)
-
-    assert runtime.params.ext_press_mode == expected_mode
-    assert np.any(runtime.forcing.dpdx != 0.0) or np.any(runtime.forcing.dpdy != 0.0)
-    if expected_mode == 1:
-        assert np.any(runtime.forcing.h_press != 0.0)
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize(
-    ("case_name", "config_path"),
-    [("liverpool_bay", _LIVERPOOL_BAY_CONFIG), ("seagrass", _SEAGRASS_CONFIG)],
-)
-def test_compiled_zeta_forcing_matches_reference_initial_slot(
-    case_name: str,
-    config_path: Path,
-) -> None:
-    case = resolve_reference_case(case_name)
-    run = initialize_gotm(config_path)
+def test_compiled_zeta_forcing_matches_reference_initial_slot() -> None:
+    case = bundled_case("seagrass")
+    run = initialize_gotm(_SEAGRASS_CONFIG)
     reference = open_reference_dataset(case)
     actual = None
     try:
@@ -586,24 +415,6 @@ def test_compiled_zeta_forcing_matches_reference_initial_slot(
         finalize_gotm(run)
 
 
-@pytest.mark.slow
-def test_compiled_estuary_internal_pressure_gradients_are_emitted() -> None:
-    run = initialize_gotm(_ESTUARY_CONFIG)
-    try:
-        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
-    finally:
-        finalize_gotm(run)
-
-    assert runtime.params.int_press_type == 1
-    assert np.any(runtime.forcing.dtdx != 0.0) or np.any(runtime.forcing.dsdx != 0.0)
-    assert np.isfinite(runtime.work.idpdx).all()
-    assert np.isfinite(runtime.work.idpdy).all()
-    assert np.any(runtime.work.idpdx[1:] != 0.0) or np.any(
-        runtime.work.idpdy[1:] != 0.0
-    )
-
-
-@pytest.mark.slow
 def test_compiled_first_order_turbulence_emits_variances() -> None:
     run = initialize_gotm(_WAVE_BREAKING_CONFIG)
     try:
@@ -618,7 +429,6 @@ def test_compiled_first_order_turbulence_emits_variances() -> None:
     assert np.any(runtime.state.at != 0.0)
 
 
-@pytest.mark.slow
 def test_major_couette_step_routines_have_nopython_signatures() -> None:
     run = initialize_gotm(_COUETTE_CONFIG)
     try:
@@ -643,7 +453,6 @@ def test_major_couette_step_routines_have_nopython_signatures() -> None:
         assert step_routine.nopython_signatures, step_routine
 
 
-@pytest.mark.slow
 def test_compiled_couette_two_steps_matches_python_path(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
     config_text = _COUETTE_CONFIG.read_text(encoding="utf-8")
@@ -717,13 +526,9 @@ def test_compiled_couette_two_steps_matches_python_path(tmp_path: Path) -> None:
         finalize_gotm(python_run)
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize(
-    "case_name",
-    ("blacksea", "gotland", "nns_annual", "ows_papa"),
-)
+@pytest.mark.parametrize("case_name", ("asics_med",))
 def test_compiled_airsea_first_slot_matches_fortran(case_name: str) -> None:
-    case = resolve_reference_case(case_name)
+    case = bundled_case(case_name)
     compiled_run = initialize_gotm(case.yaml_path)
     if compiled_run.fabm_config is not None and compiled_run.fabm_config.use:
         finalize_gotm(compiled_run)
@@ -753,10 +558,9 @@ def test_compiled_airsea_first_slot_matches_fortran(case_name: str) -> None:
         finalize_gotm(compiled_run)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("case_name", ("couette", "channel"))
 def test_compiled_reference_emitted_variables_match_fortran(case_name: str) -> None:
-    case = resolve_reference_case(case_name)
+    case = bundled_case(case_name)
     compiled_run = initialize_gotm(case.yaml_path)
     reference = open_reference_dataset(case)
     actual = None
@@ -803,12 +607,10 @@ def test_compiled_reference_emitted_variables_match_fortran(case_name: str) -> N
         finalize_gotm(compiled_run)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize(
     ("case_name", "max_steps", "sprof_active", "tprof_active"),
     (
         ("channel", 360, 0, 0),
-        ("estuary", 30, 1, 0),
         ("entrainment", 24, 1, 1),
     ),
 )
@@ -818,7 +620,7 @@ def test_compiled_avh_matches_fortran_for_transport_paths(
     sprof_active: int,
     tprof_active: int,
 ) -> None:
-    case = resolve_reference_case(case_name)
+    case = bundled_case(case_name)
     compiled_run = initialize_gotm(case.yaml_path)
     reference = open_reference_dataset(case)
     actual = None
@@ -850,20 +652,9 @@ def test_compiled_avh_matches_fortran_for_transport_paths(
         finalize_gotm(compiled_run)
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize(
-    "case_name",
-    (
-        "blacksea",
-        "medsea_west",
-        "entrainment",
-        "flex",
-        "gotland",
-        "lago_maggiore",
-    ),
-)
+@pytest.mark.parametrize("case_name", ("entrainment",))
 def test_compiled_profile_cases_emit_parity_comparable_output(case_name: str) -> None:
-    case = resolve_reference_case(case_name)
+    case = bundled_case(case_name)
     compiled_run = initialize_gotm(case.yaml_path)
     if compiled_run.fabm_config is not None and compiled_run.fabm_config.use:
         finalize_gotm(compiled_run)

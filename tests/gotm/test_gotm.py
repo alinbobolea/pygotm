@@ -17,8 +17,9 @@ from pygotm.gotm.gotm import (
     integrate_gotm,
 )
 from pygotm.icethm import IceModelEnum
+from tests.fixtures import bundled_case_path
 
-_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
+_COUETTE_CONFIG = bundled_case_path("couette")
 
 
 def _write_config(path: Path) -> None:
@@ -143,7 +144,6 @@ def test_integrate_gotm_rejects_fabm_active_case_before_zero_output(
         finalize_gotm(run)
 
 
-@pytest.mark.slow
 def test_integrate_gotm_accepts_active_vertical_advection(tmp_path: Path) -> None:
     config_path = tmp_path / "gotm.yaml"
     _write_vertical_advection_config(config_path)

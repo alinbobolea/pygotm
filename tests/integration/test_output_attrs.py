@@ -9,8 +9,9 @@ import xarray as xr
 
 from pygotm.driver import GotmDriver
 from pygotm.gotm.run_metadata import REQUIRED_NETCDF_ATTRS
+from tests.fixtures import bundled_case_path
 
-_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
+_COUETTE_CONFIG = bundled_case_path("couette")
 
 
 def _write_short_couette_config(path: Path) -> None:

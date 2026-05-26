@@ -8,8 +8,9 @@ from pathlib import Path
 
 from pygotm.driver import GotmDriver
 from pygotm.progress import ProgressReporter
+from tests.fixtures import bundled_case_path
 
-_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
+_COUETTE_CONFIG = bundled_case_path("couette")
 
 
 def _write_short_couette_config(path: Path) -> None:

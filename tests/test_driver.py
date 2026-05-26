@@ -13,10 +13,11 @@ import xarray as xr
 from pygotm.config import GotmConfig, GotmSettings
 from pygotm.driver import GotmDriver
 from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
+from tests.fixtures import bundled_case_path
 
 yaml: Any = import_module("yaml")
 
-_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
+_COUETTE_CONFIG = bundled_case_path("couette")
 
 
 def _minimal_config_dict() -> dict[str, object]:

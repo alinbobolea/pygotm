@@ -80,20 +80,28 @@ environment instead.
 Validation Reference Data
 -------------------------
 
-The source repository does not track top-level ``validation/`` data. Generated
-reports and runs are reproducible outputs, and the official Fortran reference
-NetCDF files are too large for normal Git hosting. To run the official
-validation cases, provide a local reference-data tree that contains:
+pyGOTM ships with a small set of canonical reference cases vendored under
+``tests/fixtures/cases/`` so the test suite runs on a fresh checkout without
+any external download. The bundled cases (couette, channel, asics_med, rouse,
+seagrass, wave_breaking, entrainment) cover the distinct physics regimes
+exercised by pyGOTM and are used by ``tests.fixtures.bundled_case``.
+
+The top-level ``validation/`` directory remains gitignored. It is used by the
+``pygotm validate`` CLI to drive the full 22-case validation sweep against
+Fortran GOTM reference output, and to write generated HTML/JSON reports.
+Maintainers may distribute that larger reference-data archive separately. To
+run the full validation sweep locally, unpack it into the repository root so
+the ``validation/reference/<case>/`` directories exist locally:
 
 .. code-block:: text
 
    validation/reference/couette/gotm.yaml
    validation/reference/couette/couette.nc
 
-The pyGOTM source repository does not currently publish or vendor these data
-files. If maintainers later distribute a separate reference-data archive, unpack
-it into the repository root so the ``validation/reference/<case>/`` directories
-exist locally.
+The ``pygotm validate`` CLI reads cases from ``validation/reference/`` so
+it requires the external archive. For an in-tree regression gate on a clean
+checkout, run ``python -m pytest`` — every test resolves its case configs and
+reference NetCDFs through ``tests/fixtures/cases/``.
 
 Numba JIT Compilation
 ---------------------

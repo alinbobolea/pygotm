@@ -20,14 +20,19 @@ history. Generated reports and ``validation/runs`` outputs are reproducible, and
 the official Fortran reference NetCDF files are large enough that they should be
 kept outside the source repository.
 
-To run the full validation suite, provide a local GOTM reference-data tree under
-``validation/reference/<case>/``. Each case directory must contain the GOTM YAML
-input files and the Fortran reference NetCDF outputs used by the validation
-runner. The pyGOTM source repository does not currently publish, vendor, or
-assume a hosted reference-data archive. Maintainers may distribute a separate
-reference-data archive through a release artifact or scientific data repository
-in the future, but validation only requires that the files exist locally in the
-documented tree layout.
+To run the full 22-case validation suite, provide a local GOTM reference-data
+tree under ``validation/reference/<case>/``. Each case directory must contain
+the GOTM YAML input files and the Fortran reference NetCDF outputs used by the
+validation runner. Maintainers may distribute a separate reference-data archive
+through a release artifact or scientific data repository.
+
+The pyGOTM source repository **does** vendor a minimal seven-case reference set
+at ``tests/fixtures/cases/`` (``couette``, ``channel``, ``asics_med``,
+``rouse``, ``seagrass``, ``wave_breaking``, ``entrainment``) covering the
+distinct physics regimes pyGOTM exercises. The full ``python -m pytest`` gate
+resolves every case-aware test through these in-tree fixtures via
+``tests.fixtures.bundled_case``, so a clean checkout passes the test suite
+without any external download.
 
 Validation Pipeline
 -------------------

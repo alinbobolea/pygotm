@@ -73,12 +73,31 @@ html_theme_options = {
     ],
 }
 
+# Use vendored intersphinx inventories under ``docs/_intersphinx`` first and
+# fall back to the upstream URL only when present. Vendoring makes ``-W`` docs
+# builds reproducible and resilient to restricted-network environments (CI,
+# build sandboxes, offline mirrors). Refresh with
+# ``conda run -n pygotm python docs/refresh_intersphinx.py``.
+_INTERSPHINX_DIR = DOCS_DIR / "_intersphinx"
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-    "numpy": ("https://numpy.org/doc/stable", None),
-    "scipy": ("https://docs.scipy.org/doc/scipy", None),
-    "xarray": ("https://docs.xarray.dev/en/stable", None),
+    "python": (
+        "https://docs.python.org/3",
+        (str(_INTERSPHINX_DIR / "python.inv"), None),
+    ),
+    "numpy": (
+        "https://numpy.org/doc/stable",
+        (str(_INTERSPHINX_DIR / "numpy.inv"), None),
+    ),
+    "scipy": (
+        "https://docs.scipy.org/doc/scipy",
+        (str(_INTERSPHINX_DIR / "scipy.inv"), None),
+    ),
+    "xarray": (
+        "https://docs.xarray.dev/en/stable",
+        (str(_INTERSPHINX_DIR / "xarray.inv"), None),
+    ),
 }
+intersphinx_timeout = 5
 
 # MathJax: define GOTM LaTeX macros so any surviving PROTEX LaTeX
 # in docstrings renders correctly without manual conversion.

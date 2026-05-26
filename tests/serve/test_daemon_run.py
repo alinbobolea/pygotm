@@ -9,9 +9,10 @@ from pathlib import Path
 import xarray as xr
 
 from pygotm.serve import daemon
+from tests.fixtures import bundled_case_path
 
-_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
-_CHANNEL_CONFIG = Path("validation/reference/channel/gotm.yaml")
+_COUETTE_CONFIG = bundled_case_path("couette")
+_CHANNEL_CONFIG = bundled_case_path("channel")
 
 
 def test_daemon_run_invokes_driver_and_returns_attrs(
@@ -139,12 +140,8 @@ def test_daemon_runs_reference_cases_sequentially_without_state_leak(
     ):
         assert couette.attrs["runtime"] == "compiled"
         assert channel.attrs["runtime"] == "compiled"
-        assert couette.attrs["source_yaml"].endswith(
-            "validation/reference/couette/gotm.yaml"
-        )
-        assert channel.attrs["source_yaml"].endswith(
-            "validation/reference/channel/gotm.yaml"
-        )
+        assert couette.attrs["source_yaml"] == str(_COUETTE_CONFIG)
+        assert channel.attrs["source_yaml"] == str(_CHANNEL_CONFIG)
         assert couette.attrs["source_yaml"] != channel.attrs["source_yaml"]
         assert len(couette.data_vars) > 0
         assert len(channel.data_vars) > 0

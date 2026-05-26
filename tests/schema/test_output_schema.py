@@ -7,8 +7,9 @@ from pathlib import Path
 from pygotm.driver import GotmDriver
 from pygotm.gotm.run_metadata import REQUIRED_NETCDF_ATTRS
 from pygotm.schema import netcdf_attrs_schema, output_schema
+from tests.fixtures import bundled_case_path
 
-_COUETTE_CONFIG = Path("validation/reference/couette/gotm.yaml")
+_COUETTE_CONFIG = bundled_case_path("couette")
 
 
 def test_output_schema_has_core_variable_records() -> None:

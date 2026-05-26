@@ -55,12 +55,42 @@ dev = [
     "types-PyYAML>=6.0",
     "pre-commit>=3.7",
 ]
+# pyfabm is published on conda-forge only (no PyPI release). The extra makes
+# the dependency discoverable via package metadata; conda users get it through
+# pygotm-conda-env.yml. Wheel users must install pyfabm from conda-forge
+# before enabling FABM in a YAML config; pygotm.fabm.engine raises a clear
+# ImportError otherwise.
+fabm = [
+    "pyfabm>=3.0",
+]
 
 [project.scripts]
 pygotm = "pygotm.__main__:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pygotm"]
+
+[tool.hatch.build.targets.sdist]
+# Be explicit about what ships in the sdist so packaging is reproducible and
+# does not silently drop files when local .gitignore rules change.
+include = [
+    "src/pygotm",
+    "tests",
+    "docs",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    "pygotm-conda-env.yml",
+]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
+    "docs/build",
+    "docs/_validation_html",
+    "docs/validation/_generated",
+    "docs/validation/cases",
+]
 
 [tool.ruff]
 line-length = 88
@@ -103,7 +133,3 @@ disallow_subclassing_any = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
-addopts = "-m 'not slow'"
-markers = [
-    "slow: full-run case validation against Fortran GOTM reference (run explicitly with -m slow)",
-]

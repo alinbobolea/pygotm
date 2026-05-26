@@ -67,22 +67,13 @@ def test_load_settings_parses_minimal_yaml(tmp_path: Path) -> None:
 
 
 def test_load_settings_lifts_nested_tidal_periods_from_real_case() -> None:
-    settings = load_settings(Path("validation/reference/seagrass/gotm.yaml"))
+    from tests.fixtures import bundled_case_path
+
+    settings = load_settings(bundled_case_path("seagrass"))
 
     assert settings.mimic_3d.zeta.method == "tidal"
     assert settings.mimic_3d.zeta.period_1 == 15.0
     assert settings.mimic_3d.zeta.period_2 == 43200.0
-
-
-def test_load_settings_parses_mimic3d_vertical_velocity_from_real_cases() -> None:
-    for case_path in (
-        Path("validation/reference/nns_seasonal/gotm.yaml"),
-        Path("validation/reference/reynolds/gotm.yaml"),
-    ):
-        settings = load_settings(case_path)
-
-        assert settings.mimic_3d.w.max.method == "file"
-        assert settings.mimic_3d.w.height.method == "file"
 
 
 def test_save_settings_roundtrip(tmp_path: Path) -> None:

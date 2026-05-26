@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -161,26 +160,14 @@ def test_init_observations_activates_constant_vertical_advection() -> None:
 
 
 def test_init_observations_uses_real_case_nested_zeta_period() -> None:
-    settings = load_settings(Path("validation/reference/seagrass/gotm.yaml"))
+    from tests.fixtures import bundled_case_path
+
+    settings = load_settings(bundled_case_path("seagrass"))
     state = ObservationsState()
 
     init_observations(state, settings)
 
     assert state.period_1 == pytest.approx(15.0)
-
-
-def test_init_observations_uses_real_case_nested_vertical_advection() -> None:
-    for case_path in (
-        Path("validation/reference/nns_seasonal/gotm.yaml"),
-        Path("validation/reference/reynolds/gotm.yaml"),
-    ):
-        settings = load_settings(case_path)
-        state = ObservationsState()
-
-        init_observations(state, settings)
-
-        assert state.w_adv_input.method == 0
-        assert state.w_height_input.index == 1
 
 
 def test_post_init_observations_creates_two_layer_profile_and_relaxation() -> None:

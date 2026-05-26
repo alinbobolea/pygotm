@@ -50,12 +50,15 @@ Thumbs.db
 
 # NetCDF / data
 *.nc
+# Vendored reference NetCDFs used by the in-tree test fixtures must be tracked.
+!tests/fixtures/cases/**/*.nc
 *.hdf5
 gotm-model/
 papers/
 
-# Validation outputs and external reference data
-validation/
+# Validation outputs and external reference data — anchored to repo root so it
+# does not collide with the in-tree package directory src/pygotm/validation/.
+/validation/
 
 # Logs
 *.log
