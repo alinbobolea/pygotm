@@ -55,14 +55,6 @@ dev = [
     "types-PyYAML>=6.0",
     "pre-commit>=3.7",
 ]
-# pyfabm is published on conda-forge only (no PyPI release). The extra makes
-# the dependency discoverable via package metadata; conda users get it through
-# pygotm-conda-env.yml. Wheel users must install pyfabm from conda-forge
-# before enabling FABM in a YAML config; pygotm.fabm.engine raises a clear
-# ImportError otherwise.
-fabm = [
-    "pyfabm>=3.0",
-]
 
 [project.scripts]
 pygotm = "pygotm.__main__:cli"

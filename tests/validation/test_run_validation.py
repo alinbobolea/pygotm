@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
 from pygotm.validation import run_validation
+from pygotm.validation.compare import VarResult
 from pygotm.validation.hardware import PlatformInfo
 from pygotm.validation.report import CaseResult, Report
 from pygotm.validation.run_validation import (
@@ -22,6 +24,19 @@ from pygotm.validation.run_validation import (
 
 
 def _case_result(status: str = "PASS") -> CaseResult:
+    variables = [
+        VarResult(
+            name="temp",
+            section="pygotm",
+            status="PASS",
+            color="green",
+            reference_at_worst=1.0,
+            calculated_at_worst=1.0,
+            d_raw=0.0,
+            d_norm=0.0,
+            plot_html=None,
+        )
+    ]
     return CaseResult(
         case_name="couette",
         status=status,
@@ -30,6 +45,7 @@ def _case_result(status: str = "PASS") -> CaseResult:
         ref_nc_path="validation/reference/couette/couette.nc",
         wall_time_s=0.0,
         task_name="couette-gotm",
+        variables=variables,
         n_pass=1 if status == "PASS" else 0,
     )
 
@@ -309,8 +325,17 @@ def test_run_validation_cli_writes_html_and_report_json(
     assert result.exit_code == 0
     assert (tmp_path / "report.html").is_file()
     assert (tmp_path / "report.json").is_file()
-    assert not (tmp_path / "results.json").exists()
+    assert (tmp_path / "results.json").is_file()
+
+    report_payload = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    results_payload = json.loads(
+        (tmp_path / "results.json").read_text(encoding="utf-8")
+    )
+    assert report_payload["cases"][0]["variables"] == []
+    assert results_payload["cases"][0]["variables"][0]["name"] == "temp"
+    assert results_payload["cases"][0]["variables"][0]["plot_html"] is None
     assert f"JSON  : {tmp_path / 'report.json'}" in result.output
+    assert f"Results JSON: {tmp_path / 'results.json'}" in result.output
 
 
 def test_run_validation_cli_reports_unknown_case_without_traceback(

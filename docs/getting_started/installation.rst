@@ -47,6 +47,11 @@ currently includes:
   stubs, pre-commit, hatch, Sphinx, Furo, MyST, MyST-NB, copybutton, and
   Mermaid.
 
+FABM support depends on ``pyfabm`` from conda-forge. pyGOTM does not publish a
+``pygotm[fabm]`` pip extra because current FABM-capable ``pyfabm`` builds are
+distributed through conda, not PyPI. Use this conda environment when running
+configurations with ``fabm.use: true``.
+
 The broader environment is a development and runtime convenience.  It does not
 change the project boundary: physics, execution, validation, schemas, and
 citations stay in ``src/pygotm/``.

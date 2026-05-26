@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test, Typecheck, Docs, Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          use-mamba: true
+          environment-file: pygotm-conda-env.yml
+          activate-environment: pygotm
+          auto-activate-base: false
+
+      - name: Register checkout
+        run: |
+          conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
+
+      - name: Ruff format check
+        run: conda run -n pygotm ruff format --check .
+
+      - name: Ruff lint
+        run: conda run -n pygotm ruff check .
+
+      - name: Typecheck
+        run: conda run -n pygotm mypy src/
+
+      - name: Test
+        run: conda run -n pygotm python -m pytest -W error::RuntimeWarning
+
+      - name: Build docs
+        run: conda run -n pygotm sphinx-build -W -b html docs docs/build
+
+      - name: Build package
+        run: conda run -n pygotm hatch build
+
+      - name: Check wheel metadata
+        run: >
+          conda run -n pygotm python -c
+          "from pathlib import Path; from zipfile import ZipFile;
+          wheel = next(Path('dist').glob('*.whl'));
+          zf = ZipFile(wheel);
+          metadata = zf.read(next(name for name in zf.namelist()
+          if name.endswith('.dist-info/METADATA'))).decode();
+          assert 'Requires-Dist: pyfabm' not in metadata,
+          'wheel advertises pyfabm'"

@@ -83,7 +83,8 @@ Compare pyGOTM output against the official Fortran GOTM reference cases:
    conda run -n pygotm python -m pygotm.validation.run_validation \
        --cases couette,channel,entrainment
 
-Output: ``validation/report.html`` plus one per-case HTML report.
+Output: ``validation/report.html``, ``validation/report.json``,
+``validation/results.json``, and one per-case HTML report.
 
 The default validation set is ``couette,channel,entrainment`` and should exit
 successfully.  Running all 22 reference cases currently completes every case

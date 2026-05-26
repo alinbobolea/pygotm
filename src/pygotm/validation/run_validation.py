@@ -5,7 +5,7 @@ Workflow:
   2. Warm up Numba kernels once before timed runs
   4. Run validation cases serially or through Dask when --workers > 1
   5. Compare each run against Fortran reference NetCDF
-  6. Write validation/report.html + per-case reports
+  6. Write validation/report.html + report.json + results.json + per-case reports
 
 Usage
 -----
@@ -32,7 +32,11 @@ from pygotm.validation.hardware import detect_platform
 from pygotm.validation.parallel import run_cases_parallel
 from pygotm.validation.reference import REFERENCE_CASE_NAMES, resolve_reference_case
 from pygotm.validation.report import CaseResult, Report, save_json, write_html_index
-from pygotm.validation.runner import validate_case_to_html
+from pygotm.validation.runner import (
+    strip_case_plots,
+    summary_case,
+    validate_case_to_html,
+)
 from pygotm.validation.warmup import trigger_numba_jit
 
 ALL_CASES: tuple[str, ...] = REFERENCE_CASE_NAMES
@@ -309,23 +313,32 @@ def cli(
     else:
         verdict = "FAILED VALIDATION"
 
-    report = Report(
+    summary_report = Report(
         generated_at=generated_at,
         hardware=hw,
-        cases=results,
+        cases=[summary_case(result) for result in results],
+        verdict=verdict,
+    )
+    results_report = Report(
+        generated_at=generated_at,
+        hardware=hw,
+        cases=[strip_case_plots(result) for result in results],
         verdict=verdict,
     )
 
     html_path = output_dir / "report.html"
     json_path = output_dir / "report.json"
-    write_html_index(report, output_dir)
-    save_json(report, json_path)
+    results_json_path = output_dir / "results.json"
+    write_html_index(summary_report, output_dir)
+    save_json(summary_report, json_path)
+    save_json(results_report, results_json_path)
 
     print()
     print("pyGOTM validation complete")
     print(f"  Cases completed: {n_cases}/{len(case_list)}")
     print(f"  HTML  : {html_path}")
     print(f"  JSON  : {json_path}")
+    print(f"  Results JSON: {results_json_path}")
 
     raise SystemExit(0 if verdict == "FULL PARITY" else 1)
 

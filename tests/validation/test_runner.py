@@ -66,7 +66,7 @@ def test_validate_case_skip_run_existing_nc(tmp_path: Path) -> None:
     assert result.n_broken == 0 and result.n_marginal == 0 and result.n_discrepant == 0
 
 
-def test_validate_case_to_html_writes_case_report_before_stripping_summary(
+def test_validate_case_to_html_writes_case_report_before_stripping_plot_payload(
     tmp_path: Path,
 ) -> None:
     variable = VarResult(
@@ -93,7 +93,7 @@ def test_validate_case_to_html_writes_case_report_before_stripping_summary(
     )
 
     with patch("pygotm.validation.runner.validate_case", return_value=case_result):
-        summary = validate_case_to_html(
+        json_safe_result = validate_case_to_html(
             "couette",
             tmp_path / "runs",
             tmp_path,
@@ -102,7 +102,9 @@ def test_validate_case_to_html_writes_case_report_before_stripping_summary(
             skip_run=True,
         )
 
-    assert summary.variables == []
+    assert len(json_safe_result.variables) == 1
+    assert json_safe_result.variables[0].name == "temp"
+    assert json_safe_result.variables[0].plot_html is None
     html = (tmp_path / "couette-gotm.html").read_text(encoding="utf-8")
     assert "temp" in html
     assert "plot" in html

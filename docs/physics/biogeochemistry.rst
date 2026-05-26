@@ -58,6 +58,16 @@ The coupling is completely optional.  If ``fabm.use: false`` (the default),
 the physics-only compiled Numba loop runs unchanged and pyfabm is never
 imported.
 
+Installation Boundary
+~~~~~~~~~~~~~~~~~~~~~
+
+FABM coupling requires ``pyfabm`` from conda-forge. The project conda
+environment includes it through ``pygotm-conda-env.yml``. The Python package
+does not expose a ``pygotm[fabm]`` pip extra because current FABM-capable
+``pyfabm`` builds are not available as matching PyPI dependencies. If FABM is
+enabled without importable ``pyfabm``, pyGOTM raises a clear runtime error
+during FABM engine setup.
+
 .. _fabm-coupling-design:
 
 Coupling Architecture: Chunked Interleaved Loop

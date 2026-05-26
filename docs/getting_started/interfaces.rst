@@ -89,7 +89,7 @@ Options:
 are written only to stdout; progress events and diagnostics go to stderr.
 
 ``pygotm validate`` runs the official Frechet parity suite and writes HTML
-and JSON reports:
+reports, a lightweight JSON summary, and per-variable JSON results:
 
 .. code-block:: bash
 
@@ -142,8 +142,8 @@ Options:
    Default: ``8787``.
 
 ``--output-dir DIR``
-   Directory for generated NetCDF runs plus ``report.html`` and
-   ``report.json``. Default:
+   Directory for generated NetCDF runs plus ``report.html``, ``report.json``,
+   and ``results.json``. Default:
    ``validation``.
 
 ``--no-run``

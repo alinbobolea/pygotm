@@ -1,0 +1,103 @@
+name: Full Reference Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner-label:
+        description: Runner label with access to the reference data path.
+        required: true
+        default: self-hosted
+      reference-data-path:
+        description: Absolute path to the external validation/reference tree.
+        required: true
+        default: /data/pygotm/validation/reference
+      case-group:
+        description: Case group to run when cases is empty.
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - default
+          - non-stim
+      cases:
+        description: Optional comma-separated case list; overrides case-group.
+        required: false
+        default: ""
+      workers:
+        description: Number of local Dask workers.
+        required: true
+        default: "1"
+      allow-partial-parity:
+        description: Keep the workflow green when validation exits partial parity.
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  validate:
+    name: Run full Frechet validation
+    runs-on: ${{ inputs.runner-label }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          use-mamba: true
+          environment-file: pygotm-conda-env.yml
+          activate-environment: pygotm
+          auto-activate-base: false
+
+      - name: Register checkout
+        run: |
+          conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
+
+      - name: Link external reference data
+        env:
+          REFERENCE_DATA_PATH: ${{ inputs.reference-data-path }}
+        run: |
+          if [ ! -d "$REFERENCE_DATA_PATH" ]; then
+            echo "::error::Reference data path not found: $REFERENCE_DATA_PATH"
+            exit 1
+          fi
+          mkdir -p validation
+          if [ ! -e validation/reference ]; then
+            ln -s "$REFERENCE_DATA_PATH" validation/reference
+          fi
+
+      - name: Run validation
+        env:
+          ALLOW_PARTIAL_PARITY: ${{ inputs.allow-partial-parity }}
+          CASE_GROUP: ${{ inputs.case-group }}
+          CASES: ${{ inputs.cases }}
+          WORKERS: ${{ inputs.workers }}
+        run: |
+          case_args=(--group "$CASE_GROUP")
+          if [ -n "$CASES" ]; then
+            case_args=(--cases "$CASES")
+          fi
+
+          set +e
+          conda run -n pygotm python -m pygotm.validation.run_validation \
+            "${case_args[@]}" \
+            --workers "$WORKERS"
+          status=$?
+          set -e
+
+          if [ "$status" -ne 0 ] && [ "$ALLOW_PARTIAL_PARITY" != "true" ]; then
+            exit "$status"
+          fi
+
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-reports
+          path: |
+            validation/report.html
+            validation/report.json
+            validation/results.json
+            validation/*.html

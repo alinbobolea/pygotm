@@ -13,6 +13,8 @@ from pygotm.validation.report import CaseResult, Report, write_case_html
 
 __all__ = [
     "run_case",
+    "summary_case",
+    "strip_case_plots",
     "validate_case",
     "validate_case_to_html",
 ]
@@ -122,10 +124,19 @@ def _case_verdict(result: CaseResult) -> str:
     return "PARTIAL PARITY"
 
 
-def _summary_case(result: CaseResult) -> CaseResult:
-    """Drop per-variable plot payloads after the case HTML has been written."""
+def summary_case(result: CaseResult) -> CaseResult:
+    """Return a lightweight case summary without per-variable result rows."""
 
     return replace(result, variables=[])
+
+
+def strip_case_plots(result: CaseResult) -> CaseResult:
+    """Return per-variable results without embedded Plotly HTML payloads."""
+
+    return replace(
+        result,
+        variables=[replace(variable, plot_html=None) for variable in result.variables],
+    )
 
 
 def validate_case_to_html(
@@ -138,7 +149,7 @@ def validate_case_to_html(
     skip_run: bool = False,
     debug_turbulence: bool = False,
 ) -> CaseResult:
-    """Run or compare one case, write its HTML page, and return a summary."""
+    """Run or compare one case, write its HTML page, and return JSON-safe data."""
 
     result = validate_case(
         case_name,
@@ -153,4 +164,4 @@ def validate_case_to_html(
         verdict=_case_verdict(result),
     )
     write_case_html(report, result, output_dir)
-    return _summary_case(result)
+    return strip_case_plots(result)

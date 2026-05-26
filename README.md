@@ -78,6 +78,9 @@ family.
   loop.
 - When `fabm.use: false`, pyfabm is not imported and the physics-only compiled
   runtime remains unchanged.
+- FABM-enabled runs require the conda environment, which installs `pyfabm` from
+  conda-forge. The wheel metadata intentionally does not advertise a
+  `pygotm[fabm]` pip extra.
 
 See `docs/physics/biogeochemistry.rst` and `docs/api/fabm.rst` for the coupling
 design and API.
@@ -123,6 +126,8 @@ to a relative raw score for tiny-signal variables, and reports PASS, MARGINAL,
 DISCREPANT, or BROKEN statuses per variable. A separate peak-sensitive
 diagnostic keeps localized turbulence differences visible without letting
 post-decorrelation peak timing dominate the primary verdict.
+Validation writes a lightweight `validation/report.json` summary and a
+per-variable `validation/results.json` artifact for release triage.
 
 See `docs/validation/overview.rst` for the algorithm and
 `docs/validation/test_cases.rst` for the current 22-case result table.
@@ -231,6 +236,10 @@ conda run -n pygotm sphinx-build -W -b html docs docs/build
 
 The full pytest suite is the regression gate and runs entirely from
 `tests/fixtures/cases/`. No external reference-data download is required.
+The GitHub Actions CI workflow runs the same conda-backed formatting,
+linting, typechecking, pytest, documentation, and packaging gates. The separate
+full-reference validation workflow is manual because it requires the external
+`validation/reference/` data tree.
 
 The conda environment owns third-party dependencies. The only permitted `pip`
 use is the no-dependency editable install of the local checkout:
