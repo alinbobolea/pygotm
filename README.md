@@ -5,6 +5,7 @@
 [![Tests](https://github.com/alinbobolea/pygotm/actions/workflows/tests.yml/badge.svg)](https://github.com/alinbobolea/pygotm/actions/workflows/tests.yml)
 [![Docs](https://github.com/alinbobolea/pygotm/actions/workflows/docs.yml/badge.svg)](https://github.com/alinbobolea/pygotm/actions/workflows/docs.yml)
 
+**Documentation:** https://alinbobolea.github.io/docs/pygotm/
 
 pyGOTM is a Python reimplementation of the General Ocean Turbulence Model
 (GOTM) with Numba-compiled CPU physics. It is a substantial source-level
@@ -276,6 +277,8 @@ intentionally not part of normal Git history. They are local data used for
 validation and translation work.
 
 ## Build Documentation
+
+The hosted version is at https://alinbobolea.github.io/docs/pygotm/ — no local build is required to read the docs.
 
 Build the docs with:
 
