@@ -1,0 +1,32 @@
+name: Docs
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  docs:
+    name: Build Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          use-mamba: true
+          environment-file: pygotm-conda-env.yml
+          activate-environment: pygotm
+          auto-activate-base: false
+
+      - name: Register checkout
+        run: |
+          conda run -n pygotm python -m pip install --no-deps --no-build-isolation -e .
+
+      - name: Build docs
+        run: conda run -n pygotm sphinx-build -W -b html docs docs/build

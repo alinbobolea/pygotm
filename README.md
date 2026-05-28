@@ -1,5 +1,11 @@
 # pyGOTM
 
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/github/license/alinbobolea/pygotm)
+[![Tests](https://github.com/alinbobolea/pygotm/actions/workflows/tests.yml/badge.svg)](https://github.com/alinbobolea/pygotm/actions/workflows/tests.yml)
+[![Docs](https://github.com/alinbobolea/pygotm/actions/workflows/docs.yml/badge.svg)](https://github.com/alinbobolea/pygotm/actions/workflows/docs.yml)
+
+
 pyGOTM is a Python reimplementation of the General Ocean Turbulence Model
 (GOTM) with Numba-compiled CPU physics. It is a substantial source-level
 translation of the Fortran model into a Python package while preserving GOTM's

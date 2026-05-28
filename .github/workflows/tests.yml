@@ -1,4 +1,4 @@
-name: CI
+name: Tests
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    name: Test, Typecheck, Docs, Package
+    name: Lint, Typecheck, Test, Package
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -52,9 +52,6 @@ jobs:
           'missing validation/report/report.json';
           assert len(cases) == 22,
           f'expected 22 validation case HTML reports, found {len(cases)}'"
-
-      - name: Build docs
-        run: conda run -n pygotm sphinx-build -W -b html docs docs/build
 
       - name: Build package
         run: conda run -n pygotm hatch build
