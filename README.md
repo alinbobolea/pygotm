@@ -126,8 +126,10 @@ to a relative raw score for tiny-signal variables, and reports PASS, MARGINAL,
 DISCREPANT, or BROKEN statuses per variable. A separate peak-sensitive
 diagnostic keeps localized turbulence differences visible without letting
 post-decorrelation peak timing dominate the primary verdict.
-Validation writes a lightweight `validation/report.json` summary and a
-per-variable `validation/results.json` artifact for release triage.
+Validation writes a docs-published report snapshot under `validation/report/`,
+including `report.html`, `report.json`, and one per-case HTML page. The
+per-variable `results.json` artifact is generated there for release triage but
+is intentionally not tracked.
 
 See `docs/validation/overview.rst` for the algorithm and
 `docs/validation/test_cases.rst` for the current 22-case result table.
@@ -145,10 +147,11 @@ conda run -n pygotm pygotm --help
 Seven canonical reference cases are vendored under `tests/fixtures/cases/`
 (couette, channel, asics_med, rouse, seagrass, wave_breaking, entrainment) so
 the test suite runs on a clean checkout with no external download required.
-The top-level `validation/` directory is intentionally excluded from normal Git
-history; it is used by `pygotm validate` to drive the full 22-case sweep
-against Fortran reference output. To run that full sweep locally, provide the
-external reference-data tree so files like this exist:
+The top-level `validation/` directory is mostly local validation state:
+`validation/reference/`, `validation/runs/`, NetCDFs, and debug outputs remain
+ignored, while `validation/report/` is a curated report snapshot tracked for
+complete documentation builds. To run the full 22-case sweep locally, provide
+the external reference-data tree so files like this exist:
 
 ```text
 validation/reference/couette/gotm.yaml
@@ -256,12 +259,15 @@ tests/                  Unit, integration, validation, docs, and CLI tests
 tests/fixtures/cases/   Vendored reference cases used by the test suite
 docs/                   Sphinx documentation source
 docs/_intersphinx/      Vendored intersphinx inventories for offline builds
-validation/             External reference data and generated validation output
+validation/report/      Tracked validation HTML/JSON snapshot for docs
+validation/reference/   Local external reference data, ignored by git
+validation/runs/        Local generated validation NetCDF outputs, ignored by git
 gotm-model/             External Fortran GOTM checkout and reference cases
 ```
 
-`validation/` and `gotm-model/` are intentionally not part of normal Git
-history. They are local data used for validation and translation work.
+Except for `validation/report/`, `validation/` and `gotm-model/` are
+intentionally not part of normal Git history. They are local data used for
+validation and translation work.
 
 ## Build Documentation
 

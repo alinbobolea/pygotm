@@ -15,10 +15,12 @@ indicators described below.
 Reference Data Distribution
 ---------------------------
 
-Top-level ``validation/`` data is intentionally excluded from normal Git
-history. Generated reports and ``validation/runs`` outputs are reproducible, and
-the official Fortran reference NetCDF files are large enough that they should be
-kept outside the source repository.
+Top-level ``validation/`` is mostly excluded from normal Git history.
+``validation/report/`` is the exception: it contains the curated HTML/JSON
+report snapshot used by documentation builds in a clean checkout. Generated
+NetCDF outputs under ``validation/runs`` are reproducible, and the official
+Fortran reference NetCDF files are large enough that they should be kept outside
+the source repository.
 
 To run the full 22-case validation suite, provide a local GOTM reference-data
 tree under ``validation/reference/<case>/``. Each case directory must contain
@@ -51,10 +53,11 @@ Each validation run follows the same implementation path:
 6. ``compare_nc(py_path, ref_path, case_name)`` opens both NetCDF files and
    compares all numeric reference variables.
 7. Each case report is written directly from the reference and pyGOTM NetCDF
-   files. The final index is written to ``validation/report.html``. The
-   lightweight case summary is serialized to ``validation/report.json``, and
-   per-variable machine-readable metrics are serialized to
-   ``validation/results.json`` without embedded Plotly payloads.
+   files. The final index is written to ``validation/report/report.html``. The
+   lightweight case summary is serialized to
+   ``validation/report/report.json``, and per-variable machine-readable metrics
+   are serialized to ``validation/report/results.json`` without embedded Plotly
+   payloads.
 
 The comparison is reference-driven.  A numeric variable present in the
 reference but missing from pyGOTM is ``BROKEN``.  Extra numeric variables in the
@@ -489,31 +492,32 @@ status because the generated snapshot is ``PARTIAL PARITY``: 15 cases pass and
 
 Output files:
 
-* ``validation/report.html`` - human-readable HTML index with one frame per
-  case.
-* ``validation/report.json`` - lightweight structured report JSON with case
-  statuses, counts, paths, wall times, hardware metadata, and verdict.
-* ``validation/results.json`` - per-variable structured report JSON that
+* ``validation/report/report.html`` - human-readable HTML index with one frame
+  per case.
+* ``validation/report/report.json`` - lightweight structured report JSON with
+  case statuses, counts, paths, wall times, hardware metadata, and verdict.
+* ``validation/report/results.json`` - per-variable structured report JSON that
   round-trips through :func:`pygotm.validation.report.load_json`; Plotly HTML
   payloads are omitted so the artifact remains suitable for release triage.
-* ``validation/<run_name>.html`` - per-case report generated directly from the
-  reference and pyGOTM NetCDF files, with embedded Plotly plots for marginal
-  and discrepant variables.
+* ``validation/report/<run_name>.html`` - per-case report generated directly
+  from the reference and pyGOTM NetCDF files, with embedded Plotly plots for
+  marginal and discrepant variables.
 * ``validation/runs/<run_name>/<run_name>.nc`` - generated pyGOTM NetCDF files.
 
 Generated Reports
 -----------------
 
 The documentation build copies the HTML reports currently present in
-``validation/`` (produced by ``conda run -n pygotm python -m
-pygotm.validation.run_validation``) into the built docs at
-``validation/``. The index page links to each per-case report:
+``validation/report/`` (produced by ``conda run -n pygotm python -m
+pygotm.validation.run_validation``) into the built docs at ``validation/``.
+The index page links to each per-case report:
 
 * `Validation report (all cases) <report.html>`_
 
-If you are reading this page after a fresh clone and no validation run has
-been executed yet, the link above will return a 404. Run the validation suite
-locally and rebuild the documentation to populate the reports.
+Because ``validation/report/`` is tracked, the link above should work in a
+fresh checkout and in GitHub CI. Regenerate the report snapshot after validation
+changes so the committed docs report stays in sync with the current parity
+state.
 
 Developer Benchmarking
 ----------------------

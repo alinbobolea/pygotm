@@ -9,13 +9,14 @@ reused on subsequent runs without recompilation.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import numpy as np
 
 __all__ = ["trigger_numba_jit"]
 
 
-def trigger_numba_jit(nlev: int = 5) -> float:
+def trigger_numba_jit(nlev: int = 5, *, cases_root: Path | None = None) -> float:
     """Force Numba JIT compilation of all physics kernels; return elapsed seconds."""
     from pygotm.util.tridiagonal import tridiagonal
 
@@ -37,7 +38,7 @@ def trigger_numba_jit(nlev: int = 5) -> float:
     from pygotm.gotm.time_loop import warmup_couette_step_routines
     from pygotm.validation.reference import resolve_reference_case
 
-    case = resolve_reference_case("couette")
+    case = resolve_reference_case("couette", cases_root=cases_root)
     run = initialize_gotm(case.yaml_path)
     try:
         runtime = build_runtime_from_run(run, max_steps=1, output=False)

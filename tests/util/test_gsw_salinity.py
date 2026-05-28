@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from importlib.resources import files
+
 import numpy as np
 import pytest
 
 from pygotm.util.gsw import gsw_sa_from_sp, gsw_saar, gsw_sp_from_sa
+
+
+def test_gsw_saar_package_data_is_available() -> None:
+    data = files("pygotm.util.gsw.data").joinpath("saar_2011_gotm.npz")
+
+    assert data.is_file()
 
 
 def test_gsw_saar_matches_bundled_flex_reference_point() -> None:

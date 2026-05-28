@@ -23,12 +23,14 @@ __all__ = [
 def run_case(
     case_name: str,
     runs_dir: Path,
+    *,
+    cases_root: Path | None = None,
 ) -> tuple[Path, float]:
     """Run a compiled parity case, write NetCDF, return (path, elapsed_s)."""
     from pygotm.driver import GotmDriver
     from pygotm.validation.reference import resolve_reference_case
 
-    case = resolve_reference_case(case_name)
+    case = resolve_reference_case(case_name, cases_root=cases_root)
     case_dir = runs_dir / case.run_name
     case_dir.mkdir(parents=True, exist_ok=True)
     nc_path = case_dir / f"{case.run_name}.nc"
@@ -53,11 +55,12 @@ def validate_case(
     *,
     skip_run: bool = False,
     debug_turbulence: bool = False,
+    cases_root: Path | None = None,
 ) -> CaseResult:
     """Run (optionally) and validate a single GOTM case."""
     from pygotm.validation.reference import resolve_reference_case
 
-    case = resolve_reference_case(case_name)
+    case = resolve_reference_case(case_name, cases_root=cases_root)
     ref_path = case.reference_path
 
     if skip_run:
@@ -75,7 +78,7 @@ def validate_case(
             )
     else:
         try:
-            py_path, elapsed = run_case(case_name, runs_dir)
+            py_path, elapsed = run_case(case_name, runs_dir, cases_root=cases_root)
         except Exception as exc:
             return CaseResult(
                 case_name=case.run_name,
@@ -148,6 +151,7 @@ def validate_case_to_html(
     hardware: dict[str, str],
     skip_run: bool = False,
     debug_turbulence: bool = False,
+    cases_root: Path | None = None,
 ) -> CaseResult:
     """Run or compare one case, write its HTML page, and return JSON-safe data."""
 
@@ -156,6 +160,7 @@ def validate_case_to_html(
         runs_dir,
         skip_run=skip_run,
         debug_turbulence=debug_turbulence,
+        cases_root=cases_root,
     )
     report = Report(
         generated_at=generated_at,

@@ -5,6 +5,7 @@ Usage
     python -m pygotm.validation.render_report
     python -m pygotm.validation.render_report --cases couette,channel
     python -m pygotm.validation.render_report --all --workers 4
+    python -m pygotm.validation.render_report --report-dir validation/report
 """
 
 from __future__ import annotations
@@ -67,7 +68,14 @@ from pygotm.validation.run_validation import (
     default="validation",
     show_default=True,
     type=click.Path(file_okay=False, path_type=Path),
-    help="Directory containing runs/ and receiving report HTML.",
+    help="Directory containing runs/.",
+)
+@click.option(
+    "--report-dir",
+    default=None,
+    show_default=False,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory receiving report HTML. Defaults to <output-dir>/report.",
 )
 def cli(
     cases: str | None,
@@ -77,6 +85,7 @@ def cli(
     workers: int,
     dashboard_port: int,
     output_dir: Path,
+    report_dir: Path | None,
 ) -> None:
     """Regenerate validation HTML from existing run/reference NetCDF files."""
 
@@ -91,10 +100,11 @@ def cli(
     hardware = dict(platform_info.hardware)
     hardware["execution_backend"] = "cpu"
     generated_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    report_output_dir = report_dir if report_dir is not None else output_dir / "report"
     results = _run_cases(
         case_list=case_list,
         runs_dir=output_dir / "runs",
-        output_dir=output_dir,
+        report_dir=report_output_dir,
         selected_arch="cpu",
         n_workers=n_workers,
         dashboard_port=dashboard_port,
@@ -102,6 +112,7 @@ def cli(
         hardware=hardware,
         skip_run=True,
         debug_turbulence=False,
+        cases_root=None,
         on_result=_make_on_result(len(case_list)),
     )
 
@@ -119,7 +130,7 @@ def cli(
         cases=results,
         verdict=verdict,
     )
-    html_path = write_html_index(report, output_dir)
+    html_path = write_html_index(report, report_output_dir)
     click.echo(f"Report written to: {html_path}")
 
     raise SystemExit(0 if verdict == "FULL PARITY" else 1)

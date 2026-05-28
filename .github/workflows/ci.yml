@@ -40,6 +40,19 @@ jobs:
       - name: Test
         run: conda run -n pygotm python -m pytest -W error::RuntimeWarning
 
+      - name: Check validation report snapshot
+        run: >
+          conda run -n pygotm python -c
+          "from pathlib import Path;
+          report = Path('validation/report');
+          cases = sorted(report.glob('*-gotm.html'));
+          assert (report / 'report.html').is_file(),
+          'missing validation/report/report.html';
+          assert (report / 'report.json').is_file(),
+          'missing validation/report/report.json';
+          assert len(cases) == 22,
+          f'expected 22 validation case HTML reports, found {len(cases)}'"
+
       - name: Build docs
         run: conda run -n pygotm sphinx-build -W -b html docs docs/build
 
@@ -52,7 +65,12 @@ jobs:
           "from pathlib import Path; from zipfile import ZipFile;
           wheel = next(Path('dist').glob('*.whl'));
           zf = ZipFile(wheel);
+          names = set(zf.namelist());
           metadata = zf.read(next(name for name in zf.namelist()
           if name.endswith('.dist-info/METADATA'))).decode();
           assert 'Requires-Dist: pyfabm' not in metadata,
-          'wheel advertises pyfabm'"
+          'wheel advertises pyfabm';
+          assert 'pygotm/util/gsw/data/saar_2011_gotm.npz' in names,
+          'wheel missing GOTM SAAR data';
+          assert 'pygotm/util/gsw/data/README.md' in names,
+          'wheel missing GOTM SAAR data README'"

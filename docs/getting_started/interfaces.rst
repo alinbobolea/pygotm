@@ -142,9 +142,12 @@ Options:
    Default: ``8787``.
 
 ``--output-dir DIR``
-   Directory for generated NetCDF runs plus ``report.html``, ``report.json``,
-   and ``results.json``. Default:
-   ``validation``.
+   Directory for generated NetCDF runs and local validation artifacts.
+   Default: ``validation``.
+
+``--report-dir DIR``
+   Directory for generated report HTML and JSON. Default:
+   ``<output-dir>/report``.
 
 ``--no-run``
    Skip simulation and compare existing NetCDF files under ``DIR/runs``.

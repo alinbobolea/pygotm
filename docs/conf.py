@@ -48,15 +48,16 @@ extensions = [
 html_theme = "furo"
 html_title = "pyGOTM Documentation"
 _VALIDATION_HTML_STAGING = DOCS_DIR / "_validation_html"
+_VALIDATION_REPORT_DIR = REPO_ROOT / "validation" / "report"
 stage_validation_html(
-    src=REPO_ROOT / "validation",
+    src=_VALIDATION_REPORT_DIR,
     staged_root=_VALIDATION_HTML_STAGING,
 )
 html_extra_path = [str(_VALIDATION_HTML_STAGING.relative_to(DOCS_DIR))]
 
 stage_validation_rst_wrappers(cases_dir=DOCS_DIR / "validation" / "cases")
 stage_validation_test_cases_summary(
-    report_json=REPO_ROOT / "validation" / "report.json",
+    report_json=_VALIDATION_REPORT_DIR / "report.json",
     output_path=DOCS_DIR / "validation" / "_generated" / "test_cases_summary.inc",
 )
 

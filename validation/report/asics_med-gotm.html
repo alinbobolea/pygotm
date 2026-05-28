@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pyGOTM Validation Case: asics_med</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  body   { font-family: system-ui, sans-serif; margin: 1.25rem; color: #222; }
+  h1     { margin: 0; font-size: 1.35rem; }
+  h4     { color: #444; }
+  table  { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.85em; }
+  th, td { border: 1px solid #ddd; padding: .35em .6em; text-align: left; white-space: nowrap; }
+  th     { background: #f5f5f5; font-weight: 600; }
+  tr:hover td { background: #fafafa; }
+  code   { background: #f5f5f5; padding: .1em .4em; border-radius: 3px; font-size: 0.9em; }
+  .table-wrap { overflow-x: auto; }
+  .case-section { max-width: 100%; }
+  .case-summary { display: flex; align-items: center; gap: .7em; border-bottom: 1px solid #ddd; padding-bottom: .7em; }
+  .case-meta  { font-size: 0.8em; color: #666; margin-left: auto; }
+  .case-badge { font-size: 0.8em; font-weight: 700; padding: .15em .5em; border-radius: 3px; }
+  .badge-pass       { background: #e8f5e9; color: #2e7d32; }
+  .badge-marginal   { background: #fff9c4; color: #f57f17; }
+  .badge-discrepant { background: #ffe0b2; color: #e65100; }
+  .badge-broken     { background: #ffebee; color: #c62828; }
+  .badge-error      { background: #ffebee; color: #c62828; }
+  .case-body  { padding-bottom: 1em; }
+  .plot-container { margin: .5em 0; }
+  .report-meta { color:#666; font-size:0.8em; margin:.4em 0 1em; }
+</style>
+</head>
+<body>
+<p class="report-meta">Generated: 2026-05-26T20:27:42Z &nbsp;·&nbsp; Total validation wall time: 0.0s</p>
+
+<section class="case-section" data-status="PASS">
+  <header class="case-summary">
+    <h1>asics_med</h1>
+    <span class="case-badge badge-pass">PASS</span>
+    <span class="case-meta">
+      PASS: 104 &nbsp;·&nbsp;
+      MARGINAL: 0 &nbsp;·&nbsp;
+      DISCREPANT: 0 &nbsp;·&nbsp;
+      BROKEN: 0 &nbsp;·&nbsp;
+      wall time: —
+    </span>
+  </header>
+  <div class="case-body">
+    <p style="font-size:0.85em;color:#555;margin:.4em 0">
+      Python: <code>validation/runs/asics_med/asics_med.nc</code><br>
+      Reference: <code>/home/nick/projects/pygotm/validation/reference/asics_med/Asics_Med_keps.nc</code>
+    </p>
+    <h4 style="margin:1em 0 .4em">1. PyGOTM variables</h4><div class="table-wrap"><table><thead><tr><th>Status</th><th>Variable</th><th>Reference (full precision)</th><th>Calculated (full precision)</th><th>Raw Frechet</th><th>Score (Normalized Frechet / d_rel)</th><th>Peak-sensitive d_norm</th></tr></thead><tbody><tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>rho_p</td><td><code>1029.1221923828125</code></td><td><code>1029.1221923828125</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>rho</td><td><code>1038.8763427734375</code></td><td><code>1038.8763427734375</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>int_precip</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>int_evap</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>int_swr</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>int_heat</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>int_total</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>I_0</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>mld_surf</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>temp</td><td><code>12.81365966796875</code></td><td><code>12.81365966796875</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>salt</td><td><code>38.673171997070312</code></td><td><code>38.673171997070312</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>u</td><td><code>0.071067549288272858</code></td><td><code>0.071067541837692261</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>v</td><td><code>-0.013954950496554375</code></td><td><code>-0.013954951427876949</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>xP</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>h</td><td><code>164.12504577636719</code></td><td><code>164.12504577636719</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>num</td><td><code>2.1398694515228271</code></td><td><code>2.1398696899414062</code></td><td>1.192e-07</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>nuh</td><td><code>1.0128626823425293</code></td><td><code>1.0128632783889771</code></td><td>2.384e-07</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>nus</td><td><code>1.0128626823425293</code></td><td><code>1.0128632783889771</code></td><td>2.384e-07</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>nucl</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>tke</td><td><code>0.0026672680396586657</code></td><td><code>0.0026672682724893093</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>eps</td><td><code>9.663247055868851e-07</code></td><td><code>9.6632481927372282e-07</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>idpdx</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>idpdy</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>fric</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>drag</td><td><code>0.0022375774569809437</code></td><td><code>0.0022375772241503</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>SS</td><td><code>4.7460875975957606e-06</code></td><td><code>4.7460880523431115e-06</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>P</td><td><code>9.0425928078730067e-08</code></td><td><code>9.0425920973302709e-08</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>uu</td><td><code>0.00098494184203445911</code></td><td><code>0.00098494195844978094</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>vv</td><td><code>0.00079748791176825762</code></td><td><code>0.0007974878535605967</code></td><td>7.276e-12</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>ww</td><td><code>0.0011063296115025878</code></td><td><code>0.001106329495087266</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>NN</td><td><code>5.223715220381564e-07</code></td><td><code>5.2237157888157526e-07</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>NNT</td><td><code>-8.1772186604212038e-06</code></td><td><code>-8.177217750926502e-06</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>NNS</td><td><code>-7.337910687965632e-07</code></td><td><code>-7.3379101195314433e-07</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>buoy</td><td><code>-0.020270844921469688</code></td><td><code>-0.020270844921469688</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>kb</td><td><code>1.4025587635746462e-10</code></td><td><code>1.4025586247967681e-10</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>epsb</td><td><code>1.3461926018365489e-10</code></td><td><code>1.346192740614427e-10</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>G</td><td><code>3.3302882229691022e-08</code></td><td><code>3.3302885782404701e-08</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>Pb</td><td><code>2.5500951786956889e-14</code></td><td><code>2.5500953481022784e-14</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>avh</td><td><code>0.59734082221984863</code></td><td><code>0.59734147787094116</code></td><td>4.768e-07</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>Rig</td><td><code>64959.734375</code></td><td><code>64959.73828125</code></td><td>2.441e-04</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>L</td><td><code>203.25814819335938</code></td><td><code>203.25816345214844</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>PSTK</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>cmue1</td><td><code>0.80160433053970337</code></td><td><code>0.80160468816757202</code></td><td>5.960e-08</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>cmue2</td><td><code>0.94868290424346924</code></td><td><code>0.94868385791778564</code></td><td>1.192e-07</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>an</td><td><code>8.5534477233886719</code></td><td><code>8.5534591674804688</code></td><td>3.815e-06</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>as</td><td><code>8.9633932113647461</code></td><td><code>8.9633941650390625</code></td><td>9.537e-07</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>at</td><td><code>2000759.75</code></td><td><code>2000760.125</code></td><td>1.562e-02</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>taux</td><td><code>3.0409377359319478e-05</code></td><td><code>3.0409379178308882e-05</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>tauy</td><td><code>2.1055255274404772e-05</code></td><td><code>2.1055257093394175e-05</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>taub</td><td><code>0.00019720764248631895</code></td><td><code>0.00019720762793440372</code></td><td>1.455e-11</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>mld_bott</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>bioshade</td><td><code>1</code></td><td><code>1</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>ga</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>Ekin</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>Epot</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>Eturb</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+</tbody></table></div>
+    <h4 style="margin:1em 0 .4em">2. PyFABM variables</h4><div class="table-wrap"><table><thead><tr><th>Status</th><th>Variable</th><th>Reference (full precision)</th><th>Calculated (full precision)</th><th>Raw Frechet</th><th>Score (Normalized Frechet / d_rel)</th><th>Peak-sensitive d_norm</th></tr></thead><tbody><tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>zeta</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>u_taus</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>u10</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>v10</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>airt</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>airp</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>hum</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>es</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>ea</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>qs</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>qa</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>rhoa</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>cloud</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>albedo</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>precip</td><td><code>-1.593000042987569e-08</code></td><td><code>-1.593000042987569e-08</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>evap</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>qh</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>qe</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>ql</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>heat</td><td><code>-92.629997253417969</code></td><td><code>-92.629997253417969</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>tx</td><td><code>0.007799999788403511</code></td><td><code>0.007799999788403511</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>ty</td><td><code>0.012799999676644802</code></td><td><code>0.012799999676644802</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>sst</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>sst_obs</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>sss</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>temp_p</td><td><code>12.903528213500977</code></td><td><code>12.903528213500977</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>temp_i</td><td><code>13.250866889953613</code></td><td><code>13.250866889953613</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>salt_p</td><td><code>38.489658355712891</code></td><td><code>38.489658355712891</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>temp_obs</td><td><code>12.903528213500977</code></td><td><code>12.903528213500977</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>salt_obs</td><td><code>38.489658355712891</code></td><td><code>38.489658355712891</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>u_obs</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>v_obs</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>gamu</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>gamv</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>gamh</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>gams</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>gamb</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>gam</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>r</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>u_taub</td><td><code>0.00040300158434547484</code></td><td><code>0.00040300155524164438</code></td><td>2.910e-11</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>rad</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00</td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>us</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>vs</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>dusdz</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>dvsdz</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>us0</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>vs0</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+<tr><td style="color:#2e7d32;font-weight:bold">PASS</td><td>ds</td><td><code>0</code></td><td><code>0</code></td><td>0.000e+00</td><td>0.000e+00 <small>(d_rel)</small></td><td>0.000e+00</td></tr>
+</tbody></table></div>
+  </div>
+</section>
+
+</body>
+</html>

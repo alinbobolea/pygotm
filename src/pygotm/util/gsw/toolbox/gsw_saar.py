@@ -4,29 +4,24 @@ Direct translation of:
     gotm-model/code/extern/gsw/toolbox/gsw_saar.f90
 
 The SAAR grid is loaded lazily from GOTM's bundled
-``gsw_mod_saar_data.f90`` when it is available in the source tree.  If the
-bundled file is unavailable, callers fall back to the installed ``gsw``
-package data.
+``gsw_mod_saar_data.f90`` data, packaged as
+``pygotm.util.gsw.data.saar_2011_gotm.npz``. The external ``gsw`` package is not
+used here because its newer SAAR grid does not match GOTM's 2011 data and breaks
+Fortran parity.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
+from importlib.resources import as_file, files
 
-import gsw as _external_gsw
 import numpy as np
 
 __all__ = ["gsw_saar"]
 
-_FLOAT_PATTERN = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][-+]?\d+)?")
-_SAAR_BLOCK_PATTERN = re.compile(
-    r"data\s+saar_ref\(:,(\d+),(\d+)\)\s*/\s*&(?P<body>.*?)\n\s*/",
-    re.S,
-)
-_DATA_PATH = "gotm-model/code/extern/gsw/modules/gsw_mod_saar_data.f90"
+_DATA_PACKAGE = "pygotm.util.gsw.data"
+_DATA_FILE = "saar_2011_gotm.npz"
 _DELI = (0, 1, 1, 0)
 _DELJ = (0, 0, 1, 1)
 _LONGS_PAN = np.asarray([260.00, 272.59, 276.50, 278.65, 280.73, 292.0])
@@ -42,72 +37,24 @@ class _SaarData:
     ndepth_ref: np.ndarray
 
 
-def _candidate_data_paths() -> list[Path]:
-    paths: list[Path] = []
-    for parent in Path(__file__).resolve().parents:
-        paths.append(parent / _DATA_PATH)
-    return paths
-
-
-def _parse_numbers(text: str) -> np.ndarray:
-    clean = text.replace("_r8", "").replace("&", " ")
-    return np.asarray(
-        [
-            float(token.replace("D", "E").replace("d", "e"))
-            for token in _FLOAT_PATTERN.findall(clean)
-        ],
-        dtype=np.float64,
-    )
-
-
-def _parse_named_block(text: str, name: str) -> np.ndarray:
-    pattern = re.compile(rf"data\s+{name}\s*/\s*&(?P<body>.*?)\n\s*/", re.S)
-    match = pattern.search(text)
-    if match is None:
-        msg = f"could not find {name} in GOTM SAAR data"
-        raise ValueError(msg)
-    return _parse_numbers(match.group("body"))
-
-
 @lru_cache(maxsize=1)
-def _load_saar_data() -> _SaarData | None:
-    data_path = next((path for path in _candidate_data_paths() if path.exists()), None)
-    if data_path is None:
-        return None
-
-    text = data_path.read_text()
-    p_ref = _parse_named_block(text, "p_ref")
-    lats_ref = _parse_named_block(text, "lats_ref")
-    longs_ref = _parse_named_block(text, "longs_ref")
-    nz = p_ref.size
-    ny = lats_ref.size
-    nx = longs_ref.size
-
-    saar_ref = np.empty((nz, ny, nx), dtype=np.float64)
-    saar_ref.fill(np.nan)
-    count = 0
-    for match in _SAAR_BLOCK_PATTERN.finditer(text):
-        j = int(match.group(1)) - 1
-        i = int(match.group(2)) - 1
-        values = _parse_numbers(match.group("body"))
-        if values.size != nz:
-            msg = f"saar_ref(:,{j + 1},{i + 1}) has {values.size} values, expected {nz}"
-            raise ValueError(msg)
-        saar_ref[:, j, i] = values
-        count += 1
-    if count != nx * ny or np.isnan(saar_ref).any():
-        msg = f"parsed {count} SAAR columns, expected {nx * ny}"
-        raise ValueError(msg)
-
-    ndepth_values = _parse_named_block(text, "ndepth_ref").astype(np.int64)
-    ndepth_ref = np.reshape(ndepth_values, (ny, nx), order="F")
-    return _SaarData(
-        p_ref=p_ref,
-        lats_ref=lats_ref,
-        longs_ref=longs_ref,
-        saar_ref=saar_ref,
-        ndepth_ref=ndepth_ref,
-    )
+def _load_saar_data() -> _SaarData:
+    resource = files(_DATA_PACKAGE).joinpath(_DATA_FILE)
+    try:
+        with as_file(resource) as path, np.load(path) as data:
+            return _SaarData(
+                p_ref=np.asarray(data["p_ref"], dtype=np.float64),
+                lats_ref=np.asarray(data["lats_ref"], dtype=np.float64),
+                longs_ref=np.asarray(data["longs_ref"], dtype=np.float64),
+                saar_ref=np.asarray(data["saar_ref"], dtype=np.float64),
+                ndepth_ref=np.asarray(data["ndepth_ref"], dtype=np.int64),
+            )
+    except FileNotFoundError as exc:
+        msg = (
+            f"missing packaged GOTM SAAR data {_DATA_PACKAGE}.{_DATA_FILE}; "
+            "regenerate it with scripts/generate_gotm_saar_data.py"
+        )
+        raise RuntimeError(msg) from exc
 
 
 def _util_indx(x: np.ndarray, z: float) -> int:
@@ -316,9 +263,4 @@ def gsw_saar(p: object, long: float, lat: float) -> np.ndarray | float:
     """Calculate the Absolute Salinity Anomaly Ratio."""
 
     data = _load_saar_data()
-    if data is None:
-        result = _external_gsw.SAAR(p, long, lat)
-        if np.asarray(p).ndim == 0:
-            return float(result)
-        return np.asarray(result, dtype=np.float64)
     return _saar_from_data(p, long, lat, data)

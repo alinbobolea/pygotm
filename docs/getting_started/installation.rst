@@ -91,12 +91,14 @@ any external download. The bundled cases (couette, channel, asics_med, rouse,
 seagrass, wave_breaking, entrainment) cover the distinct physics regimes
 exercised by pyGOTM and are used by ``tests.fixtures.bundled_case``.
 
-The top-level ``validation/`` directory remains gitignored. It is used by the
-``pygotm validate`` CLI to drive the full 22-case validation sweep against
-Fortran GOTM reference output, and to write generated HTML/JSON reports.
-Maintainers may distribute that larger reference-data archive separately. To
-run the full validation sweep locally, unpack it into the repository root so
-the ``validation/reference/<case>/`` directories exist locally:
+The top-level ``validation/`` directory is mostly local validation state.
+``validation/report/`` is tracked as the current documentation report snapshot,
+while ``validation/reference/`` and ``validation/runs/`` remain gitignored. The
+``pygotm validate`` CLI uses those ignored directories to drive the full 22-case
+validation sweep against Fortran GOTM reference output. Maintainers may
+distribute that larger reference-data archive separately. To run the full
+validation sweep locally, unpack it into the repository root so the
+``validation/reference/<case>/`` directories exist locally:
 
 .. code-block:: text
 

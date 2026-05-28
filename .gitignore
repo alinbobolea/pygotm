@@ -58,7 +58,13 @@ papers/
 
 # Validation outputs and external reference data — anchored to repo root so it
 # does not collide with the in-tree package directory src/pygotm/validation/.
-/validation/
+# Keep only the curated docs report snapshot in git; NetCDFs, references, run
+# directories, debug dumps, and the bulky per-variable JSON artifact stay local.
+/validation/*
+!/validation/report/
+/validation/report/*
+!/validation/report/*.html
+!/validation/report/report.json
 
 # Logs
 *.log

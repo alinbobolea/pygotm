@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pyGOTM Validation Report</title>
+<script>
+MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+  *      { box-sizing: border-box; }
+  body   { font-family: system-ui, sans-serif; margin: 0; color: #1f2937; background: #f7f8fb; }
+  .page  { max-width: 1800px; margin: 0 auto; padding: 1.25rem 1.5rem 1.5rem; }
+  h1     { font-size: 1.25rem; margin: 0; }
+  h2     { margin-top: 1.8em; border-bottom: 1px solid #ddd; padding-bottom: .3em; font-size: 1rem; }
+  h4     { color: #444; }
+  table  { border-collapse: collapse; width: 100%; margin: .8em 0; font-size: 0.85em; background: white; }
+  th, td { border: 1px solid #ddd; padding: .35em .6em; text-align: left; white-space: nowrap; }
+  th     { background: #f1f5f9; font-weight: 600; }
+  tr:hover td { background: #f8fafc; }
+  a      { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .topbar { display: flex; align-items: center; gap: .8em; padding: .9em 1.1em; background: white; border: 1px solid #d9e2ec; border-radius: 6px; }
+  .topbar-meta { color: #64748b; font-size: .85em; }
+  .verdict { font-size: .9em; font-weight: bold; padding: .25em .55em;
+               border: 1px solid; border-radius: 4px; margin-left: auto; }
+  code   { background: #f5f5f5; padding: .1em .4em; border-radius: 3px; font-size: 0.9em; }
+  .hardware-box { background: white; border: 1px solid #d9e2ec; border-radius: 6px;
+                   padding: .8em 1.2em; margin: 1em 0; display: inline-block; min-width: 420px; }
+  .table-wrap { overflow-x: auto; }
+  .hw-table { margin: 0; font-size: 0.88em; border: none; }
+  .hw-table th, .hw-table td { border: none; padding: .2em .7em .2em 0; background: transparent; }
+  .hw-table th { width: 140px; color: #555; font-weight: 600; }
+  .case-badge { font-size: 0.8em; font-weight: 700; padding: .15em .5em; border-radius: 3px; }
+  .badge-pass       { background: #e8f5e9; color: #2e7d32; }
+  .badge-marginal   { background: #fff9c4; color: #f57f17; }
+  .badge-discrepant { background: #ffe0b2; color: #e65100; }
+  .badge-broken     { background: #ffebee; color: #c62828; }
+  .badge-error      { background: #ffebee; color: #c62828; }
+  .methodology { background: white; border: 1px solid #d9e2ec; border-radius: 6px;
+                  padding: 1em 1.4em; margin: 1em 0; }
+  .status-band { display: grid; grid-template-columns: auto auto auto 1fr; gap: .3em 1em;
+                  font-size: 0.88em; margin-top: .6em; }
+  .case-browser { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 680px; margin-top: 1rem; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: white; }
+  .case-nav { border-right: 1px solid #cbd5e1; background: #f8fafc; overflow: auto; }
+  .case-nav h2 { margin: 0; padding: .8em 1em; border-bottom: 1px solid #cbd5e1; font-size: .85em; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }
+  .case-link { display: flex; align-items: center; justify-content: space-between; gap: .7em; padding: .65em .85em; border-bottom: 1px solid #e2e8f0; color: #1f2937; }
+  .case-link:hover { background: #eaf2ff; text-decoration: none; }
+  .case-link.is-selected { background: #dbeafe; border-left: 4px solid #2563eb; padding-left: calc(.85em - 4px); }
+  .case-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .case-frame { width: 100%; height: 100%; min-height: 680px; border: 0; background: white; }
+  @media (max-width: 900px) {
+    .page { padding: .8rem; }
+    .topbar { align-items: flex-start; flex-direction: column; }
+    .verdict { margin-left: 0; }
+    .hardware-box { min-width: 0; width: 100%; }
+    .case-browser { grid-template-columns: 1fr; }
+    .case-nav { border-right: 0; border-bottom: 1px solid #cbd5e1; max-height: 260px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="topbar">
+  <h1>pyGOTM Validation Report</h1>
+  <span class="topbar-meta">Generated: 2026-05-26T20:27:42Z &nbsp;·&nbsp; Total wall time: 0.0s</span>
+  <div class="verdict" style="color:#e65100;border-color:#e65100">
+    PARTIAL PARITY &nbsp; (15/22 cases passed)
+  </div>
+</div>
+
+
+<div class="hardware-box">
+  <h3 style="margin:0 0 .5em">Hardware</h3>
+  <table class="hw-table"><tbody><tr><th>CPU</th><td>AMD Ryzen 7 1800X Eight-Core Processor</td></tr><tr><th>Logical CPUs</th><td>8</td></tr><tr><th>RAM</th><td>23.4 GiB</td></tr><tr><th>Execution backend</th><td>cpu</td></tr><tr><th>Numba</th><td>0.65.1</td></tr><tr><th>Python</th><td>3.12.13</td></tr><tr><th>OS</th><td>Linux-6.14.0-37-generic-x86_64-with-glibc2.39</td></tr></tbody></table>
+</div>
+
+<h2>Validation Methodology</h2>
+<div class="methodology">
+  <p style="font-size:0.85em;color:#555;margin:.2em 0 .8em">
+    Discrete Frechet distance is computed per numeric variable after aligning both outputs onto a shared time grid.
+    Status is driven by the score: normalized Frechet distance for physically meaningful signal magnitudes, or relative raw distance below the variable magnitude floor.
+  </p>
+  <p style="font-size:0.85em">
+    <strong>Raw distance:</strong> \(d_{raw} = F(\text{ref}, \text{calc})\), the discrete Frechet distance on original values.<br>
+    <strong>Normalized distance:</strong> \(d_{norm} = F(N(\text{ref}), N(\text{calc}))\), where \(N\) is dynamic linear/log range normalization.<br>
+    <strong>Relative raw distance:</strong> \(d_{rel} = d_{raw} / \max(|\text{ref}|, |\text{calc}|)\), used when the signal magnitude is below its variable floor.
+  </p>
+  <p style="font-size:0.85em">
+    If \(d_{raw} &lt; 10^{-12}\), both distances are reported as zero.
+    Reference and calculated values are shown at the largest absolute aligned difference.
+  </p>
+  <div class="status-band">
+    <span style="color:#2e7d32;font-weight:bold">PASS</span>     <span>green</span>  <span>score \(&lt; 0.01\)</span>       <span>Shape-equivalent within threshold.</span>
+    <span style="color:#f9a825;font-weight:bold">MARGINAL</span> <span>yellow</span> <span>score \(0.01\) to \(&lt; 0.05\)</span>  <span>Small shape deviation. Plot generated.</span>
+    <span style="color:#e65100;font-weight:bold">DISCREPANT</span><span>orange</span><span>score \(0.05\) to \(&lt; 0.20\)</span> <span>Deterministic implementation difference likely. Plot generated.</span>
+    <span style="color:#c62828;font-weight:bold">BROKEN</span>    <span>red</span>   <span>score \(\geq 0.20\)</span>          <span>Severe mismatch or structural comparison failure.</span>
+  </div>
+  <p style="font-size:0.85em;margin-top:.6em">
+    Comparison plots are generated only for <strong>MARGINAL</strong> and <strong>DISCREPANT</strong> variables.
+    Each case is split into <strong>PyGOTM</strong> and <strong>PyFABM</strong> sections.
+  </p>
+</div>
+
+<h2>Summary</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Case</th><th>Status</th>
+      <th>PASS</th><th>MARGINAL</th><th>DISCREPANT</th><th>BROKEN</th>
+      <th>Total vars</th><th>Wall time</th>
+    </tr>
+  </thead>
+  <tbody><tr><td><a href="couette-gotm.html" target="case-frame">couette</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>100</td><td>0</td><td>0</td><td>0</td><td>100</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="blacksea-gotm.html" target="case-frame">blacksea</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>121</td><td>0</td><td>0</td><td>0</td><td>121</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="channel-gotm.html" target="case-frame">channel</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>100</td><td>0</td><td>0</td><td>0</td><td>100</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="entrainment-gotm.html" target="case-frame">entrainment</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>100</td><td>0</td><td>0</td><td>0</td><td>100</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="estuary-gotm.html" target="case-frame">estuary</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>100</td><td>0</td><td>0</td><td>0</td><td>100</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="flex-gotm.html" target="case-frame">flex</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>104</td><td>0</td><td>0</td><td>0</td><td>104</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="gotland-gotm.html" target="case-frame">gotland</a></td><td><span class="case-badge badge-broken">FAIL</span></td><td>74</td><td>14</td><td>16</td><td>0</td><td>104</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="lago_maggiore-gotm.html" target="case-frame">lago_maggiore</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>105</td><td>0</td><td>0</td><td>0</td><td>105</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="langmuir-gotm.html" target="case-frame">langmuir</a></td><td><span class="case-badge badge-broken">FAIL</span></td><td>111</td><td>1</td><td>1</td><td>0</td><td>113</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="liverpool_bay-gotm.html" target="case-frame">liverpool_bay</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>105</td><td>0</td><td>0</td><td>0</td><td>105</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="medsea_east-gotm.html" target="case-frame">medsea_east</a></td><td><span class="case-badge badge-broken">FAIL</span></td><td>124</td><td>16</td><td>0</td><td>0</td><td>140</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="medsea_west-gotm.html" target="case-frame">medsea_west</a></td><td><span class="case-badge badge-broken">FAIL</span></td><td>128</td><td>11</td><td>1</td><td>0</td><td>140</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="nns_annual-gotm.html" target="case-frame">nns_annual</a></td><td><span class="case-badge badge-broken">FAIL</span></td><td>102</td><td>7</td><td>6</td><td>0</td><td>115</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="nns_seasonal-gotm.html" target="case-frame">nns_seasonal</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>105</td><td>0</td><td>0</td><td>0</td><td>105</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="ows_papa-gotm.html" target="case-frame">ows_papa</a></td><td><span class="case-badge badge-broken">FAIL</span></td><td>111</td><td>1</td><td>1</td><td>0</td><td>113</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="plume-gotm.html" target="case-frame">plume</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>113</td><td>0</td><td>0</td><td>0</td><td>113</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="resolute-gotm.html" target="case-frame">resolute</a></td><td><span class="case-badge badge-broken">FAIL</span></td><td>92</td><td>17</td><td>6</td><td>0</td><td>115</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="reynolds-gotm.html" target="case-frame">reynolds</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>105</td><td>0</td><td>0</td><td>0</td><td>105</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="rouse-gotm.html" target="case-frame">rouse</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>108</td><td>0</td><td>0</td><td>0</td><td>108</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="seagrass-gotm.html" target="case-frame">seagrass</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>104</td><td>0</td><td>0</td><td>0</td><td>104</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="wave_breaking-gotm.html" target="case-frame">wave_breaking</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>100</td><td>0</td><td>0</td><td>0</td><td>100</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr><td><a href="asics_med-gotm.html" target="case-frame">asics_med</a></td><td><span class="case-badge badge-pass">PASS</span></td><td>104</td><td>0</td><td>0</td><td>0</td><td>104</td><td style='font-variant-numeric:tabular-nums'>—</td></tr>
+<tr style='font-weight:bold;border-top:2px solid #ccc'><td>TOTAL (22 cases)</td><td>—</td><td>2316</td><td>67</td><td>31</td><td>0</td><td>—</td><td style='font-variant-numeric:tabular-nums'>0.0s</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="case-browser">
+  <nav class="case-nav" aria-label="Case reports">
+    <h2>Cases</h2>
+    
+  <a class="case-link is-selected" href="couette-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">couette-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="blacksea-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">blacksea-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="channel-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">channel-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="entrainment-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">entrainment-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="estuary-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">estuary-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="flex-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">flex-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="gotland-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">gotland-gotm</span>
+    <span class="case-badge badge-broken">FAIL</span>
+  </a>
+  <a class="case-link" href="lago_maggiore-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">lago_maggiore-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="langmuir-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">langmuir-gotm</span>
+    <span class="case-badge badge-broken">FAIL</span>
+  </a>
+  <a class="case-link" href="liverpool_bay-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">liverpool_bay-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="medsea_east-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">medsea_east-gotm</span>
+    <span class="case-badge badge-broken">FAIL</span>
+  </a>
+  <a class="case-link" href="medsea_west-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">medsea_west-gotm</span>
+    <span class="case-badge badge-broken">FAIL</span>
+  </a>
+  <a class="case-link" href="nns_annual-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">nns_annual-gotm</span>
+    <span class="case-badge badge-broken">FAIL</span>
+  </a>
+  <a class="case-link" href="nns_seasonal-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">nns_seasonal-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="ows_papa-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">ows_papa-gotm</span>
+    <span class="case-badge badge-broken">FAIL</span>
+  </a>
+  <a class="case-link" href="plume-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">plume-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="resolute-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">resolute-gotm</span>
+    <span class="case-badge badge-broken">FAIL</span>
+  </a>
+  <a class="case-link" href="reynolds-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">reynolds-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="rouse-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">rouse-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="seagrass-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">seagrass-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="wave_breaking-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">wave_breaking-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  <a class="case-link" href="asics_med-gotm.html" target="case-frame" data-case-link>
+    <span class="case-name">asics_med-gotm</span>
+    <span class="case-badge badge-pass">PASS</span>
+  </a>
+  </nav>
+  <iframe class="case-frame" name="case-frame" src="couette-gotm.html" title="Selected validation case report"></iframe>
+</div>
+
+<script>
+document.querySelectorAll('[data-case-link]').forEach(link => {
+  link.addEventListener('click', () => {
+    document.querySelectorAll('[data-case-link]').forEach(item => item.classList.remove('is-selected'));
+    link.classList.add('is-selected');
+  });
+});
+</script>
+</div>
+</body>
+</html>

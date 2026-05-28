@@ -5,7 +5,8 @@ Workflow:
   2. Warm up Numba kernels once before timed runs
   4. Run validation cases serially or through Dask when --workers > 1
   5. Compare each run against Fortran reference NetCDF
-  6. Write validation/report.html + report.json + results.json + per-case reports
+  6. Write validation/report/report.html + report.json + results.json
+     + per-case reports
 
 Usage
 -----
@@ -16,6 +17,7 @@ Usage
     python -m pygotm.validation.run_validation --exclude plume,resolute
     python -m pygotm.validation.run_validation --no-run
     python -m pygotm.validation.run_validation --workers 4
+    python -m pygotm.validation.run_validation --report-dir validation/report
     python -m pygotm.validation.run_validation --dashboard-port 8788
 """
 
@@ -79,11 +81,15 @@ def _select_case_list(
     return case_list
 
 
-def _validate_case_list(case_list: list[str]) -> None:
+def _validate_case_list(
+    case_list: list[str],
+    *,
+    cases_root: Path | None = None,
+) -> None:
     """Fail before warmup/execution if any requested case cannot be resolved."""
 
     for case_name in case_list:
-        resolve_reference_case(case_name)
+        resolve_reference_case(case_name, cases_root=cases_root)
 
 
 def _fmt_duration(s: float) -> str:
@@ -118,7 +124,7 @@ def _run_cases(
     *,
     case_list: list[str],
     runs_dir: Path,
-    output_dir: Path,
+    report_dir: Path,
     selected_arch: str,
     n_workers: int,
     dashboard_port: int,
@@ -126,6 +132,7 @@ def _run_cases(
     hardware: dict[str, str],
     skip_run: bool,
     debug_turbulence: bool,
+    cases_root: Path | None,
     on_result: Callable[[CaseResult], None],
 ) -> list[CaseResult]:
     if not case_list:
@@ -137,11 +144,12 @@ def _run_cases(
             result = validate_case_to_html(
                 case_name,
                 runs_dir,
-                output_dir,
+                report_dir,
                 generated_at=generated_at,
                 hardware=hardware,
                 skip_run=skip_run,
                 debug_turbulence=debug_turbulence,
+                cases_root=cases_root,
             )
             on_result(result)
             results.append(result)
@@ -155,9 +163,10 @@ def _run_cases(
         dashboard_port=dashboard_port,
         skip_run=skip_run,
         debug_turbulence=debug_turbulence,
-        report_dir=output_dir,
+        report_dir=report_dir,
         report_generated_at=generated_at,
         report_hardware=hardware,
+        cases_root=cases_root,
         on_result=on_result,
     )
 
@@ -216,7 +225,21 @@ def _run_cases(
     default="validation",
     show_default=True,
     type=click.Path(file_okay=False, path_type=Path),
-    help="Directory for run outputs and report.",
+    help="Directory for generated NetCDF runs and local validation artifacts.",
+)
+@click.option(
+    "--report-dir",
+    default=None,
+    show_default=False,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory receiving report HTML/JSON. Defaults to <output-dir>/report.",
+)
+@click.option(
+    "--cases-root",
+    default=None,
+    show_default=False,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Reference case root. Defaults to validation/reference.",
 )
 @click.option(
     "--no-run",
@@ -244,6 +267,8 @@ def cli(
     workers: int,
     dashboard_port: int,
     output_dir: Path,
+    report_dir: Path | None,
+    cases_root: Path | None,
     skip_run: bool,
     skip_warmup: bool,
     debug_turbulence: bool,
@@ -271,17 +296,18 @@ def cli(
         exclude=exclude,
     )
     try:
-        _validate_case_list(case_list)
+        _validate_case_list(case_list, cases_root=cases_root)
     except FileNotFoundError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
 
     runs_dir = output_dir / "runs"
+    report_output_dir = report_dir if report_dir is not None else output_dir / "report"
     print(f"pyGOTM validation starting ({len(case_list)} cases)")
 
     # 4. Warm up Numba kernels
     if not skip_run and not skip_warmup:
-        trigger_numba_jit()
+        trigger_numba_jit(cases_root=cases_root)
 
     # 5. Run cases
     hw = dict(platform_info.hardware)
@@ -292,7 +318,7 @@ def cli(
     results = _run_cases(
         case_list=case_list,
         runs_dir=runs_dir,
-        output_dir=output_dir,
+        report_dir=report_output_dir,
         selected_arch=selected_arch,
         n_workers=n_workers,
         dashboard_port=dashboard_port,
@@ -300,6 +326,7 @@ def cli(
         hardware=hw,
         skip_run=skip_run,
         debug_turbulence=debug_turbulence,
+        cases_root=cases_root,
         on_result=on_result,
     )
 
@@ -326,10 +353,10 @@ def cli(
         verdict=verdict,
     )
 
-    html_path = output_dir / "report.html"
-    json_path = output_dir / "report.json"
-    results_json_path = output_dir / "results.json"
-    write_html_index(summary_report, output_dir)
+    html_path = report_output_dir / "report.html"
+    json_path = report_output_dir / "report.json"
+    results_json_path = report_output_dir / "results.json"
+    write_html_index(summary_report, report_output_dir)
     save_json(summary_report, json_path)
     save_json(results_report, results_json_path)
 

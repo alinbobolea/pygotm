@@ -35,8 +35,8 @@ def _write(path: Path, body: str = "<html></html>") -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_stages_top_level_report_and_case_files(tmp_path: Path) -> None:
-    src = tmp_path / "validation"
+def test_stages_report_snapshot_files(tmp_path: Path) -> None:
+    src = tmp_path / "validation" / "report"
     staged_root = tmp_path / "_validation_html"
 
     _write(src / "report.html", "<html>index</html>")
@@ -61,7 +61,7 @@ def test_stages_top_level_report_and_case_files(tmp_path: Path) -> None:
 
 
 def test_refreshes_previous_staging(tmp_path: Path) -> None:
-    src = tmp_path / "validation"
+    src = tmp_path / "validation" / "report"
     staged_root = tmp_path / "_validation_html"
 
     _write(src / "report.html", "<html>v1</html>")
@@ -81,7 +81,7 @@ def test_refreshes_previous_staging(tmp_path: Path) -> None:
 
 
 def test_missing_validation_directory_is_not_an_error(tmp_path: Path) -> None:
-    src = tmp_path / "validation"  # never created
+    src = tmp_path / "validation" / "report"  # never created
     staged_root = tmp_path / "_validation_html"
 
     copied = stage_validation_html(src=src, staged_root=staged_root)
@@ -91,8 +91,8 @@ def test_missing_validation_directory_is_not_an_error(tmp_path: Path) -> None:
 
 
 def test_empty_validation_directory_produces_empty_staging(tmp_path: Path) -> None:
-    src = tmp_path / "validation"
-    src.mkdir()
+    src = tmp_path / "validation" / "report"
+    src.mkdir(parents=True)
     staged_root = tmp_path / "_validation_html"
 
     copied = stage_validation_html(src=src, staged_root=staged_root)
@@ -152,7 +152,7 @@ def test_rst_wrappers_refresh_on_second_call(tmp_path: Path) -> None:
 def test_validation_test_cases_summary_uses_report_json_timestamp(
     tmp_path: Path,
 ) -> None:
-    report_json = tmp_path / "validation" / "report.json"
+    report_json = tmp_path / "validation" / "report" / "report.json"
     out = tmp_path / "docs" / "validation" / "_generated" / "test_cases_summary.inc"
     report_json.parent.mkdir(parents=True)
     report_json.write_text(
@@ -204,7 +204,7 @@ def test_validation_test_cases_summary_handles_missing_report(
     out = tmp_path / "docs" / "validation" / "_generated" / "test_cases_summary.inc"
 
     generated = stage_validation_test_cases_summary(
-        report_json=tmp_path / "validation" / "report.json",
+        report_json=tmp_path / "validation" / "report" / "report.json",
         output_path=out,
     )
 

@@ -21,6 +21,7 @@ from pygotm.validation.run_validation import (
     _select_case_list,
     _validate_case_list,
 )
+from tests.fixtures import BUNDLED_CASES_ROOT
 
 
 def _case_result(status: str = "PASS") -> CaseResult:
@@ -87,7 +88,7 @@ def test_explicit_cases_take_precedence_over_default_group() -> None:
 
 
 def test_validate_case_list_accepts_case_yaml_specs() -> None:
-    _validate_case_list(["entrainment/gotm_keps"])
+    _validate_case_list(["entrainment/gotm"], cases_root=BUNDLED_CASES_ROOT)
 
 
 def test_on_result_reports_completed_case_counts(
@@ -138,9 +139,10 @@ def test_run_cases_renders_multi_case_no_run_with_dask_when_workers_requested(
         assert kwargs["n_workers"] == 4
         assert kwargs["skip_run"] is True
         assert kwargs["debug_turbulence"] is False
-        assert kwargs["report_dir"] == tmp_path
+        assert kwargs["report_dir"] == tmp_path / "report"
         assert kwargs["report_generated_at"] == "2026-05-22T00:00:00Z"
         assert kwargs["report_hardware"] == {"execution_backend": "cpu"}
+        assert kwargs["cases_root"] is None
         return [_case_result(), _case_result()]
 
     monkeypatch.setattr(
@@ -152,7 +154,7 @@ def test_run_cases_renders_multi_case_no_run_with_dask_when_workers_requested(
     results = _run_cases(
         case_list=["couette", "channel"],
         runs_dir=tmp_path / "runs",
-        output_dir=tmp_path,
+        report_dir=tmp_path / "report",
         selected_arch="cpu",
         n_workers=4,
         dashboard_port=8787,
@@ -160,6 +162,7 @@ def test_run_cases_renders_multi_case_no_run_with_dask_when_workers_requested(
         hardware={"execution_backend": "cpu"},
         skip_run=True,
         debug_turbulence=False,
+        cases_root=None,
         on_result=lambda result: None,
     )
 
@@ -184,6 +187,7 @@ def test_run_cases_renders_multi_case_serially_with_one_worker(
         hardware: dict[str, str],
         skip_run: bool = False,
         debug_turbulence: bool = False,
+        cases_root: Path | None = None,
     ) -> CaseResult:
         assert runs_dir == tmp_path / "runs"
         assert output_dir == tmp_path
@@ -191,6 +195,7 @@ def test_run_cases_renders_multi_case_serially_with_one_worker(
         assert hardware == {"execution_backend": "cpu"}
         assert skip_run
         assert not debug_turbulence
+        assert cases_root is None
         calls.append(case_name)
         return _case_result()
 
@@ -208,7 +213,7 @@ def test_run_cases_renders_multi_case_serially_with_one_worker(
     results = _run_cases(
         case_list=["couette", "channel"],
         runs_dir=tmp_path / "runs",
-        output_dir=tmp_path,
+        report_dir=tmp_path,
         selected_arch="cpu",
         n_workers=1,
         dashboard_port=8787,
@@ -216,6 +221,7 @@ def test_run_cases_renders_multi_case_serially_with_one_worker(
         hardware={"execution_backend": "cpu"},
         skip_run=True,
         debug_turbulence=False,
+        cases_root=None,
         on_result=lambda result: None,
     )
 
@@ -241,6 +247,7 @@ def test_run_cases_renders_single_case_no_run_directly(
         hardware: dict[str, str],
         skip_run: bool = False,
         debug_turbulence: bool = False,
+        cases_root: Path | None = None,
     ) -> CaseResult:
         assert runs_dir == tmp_path / "runs"
         assert output_dir == tmp_path
@@ -248,6 +255,7 @@ def test_run_cases_renders_single_case_no_run_directly(
         assert hardware == {"execution_backend": "cpu"}
         assert skip_run
         assert not debug_turbulence
+        assert cases_root is None
         calls.append(case_name)
         return _case_result()
 
@@ -265,7 +273,7 @@ def test_run_cases_renders_single_case_no_run_directly(
     results = _run_cases(
         case_list=["couette"],
         runs_dir=tmp_path / "runs",
-        output_dir=tmp_path,
+        report_dir=tmp_path,
         selected_arch="cpu",
         n_workers=4,
         dashboard_port=8787,
@@ -273,6 +281,7 @@ def test_run_cases_renders_single_case_no_run_directly(
         hardware={"execution_backend": "cpu"},
         skip_run=True,
         debug_turbulence=False,
+        cases_root=None,
         on_result=lambda result: None,
     )
 
@@ -298,9 +307,12 @@ def test_run_validation_cli_writes_html_and_report_json(
     def fake_run_cases(**kwargs: object) -> list[CaseResult]:
         assert kwargs["skip_run"] is True
         assert kwargs["n_workers"] == 1
-        output_dir = kwargs["output_dir"]
-        assert isinstance(output_dir, Path)
-        (output_dir / "couette-gotm.html").write_text("case", encoding="utf-8")
+        assert kwargs["cases_root"] == BUNDLED_CASES_ROOT
+        report_dir = kwargs["report_dir"]
+        assert isinstance(report_dir, Path)
+        assert report_dir == tmp_path / "report"
+        report_dir.mkdir(parents=True)
+        (report_dir / "couette-gotm.html").write_text("case", encoding="utf-8")
         return [_case_result()]
 
     def fake_write_html_index(report: Report, output_dir: Path) -> Path:
@@ -319,23 +331,28 @@ def test_run_validation_cli_writes_html_and_report_json(
             "--no-run",
             "--output-dir",
             str(tmp_path),
+            "--cases-root",
+            str(BUNDLED_CASES_ROOT),
         ],
     )
 
     assert result.exit_code == 0
-    assert (tmp_path / "report.html").is_file()
-    assert (tmp_path / "report.json").is_file()
-    assert (tmp_path / "results.json").is_file()
+    report_dir = tmp_path / "report"
+    assert (report_dir / "report.html").is_file()
+    assert (report_dir / "report.json").is_file()
+    assert (report_dir / "results.json").is_file()
 
-    report_payload = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    report_payload = json.loads(
+        (report_dir / "report.json").read_text(encoding="utf-8")
+    )
     results_payload = json.loads(
-        (tmp_path / "results.json").read_text(encoding="utf-8")
+        (report_dir / "results.json").read_text(encoding="utf-8")
     )
     assert report_payload["cases"][0]["variables"] == []
     assert results_payload["cases"][0]["variables"][0]["name"] == "temp"
     assert results_payload["cases"][0]["variables"][0]["plot_html"] is None
-    assert f"JSON  : {tmp_path / 'report.json'}" in result.output
-    assert f"Results JSON: {tmp_path / 'results.json'}" in result.output
+    assert f"JSON  : {report_dir / 'report.json'}" in result.output
+    assert f"Results JSON: {report_dir / 'results.json'}" in result.output
 
 
 def test_run_validation_cli_reports_unknown_case_without_traceback(
@@ -365,6 +382,8 @@ def test_run_validation_cli_reports_unknown_case_without_traceback(
             "does_not_exist",
             "--output-dir",
             str(tmp_path),
+            "--cases-root",
+            str(BUNDLED_CASES_ROOT),
         ],
     )
 

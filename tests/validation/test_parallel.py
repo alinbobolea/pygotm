@@ -22,7 +22,8 @@ def _fake_result(name: str) -> CaseResult:
     )
 
 
-def _fake_case(case_spec: str) -> SimpleNamespace:
+def _fake_case(case_spec: str, **kwargs: object) -> SimpleNamespace:
+    assert kwargs.get("cases_root") is None
     case_name, yaml_base = (
         case_spec.split("/", 1) if "/" in case_spec else (case_spec, "gotm")
     )

@@ -14,8 +14,10 @@ Create the conda environment and register this checkout as the importable
 
 Before running official validation cases, provide a local reference-data tree
 so ``validation/reference/couette/gotm.yaml`` exists. Top-level
-``validation/`` data is intentionally not tracked in normal Git history, and
-the source repository does not currently publish or vendor those files.
+``validation/reference/`` data is intentionally not tracked in normal Git
+history. The source repository does track ``validation/report/`` as the current
+documentation report snapshot, but it does not vendor the full reference-data
+tree.
 
 Run a Single-Column Simulation
 -------------------------------
@@ -83,8 +85,10 @@ Compare pyGOTM output against the official Fortran GOTM reference cases:
    conda run -n pygotm python -m pygotm.validation.run_validation \
        --cases couette,channel,entrainment
 
-Output: ``validation/report.html``, ``validation/report.json``,
-``validation/results.json``, and one per-case HTML report.
+Output: ``validation/report/report.html``, ``validation/report/report.json``,
+``validation/report/results.json``, and one per-case HTML report under
+``validation/report/``. Generated NetCDF outputs remain under
+``validation/runs/``.
 
 The default validation set is ``couette,channel,entrainment`` and should exit
 successfully.  Running all 22 reference cases currently completes every case

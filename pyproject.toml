@@ -62,6 +62,10 @@ pygotm = "pygotm.__main__:cli"
 [tool.hatch.build.targets.wheel]
 packages = ["src/pygotm"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/pygotm/util/gsw/data/README.md" = "pygotm/util/gsw/data/README.md"
+"src/pygotm/util/gsw/data/saar_2011_gotm.npz" = "pygotm/util/gsw/data/saar_2011_gotm.npz"
+
 [tool.hatch.build.targets.sdist]
 # Be explicit about what ships in the sdist so packaging is reproducible and
 # does not silently drop files when local .gitignore rules change.
@@ -69,6 +73,7 @@ include = [
     "src/pygotm",
     "tests",
     "docs",
+    "scripts/generate_gotm_saar_data.py",
     "pyproject.toml",
     "README.md",
     "LICENSE",

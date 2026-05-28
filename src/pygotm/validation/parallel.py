@@ -21,6 +21,7 @@ def _run_case_worker(
     arch_name: str,
     skip_run: bool,
     debug_turbulence: bool = False,
+    cases_root: Path | None = None,
     report_dir: Path | None = None,
     report_generated_at: str | None = None,
     report_hardware: dict[str, str] | None = None,
@@ -44,6 +45,7 @@ def _run_case_worker(
             hardware=report_hardware or {},
             skip_run=skip_run,
             debug_turbulence=debug_turbulence,
+            cases_root=cases_root,
         )
 
     return validate_case(
@@ -51,6 +53,7 @@ def _run_case_worker(
         runs_dir,
         skip_run=skip_run,
         debug_turbulence=debug_turbulence,
+        cases_root=cases_root,
     )
 
 
@@ -66,6 +69,7 @@ def run_cases_parallel(
     report_dir: Path | None = None,
     report_generated_at: str | None = None,
     report_hardware: dict[str, str] | None = None,
+    cases_root: Path | None = None,
     processes: bool = True,
     on_result: Callable[[CaseResult], None] | None = None,
 ) -> list[CaseResult]:
@@ -75,7 +79,7 @@ def run_cases_parallel(
     Calls *on_result* as each case completes (arrival order).
     """
     n_workers = max(1, min(n_workers, len(case_names)))
-    cases = [resolve_reference_case(name) for name in case_names]
+    cases = [resolve_reference_case(name, cases_root=cases_root) for name in case_names]
 
     logging.getLogger("distributed").setLevel(logging.CRITICAL)
 
@@ -101,6 +105,7 @@ def run_cases_parallel(
                 arch_name,
                 skip_run,
                 debug_turbulence,
+                cases_root,
                 report_dir,
                 report_generated_at,
                 report_hardware,
