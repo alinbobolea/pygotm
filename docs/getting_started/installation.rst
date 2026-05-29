@@ -35,17 +35,23 @@ Environment Contents and Boundaries
 -----------------------------------
 
 ``pygotm-conda-env.yml`` is the authoritative conda environment definition for
-local development, validation, documentation, and integration work.  It
-currently includes:
+local development, validation, documentation, and integration work.  It is a
+deliberate superset covering both pyGOTM kernel and pyGOTM Studio runtime
+dependencies. It currently includes:
 
 * Python 3.12 and the core scientific stack: Numba, NumPy, SciPy, xarray,
   NetCDF4, PyYAML, pandas, Pydantic, Click, GSW, and pyfabm.
 * Dask and distributed for multi-case validation orchestration.
 * pybtex for citation parsing, Matplotlib for documentation figures, and
   Plotly for embedded Frechet validation report plots.
+* pyGOTM Studio runtime: FastAPI, Uvicorn, WebSockets, python-dotenv,
+  NiceGUI, Jinja2, markdown-it-py, httpx, rich, cmocean, and WeasyPrint.
+  Studio deps are declared here so the single ``pygotm`` conda environment
+  covers both the kernel and the studio application layer.
 * Developer and documentation tools: pytest, anyio, Ruff, mypy, PyYAML type
-  stubs, pre-commit, hatch, Sphinx, Furo, MyST, MyST-NB, copybutton, and
-  Mermaid.
+  stubs, pre-commit, hatch, reuse (REUSE/SPDX licensing compliance),
+  import-linter (kernel–studio boundary contract), Sphinx 8.x, Furo,
+  MyST, MyST-NB, copybutton, and Mermaid.
 
 FABM support depends on ``pyfabm`` from conda-forge. pyGOTM does not publish a
 ``pygotm[fabm]`` pip extra because current FABM-capable ``pyfabm`` builds are

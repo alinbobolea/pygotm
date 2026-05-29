@@ -74,7 +74,9 @@ dependencies:
   - import-linter>=2.0
 
   # Documentation dependencies
-  - sphinx>=8.0
+  # Pin <9: Sphinx 9.x dropped SphinxUnreferencedFootnotesDetector, which the
+  # current myst-parser/myst-nb still try to remove at setup (hard crash).
+  - sphinx>=8.0,<9
   - sphinx-autodoc-typehints>=2.0
   - furo>=2024.0
   - myst-parser>=4.0
