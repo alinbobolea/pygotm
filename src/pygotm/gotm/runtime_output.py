@@ -12,15 +12,19 @@ from pygotm.gotm.runtime_state import FloatArray
 IntArray = NDArray[np.int64]
 
 __all__ = [
+    "EXTRA_SCALAR_OUTPUT_NAMES",
+    "EXTRA_Z_PROFILE_OUTPUT_NAMES",
+    "FABM_PROMOTABLE_EXTRA_OUTPUT_NAMES",
     "IntArray",
-    "REFERENCE_SCALAR_OUTPUT_NAMES",
-    "REFERENCE_Z_PROFILE_OUTPUT_NAMES",
+    "OutputAttrs",
     "RuntimeOutput",
     "allocate_runtime_output",
 ]
 
 
-REFERENCE_SCALAR_OUTPUT_NAMES = (
+OutputAttrs = dict[str, str]
+
+EXTRA_SCALAR_OUTPUT_NAMES = (
     "Hfrazil",
     "Hice",
     "T1",
@@ -28,12 +32,6 @@ REFERENCE_SCALAR_OUTPUT_NAMES = (
     "Tf",
     "Tice_surface",
     "bottom_ice_energy",
-    "jrc_med_ergom_DNB",
-    "jrc_med_ergom_OFL",
-    "jrc_med_ergom_PBR",
-    "jrc_med_ergom_SBR",
-    "jrc_med_ergom_fl",
-    "jrc_med_ergom_pb",
     "ocean_ice_flux",
     "ocean_ice_heat_flux",
     "ocean_ice_salt_flux",
@@ -42,58 +40,15 @@ REFERENCE_SCALAR_OUTPUT_NAMES = (
     "surface_ice_energy",
 )
 
-REFERENCE_Z_PROFILE_OUTPUT_NAMES = (
+EXTRA_Z_PROFILE_OUTPUT_NAMES = (
     "attenuation_coefficient_of_photosynthetic_radiative_flux",
-    "bsem_PAR",
-    "bsem_PPR",
-    "bsem_am",
-    "bsem_dn",
-    "bsem_hs",
-    "bsem_ni",
-    "bsem_o2",
-    "bsem_pl",
-    "bsem_ps",
-    "bsem_zg",
-    "bsem_zl",
-    "bsem_zn",
-    "bsem_zs",
     "eps_obs",
-    "jrc_med_ergom_Amm",
-    "jrc_med_ergom_DNP",
-    "jrc_med_ergom_DO_mg",
-    "jrc_med_ergom_GPP",
-    "jrc_med_ergom_NCP",
-    "jrc_med_ergom_NFX",
-    "jrc_med_ergom_NPR",
-    "jrc_med_ergom_Nit",
-    "jrc_med_ergom_PAR",
-    "jrc_med_ergom_PPR",
-    "jrc_med_ergom_Pho",
-    "jrc_med_ergom_TN",
-    "jrc_med_ergom_TP",
-    "jrc_med_ergom_aa",
-    "jrc_med_ergom_bb",
-    "jrc_med_ergom_bb_chla",
-    "jrc_med_ergom_dd",
-    "jrc_med_ergom_ff",
-    "jrc_med_ergom_ff_chla",
-    "jrc_med_ergom_nn",
-    "jrc_med_ergom_o2",
-    "jrc_med_ergom_po",
-    "jrc_med_ergom_pp",
-    "jrc_med_ergom_pp_chla",
-    "jrc_med_ergom_pw",
-    "jrc_med_ergom_tot_chla",
-    "jrc_med_ergom_zz",
-    "npzd_NPR",
-    "npzd_PAR",
-    "npzd_PPR",
-    "npzd_det",
-    "npzd_nut",
-    "npzd_phy",
-    "npzd_zoo",
-    "sed_c",
-    "total_nitrogen",
+)
+
+FABM_PROMOTABLE_EXTRA_OUTPUT_NAMES = (
+    "attenuation_coefficient_of_photosynthetic_radiative_flux",
+    "surface_albedo",
+    "surface_drag_coefficient_in_air",
 )
 
 
@@ -118,6 +73,86 @@ def _output_profile(nout: int, nlev: int) -> FloatArray:
 
 def _output_scalar(nout: int) -> FloatArray:
     return np.zeros(nout, dtype=np.float64)
+
+
+def _validate_output_name(name: str) -> None:
+    if not name:
+        msg = "output variable names must be non-empty"
+        raise ValueError(msg)
+    if "/" in name:
+        msg = f"output variable {name!r} must use normalized '_' separators"
+        raise ValueError(msg)
+
+
+def _validate_scalar_outputs(
+    mapping: dict[str, FloatArray],
+    *,
+    nout: int,
+    allowed_names: tuple[str, ...] | None = None,
+) -> None:
+    allowed = None if allowed_names is None else set(allowed_names)
+    for name, array in mapping.items():
+        _validate_output_name(name)
+        if allowed is not None and name not in allowed:
+            msg = f"unknown scalar output {name!r}"
+            raise ValueError(msg)
+        if array.dtype != np.float64:
+            msg = f"{name} must have dtype float64, got {array.dtype}"
+            raise TypeError(msg)
+        if array.shape != (nout,):
+            msg = f"{name} must have shape ({nout},), got {array.shape}"
+            raise ValueError(msg)
+        if not array.flags.c_contiguous:
+            msg = f"{name} must be C-contiguous"
+            raise ValueError(msg)
+
+
+def _validate_profile_outputs(
+    mapping: dict[str, FloatArray],
+    *,
+    shape: tuple[int, int],
+    allowed_names: tuple[str, ...] | None = None,
+) -> None:
+    allowed = None if allowed_names is None else set(allowed_names)
+    for name, array in mapping.items():
+        _validate_output_name(name)
+        if allowed is not None and name not in allowed:
+            msg = f"unknown z-profile output {name!r}"
+            raise ValueError(msg)
+        if array.dtype != np.float64:
+            msg = f"{name} must have dtype float64, got {array.dtype}"
+            raise TypeError(msg)
+        if array.shape != shape:
+            msg = f"{name} must have shape {shape}, got {array.shape}"
+            raise ValueError(msg)
+        if not array.flags.c_contiguous:
+            msg = f"{name} must be C-contiguous"
+            raise ValueError(msg)
+
+
+def _validate_output_disjointness(
+    extra_scalars: dict[str, FloatArray],
+    extra_z_profiles: dict[str, FloatArray],
+    fabm_scalars: dict[str, FloatArray],
+    fabm_z_profiles: dict[str, FloatArray],
+) -> None:
+    extra_names = set(extra_scalars) | set(extra_z_profiles)
+    fabm_names = set(fabm_scalars) | set(fabm_z_profiles)
+    duplicate_extra = set(extra_scalars) & set(extra_z_profiles)
+    duplicate_fabm = set(fabm_scalars) & set(fabm_z_profiles)
+    collisions = extra_names & fabm_names
+    if duplicate_extra:
+        name = sorted(duplicate_extra)[0]
+        msg = f"extra output {name!r} declared as both scalar and z-profile"
+        raise ValueError(msg)
+    if duplicate_fabm:
+        name = sorted(duplicate_fabm)[0]
+        msg = f"FABM output {name!r} declared as both scalar and z-profile"
+        raise ValueError(msg)
+    if collisions:
+        name = sorted(collisions)[0]
+        msg = f"FABM output {name!r} collides with a core optional output"
+        raise ValueError(msg)
 
 
 @dataclass(slots=True)
@@ -172,7 +207,8 @@ class RuntimeOutput:
     Ekin: FloatArray
     Epot: FloatArray
     Eturb: FloatArray
-    reference_scalars: dict[str, FloatArray]
+    extra_scalars: dict[str, FloatArray]
+    fabm_scalars: dict[str, FloatArray]
 
     rho_p: FloatArray
     rho: FloatArray
@@ -239,7 +275,56 @@ class RuntimeOutput:
     nucl: FloatArray
     z: FloatArray
     zi: FloatArray
-    reference_z_profiles: dict[str, FloatArray]
+    extra_z_profiles: dict[str, FloatArray]
+    fabm_z_profiles: dict[str, FloatArray]
+    fabm_attrs: dict[str, OutputAttrs]
+
+    def declare_fabm_output(
+        self,
+        name: str,
+        nlev: int,
+        *,
+        z_profile: bool,
+        attrs: OutputAttrs | None = None,
+        replace_extra: bool = False,
+    ) -> None:
+        """Allocate one dynamic FABM output buffer."""
+
+        _validate_output_name(name)
+        if name in self.fabm_scalars or name in self.fabm_z_profiles:
+            msg = f"FABM output variable {name!r} is already declared"
+            raise ValueError(msg)
+        if name in self.extra_scalars or name in self.extra_z_profiles:
+            if not replace_extra:
+                msg = f"FABM output {name!r} collides with a core optional output"
+                raise ValueError(msg)
+            if name not in FABM_PROMOTABLE_EXTRA_OUTPUT_NAMES:
+                msg = f"FABM output {name!r} cannot replace a core optional output"
+                raise ValueError(msg)
+            if z_profile:
+                if name in self.extra_scalars:
+                    msg = (
+                        f"FABM z-profile output {name!r} collides with a scalar "
+                        "core optional output"
+                    )
+                    raise ValueError(msg)
+                del self.extra_z_profiles[name]
+            else:
+                if name in self.extra_z_profiles:
+                    msg = (
+                        f"FABM scalar output {name!r} collides with a z-profile "
+                        "core optional output"
+                    )
+                    raise ValueError(msg)
+                del self.extra_scalars[name]
+        if z_profile:
+            self.fabm_z_profiles[name] = _output_profile(self.nout, nlev)
+        else:
+            self.fabm_scalars[name] = _output_scalar(self.nout)
+        if attrs:
+            self.fabm_attrs[name] = {
+                key: value for key, value in attrs.items() if value
+            }
 
     def validate(self, nlev: int) -> None:
         """Raise if output buffers do not match the runtime grid."""
@@ -306,22 +391,12 @@ class RuntimeOutput:
             if not array.flags.c_contiguous:
                 msg = f"{name} must be C-contiguous"
                 raise ValueError(msg)
-        if tuple(self.reference_scalars) != REFERENCE_SCALAR_OUTPUT_NAMES:
-            msg = "reference scalar outputs do not match expected declaration order"
-            raise ValueError(msg)
-        for name, array in self.reference_scalars.items():
-            if name not in REFERENCE_SCALAR_OUTPUT_NAMES:
-                msg = f"unknown reference scalar output {name!r}"
-                raise ValueError(msg)
-            if array.dtype != np.float64:
-                msg = f"{name} must have dtype float64, got {array.dtype}"
-                raise TypeError(msg)
-            if array.shape != (self.nout,):
-                msg = f"{name} must have shape ({self.nout},), got {array.shape}"
-                raise ValueError(msg)
-            if not array.flags.c_contiguous:
-                msg = f"{name} must be C-contiguous"
-                raise ValueError(msg)
+        _validate_scalar_outputs(
+            self.extra_scalars,
+            nout=self.nout,
+            allowed_names=EXTRA_SCALAR_OUTPUT_NAMES,
+        )
+        _validate_scalar_outputs(self.fabm_scalars, nout=self.nout)
         expected_profile_shape = (self.nout, nlev + 1)
         for name in (
             "rho_p",
@@ -403,25 +478,27 @@ class RuntimeOutput:
             if not array.flags.c_contiguous:
                 msg = f"{name} must be C-contiguous"
                 raise ValueError(msg)
-        if tuple(self.reference_z_profiles) != REFERENCE_Z_PROFILE_OUTPUT_NAMES:
-            msg = "reference z-profile outputs do not match expected declaration order"
+        _validate_profile_outputs(
+            self.extra_z_profiles,
+            shape=expected_profile_shape,
+            allowed_names=EXTRA_Z_PROFILE_OUTPUT_NAMES,
+        )
+        _validate_profile_outputs(
+            self.fabm_z_profiles,
+            shape=expected_profile_shape,
+        )
+        _validate_output_disjointness(
+            self.extra_scalars,
+            self.extra_z_profiles,
+            self.fabm_scalars,
+            self.fabm_z_profiles,
+        )
+        declared_fabm_names = set(self.fabm_scalars) | set(self.fabm_z_profiles)
+        unknown_attrs = set(self.fabm_attrs) - declared_fabm_names
+        if unknown_attrs:
+            name = sorted(unknown_attrs)[0]
+            msg = f"FABM output attributes declared for unknown output {name!r}"
             raise ValueError(msg)
-        for name, array in self.reference_z_profiles.items():
-            if name not in REFERENCE_Z_PROFILE_OUTPUT_NAMES:
-                msg = f"unknown reference z-profile output {name!r}"
-                raise ValueError(msg)
-            if array.dtype != np.float64:
-                msg = f"{name} must have dtype float64, got {array.dtype}"
-                raise TypeError(msg)
-            if array.shape != expected_profile_shape:
-                msg = (
-                    f"{name} must have shape {expected_profile_shape}, "
-                    f"got {array.shape}"
-                )
-                raise ValueError(msg)
-            if not array.flags.c_contiguous:
-                msg = f"{name} must be C-contiguous"
-                raise ValueError(msg)
 
 
 def allocate_runtime_output(
@@ -486,9 +563,10 @@ def allocate_runtime_output(
         Ekin=_output_scalar(nout),
         Epot=_output_scalar(nout),
         Eturb=_output_scalar(nout),
-        reference_scalars={
-            name: _output_scalar(nout) for name in REFERENCE_SCALAR_OUTPUT_NAMES
+        extra_scalars={
+            name: _output_scalar(nout) for name in EXTRA_SCALAR_OUTPUT_NAMES
         },
+        fabm_scalars={},
         rho_p=_output_profile(nout, nlev),
         rho=_output_profile(nout, nlev),
         u=_output_profile(nout, nlev),
@@ -554,10 +632,11 @@ def allocate_runtime_output(
         nucl=_output_profile(nout, nlev),
         z=_output_profile(nout, nlev),
         zi=_output_profile(nout, nlev),
-        reference_z_profiles={
-            name: _output_profile(nout, nlev)
-            for name in REFERENCE_Z_PROFILE_OUTPUT_NAMES
+        extra_z_profiles={
+            name: _output_profile(nout, nlev) for name in EXTRA_Z_PROFILE_OUTPUT_NAMES
         },
+        fabm_z_profiles={},
+        fabm_attrs={},
     )
     output.validate(nlev)
     return output

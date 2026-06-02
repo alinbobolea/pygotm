@@ -9,15 +9,16 @@ from pathlib import Path
 from typing import Any
 
 from pygotm.config import GotmSettings, load_config
+from pygotm.fabm.engine import FABMEngine
 from pygotm.gotm.run_metadata import (
     PYGOTM_CONFIG_SCHEMA_VERSION,
     PYGOTM_OUTPUT_SCHEMA_VERSION,
     REQUIRED_NETCDF_ATTRS,
-    parse_fabm_models,
 )
 from pygotm.gotm.runtime_output import (
-    REFERENCE_SCALAR_OUTPUT_NAMES,
-    REFERENCE_Z_PROFILE_OUTPUT_NAMES,
+    EXTRA_SCALAR_OUTPUT_NAMES,
+    EXTRA_Z_PROFILE_OUTPUT_NAMES,
+    FABM_PROMOTABLE_EXTRA_OUTPUT_NAMES,
 )
 
 __all__ = [
@@ -846,7 +847,7 @@ _CORE_OUTPUT_VARIABLES: tuple[OutputVariable, ...] = (
     ),
 )
 
-_REFERENCE_SCALAR_VARIABLES: tuple[OutputVariable, ...] = tuple(
+_EXTRA_SCALAR_VARIABLES: tuple[OutputVariable, ...] = tuple(
     _variable(
         name,
         units="",
@@ -858,9 +859,9 @@ _REFERENCE_SCALAR_VARIABLES: tuple[OutputVariable, ...] = tuple(
         axis="scalar",
         state_dependent=True,
     )
-    for name in REFERENCE_SCALAR_OUTPUT_NAMES
+    for name in EXTRA_SCALAR_OUTPUT_NAMES
 )
-_REFERENCE_Z_PROFILE_VARIABLES: tuple[OutputVariable, ...] = tuple(
+_EXTRA_Z_PROFILE_VARIABLES: tuple[OutputVariable, ...] = tuple(
     _variable(
         name,
         units="",
@@ -869,7 +870,7 @@ _REFERENCE_Z_PROFILE_VARIABLES: tuple[OutputVariable, ...] = tuple(
         axis="z",
         state_dependent=True,
     )
-    for name in REFERENCE_Z_PROFILE_OUTPUT_NAMES
+    for name in EXTRA_Z_PROFILE_OUTPUT_NAMES
 )
 
 
@@ -892,6 +893,58 @@ def _mapping(value: object) -> Mapping[str, Any]:
     if isinstance(value, Mapping):
         return value
     return {}
+
+
+def _fabm_output_variables(fabm_path: Path) -> tuple[OutputVariable, ...]:
+    engine = FABMEngine(fabm_path)
+    engine.initialize(nlev=1, skip_start=True)
+    variables: list[OutputVariable] = []
+    for spec in engine.output_variable_specs():
+        variables.append(
+            _variable(
+                spec.name,
+                units=spec.units,
+                long_name=spec.long_name,
+                category="fabm",
+                axis=spec.kind,
+                state_dependent=True,
+            )
+        )
+    return tuple(variables)
+
+
+def _append_or_replace_fabm_output_variables(
+    variables: list[OutputVariable],
+    fabm_path: Path,
+) -> None:
+    core_names = {item.name for item in _CORE_OUTPUT_VARIABLES}
+    extra_names = set(EXTRA_SCALAR_OUTPUT_NAMES) | set(EXTRA_Z_PROFILE_OUTPUT_NAMES)
+    existing_names = {item.name for item in variables}
+    promotable_names = set(FABM_PROMOTABLE_EXTRA_OUTPUT_NAMES)
+
+    for variable in _fabm_output_variables(fabm_path):
+        if variable.name in core_names:
+            msg = f"FABM output {variable.name!r} collides with a core output variable"
+            raise ValueError(msg)
+        if variable.name in extra_names and variable.name not in promotable_names:
+            msg = (
+                f"FABM output {variable.name!r} collides with a core optional "
+                "output variable"
+            )
+            raise ValueError(msg)
+        if variable.name not in existing_names:
+            variables.append(variable)
+            existing_names.add(variable.name)
+            continue
+        if variable.name in promotable_names and variable.name in extra_names:
+            for index, existing in enumerate(variables):
+                if existing.name == variable.name:
+                    variables[index] = variable
+                    break
+            existing_names.add(variable.name)
+            continue
+        msg = f"FABM output {variable.name!r} collides with an existing output variable"
+        raise ValueError(msg)
 
 
 def _state_dependent_variables(config_path: Path | None) -> tuple[OutputVariable, ...]:
@@ -917,7 +970,7 @@ def _state_dependent_variables(config_path: Path | None) -> tuple[OutputVariable
         if ice_model == "winton":
             ice_names.update({"T1", "T2"})
         variables.extend(
-            item for item in _REFERENCE_SCALAR_VARIABLES if item.name in ice_names
+            item for item in _EXTRA_SCALAR_VARIABLES if item.name in ice_names
         )
 
     fabm = _mapping(document.get("fabm"))
@@ -932,50 +985,21 @@ def _state_dependent_variables(config_path: Path | None) -> tuple[OutputVariable
         fabm_path = Path(str(fabm_config))
         if not fabm_path.is_absolute():
             fabm_path = config_path.parent / fabm_path
-        model_text = " ".join(parse_fabm_models(fabm_path)).lower()
         scalar_names = {"surface_albedo", "surface_drag_coefficient_in_air"}
+        variables.extend(
+            item for item in _EXTRA_SCALAR_VARIABLES if item.name in scalar_names
+        )
         z_profile_names = {"attenuation_coefficient_of_photosynthetic_radiative_flux"}
-        if "jrc_med_ergom" in model_text or "ergom" in model_text:
-            scalar_names.update(
-                name
-                for name in REFERENCE_SCALAR_OUTPUT_NAMES
-                if name.startswith("jrc_med_ergom")
-            )
-            z_profile_names.update(
-                name
-                for name in REFERENCE_Z_PROFILE_OUTPUT_NAMES
-                if name.startswith("jrc_med_ergom")
-            )
-        if "bsem" in model_text:
-            z_profile_names.update(
-                name
-                for name in REFERENCE_Z_PROFILE_OUTPUT_NAMES
-                if name.startswith("bsem_")
-            )
-            z_profile_names.add("total_nitrogen")
-        if "npzd" in model_text:
-            z_profile_names.update(
-                name
-                for name in REFERENCE_Z_PROFILE_OUTPUT_NAMES
-                if name.startswith("npzd_")
-            )
-            z_profile_names.add("total_nitrogen")
-        if "bb/passive" in model_text:
-            z_profile_names.add("sed_c")
         variables.extend(
-            item for item in _REFERENCE_SCALAR_VARIABLES if item.name in scalar_names
+            item for item in _EXTRA_Z_PROFILE_VARIABLES if item.name in z_profile_names
         )
-        variables.extend(
-            item
-            for item in _REFERENCE_Z_PROFILE_VARIABLES
-            if item.name in z_profile_names
-        )
+        _append_or_replace_fabm_output_variables(variables, fabm_path)
 
     turbulence = _mapping(document.get("turbulence"))
     epsprof = _mapping(turbulence.get("epsprof"))
     if epsprof and str(epsprof.get("method", "off")).lower() not in {"off", "0"}:
         variables.extend(
-            item for item in _REFERENCE_Z_PROFILE_VARIABLES if item.name == "eps_obs"
+            item for item in _EXTRA_Z_PROFILE_VARIABLES if item.name == "eps_obs"
         )
     return tuple(variables)
 

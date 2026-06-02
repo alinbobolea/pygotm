@@ -300,6 +300,23 @@ for output:
      - m\ :sup:`2` s\ :sup:`−1`
      - Biological light attenuation (cell centres)
 
+When ``fabm.use: true``, additional FABM variables are discovered from the
+resolved ``fabm.yaml`` through pyfabm and written automatically.  Interior state
+variables and output-enabled interior diagnostics are profiles with dimensions
+``(time, z, lat, lon)``; surface state, bottom state, and horizontal diagnostics
+are scalar fields with dimensions ``(time, lat, lon)``.  Variable names use
+FABM ``output_name`` metadata, with ``/`` normalized to ``_``.  For example,
+``gotm/npzd`` configured under an instance named ``npzd`` writes
+``npzd_nut``, ``npzd_phy``, ``npzd_zoo``, ``npzd_det``, ``npzd_PAR``,
+``npzd_PPR``, ``npzd_NPR``, and ``total_nitrogen``.
+
+Use ``pygotm schema output --config gotm.yaml --json`` to inspect the exact
+output variable list for a FABM-active configuration before running it.
+FABM-active runs also retain the host feedback placeholders
+``surface_albedo``, ``surface_drag_coefficient_in_air``, and
+``attenuation_coefficient_of_photosynthetic_radiative_flux`` for compatibility
+with existing validation outputs.
+
 .. _yaml-restart:
 
 ``restart``

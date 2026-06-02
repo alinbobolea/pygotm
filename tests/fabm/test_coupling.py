@@ -188,23 +188,25 @@ def test_try_set_propagates_real_setter_failures() -> None:
         )
 
 
-def test_record_fabm_output_uses_cached_diagnostics_and_boundary_scalars() -> None:
+def test_record_fabm_output_uses_dynamic_diagnostics_and_boundary_scalars() -> None:
     class EngineWithStaleDiagnostics:
         def diagnostics(self) -> dict[str, np.ndarray]:
             raise AssertionError("cached output diagnostics should be used")
 
-    reference_z_profiles = {
+    fabm_z_profiles = {
         "jrc_med_ergom_Amm": np.zeros((1, 4), dtype=np.float64),
     }
-    reference_scalars = {
+    fabm_scalars = {
         "jrc_med_ergom_OFL": np.zeros(1, dtype=np.float64),
         "jrc_med_ergom_DNB": np.zeros(1, dtype=np.float64),
         "jrc_med_ergom_fl": np.zeros(1, dtype=np.float64),
     }
     output = SimpleNamespace(
         nout=1,
-        reference_z_profiles=reference_z_profiles,
-        reference_scalars=reference_scalars,
+        extra_z_profiles={},
+        extra_scalars={},
+        fabm_z_profiles=fabm_z_profiles,
+        fabm_scalars=fabm_scalars,
     )
     cc = np.array([[10.0, 20.0, 30.0]], dtype=np.float64)
     cached_diagnostics = {
@@ -217,17 +219,44 @@ def test_record_fabm_output_uses_cached_diagnostics_and_boundary_scalars() -> No
         EngineWithStaleDiagnostics(),
         cc,
         [],
-        [(0, reference_scalars["jrc_med_ergom_fl"], "jrc_med_ergom_fl")],
+        [(0, fabm_scalars["jrc_med_ergom_fl"], "jrc_med_ergom_fl")],
         output,
         0,
         3,
         diagnostics=cached_diagnostics,
     )
 
-    assert reference_scalars["jrc_med_ergom_OFL"][0] == 3.0
-    assert reference_scalars["jrc_med_ergom_DNB"][0] == 4.0
-    assert reference_scalars["jrc_med_ergom_fl"][0] == 10.0
+    assert fabm_scalars["jrc_med_ergom_OFL"][0] == 3.0
+    assert fabm_scalars["jrc_med_ergom_DNB"][0] == 4.0
+    assert fabm_scalars["jrc_med_ergom_fl"][0] == 10.0
     np.testing.assert_allclose(
-        reference_z_profiles["jrc_med_ergom_Amm"][0],
+        fabm_z_profiles["jrc_med_ergom_Amm"][0],
         [0.0, 7.0, 8.0, 9.0],
     )
+
+
+def test_record_fabm_output_does_not_fall_back_to_extra_outputs() -> None:
+    name = "attenuation_coefficient_of_photosynthetic_radiative_flux"
+    extra_z_profiles = {name: np.zeros((1, 4), dtype=np.float64)}
+    output = SimpleNamespace(
+        nout=1,
+        extra_z_profiles=extra_z_profiles,
+        extra_scalars={},
+        fabm_z_profiles={},
+        fabm_scalars={},
+    )
+
+    _record_fabm_output(
+        RecordingEngine(),
+        np.zeros((0, 3), dtype=np.float64),
+        [],
+        [],
+        output,
+        0,
+        3,
+        diagnostics={
+            name: np.array([1.0, 0.9, 0.8], dtype=np.float64),
+        },
+    )
+
+    np.testing.assert_array_equal(extra_z_profiles[name], np.zeros((1, 4)))

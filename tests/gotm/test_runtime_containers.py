@@ -105,6 +105,67 @@ def test_runtime_output_allocates_initial_periodic_and_final_buffers() -> None:
     assert output.u.shape == (4, 4)
     assert output.u.dtype == np.float64
     assert output.u.flags.c_contiguous
+    assert output.extra_scalars["Tf"].shape == (4,)
+    assert output.extra_z_profiles[
+        "attenuation_coefficient_of_photosynthetic_radiative_flux"
+    ].shape == (4, 4)
+    assert output.extra_z_profiles["eps_obs"].shape == (4, 4)
+    assert output.fabm_scalars == {}
+    assert output.fabm_z_profiles == {}
+
+
+def test_runtime_output_declares_dynamic_fabm_buffers() -> None:
+    output = allocate_runtime_output(nlev=3, nt=5, output_every=2)
+
+    output.declare_fabm_output(
+        "npzd_phy",
+        3,
+        z_profile=True,
+        attrs={"units": "mmol m-3", "long_name": "phytoplankton"},
+    )
+    output.declare_fabm_output(
+        "jrc_med_ergom_fl",
+        3,
+        z_profile=False,
+        attrs={"units": "mmol n/m**2", "long_name": "fluff"},
+    )
+    output.validate(3)
+
+    assert output.fabm_z_profiles["npzd_phy"].shape == (4, 4)
+    assert output.fabm_scalars["jrc_med_ergom_fl"].shape == (4,)
+    assert output.fabm_attrs["npzd_phy"]["units"] == "mmol m-3"
+
+
+def test_runtime_output_rejects_fabm_collision_with_extra_outputs() -> None:
+    output = allocate_runtime_output(nlev=3, nt=5, output_every=2)
+
+    with pytest.raises(ValueError, match="collides"):
+        output.declare_fabm_output("Tf", 3, z_profile=False)
+
+
+def test_runtime_output_promotes_known_fabm_feedback_output() -> None:
+    output = allocate_runtime_output(nlev=3, nt=5, output_every=2)
+    name = "attenuation_coefficient_of_photosynthetic_radiative_flux"
+
+    output.declare_fabm_output(
+        name,
+        3,
+        z_profile=True,
+        attrs={"units": "m-1", "long_name": "local PAR attenuation"},
+        replace_extra=True,
+    )
+    output.validate(3)
+
+    assert name not in output.extra_z_profiles
+    assert output.fabm_z_profiles[name].shape == (4, 4)
+    assert output.fabm_attrs[name]["units"] == "m-1"
+
+
+def test_runtime_output_rejects_unapproved_extra_promotion() -> None:
+    output = allocate_runtime_output(nlev=3, nt=5, output_every=2)
+
+    with pytest.raises(ValueError, match="cannot replace"):
+        output.declare_fabm_output("Tf", 3, z_profile=False, replace_extra=True)
 
 
 def test_runtime_output_disabled_allocates_empty_buffers() -> None:

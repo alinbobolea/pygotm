@@ -58,6 +58,32 @@ The coupling is completely optional.  If ``fabm.use: false`` (the default),
 the physics-only compiled Numba loop runs unchanged and pyfabm is never
 imported.
 
+FABM output variables
+~~~~~~~~~~~~~~~~~~~~~
+
+When FABM is active, pyGOTM discovers output variables directly from the
+instantiated ``pyfabm.Model``.  Every FABM state variable is written to the
+NetCDF result, and every pyfabm diagnostic whose ``output`` flag is enabled is
+written as well.  Names use FABM's ``output_name`` metadata, so slashes in model
+paths are normalized to underscores.  For example, ``gotm/npzd`` variables are
+reported as ``npzd_phy`` and ``npzd_PAR``, and ``bb/passive`` configured as
+``sed/c`` is reported as ``sed_c``.
+
+Interior state variables and interior diagnostics are written as
+``(time, z, lat, lon)`` profiles.  Surface state, bottom state, and horizontal
+diagnostics are written as ``(time, lat, lon)`` scalar fields.  pyGOTM attaches
+the FABM ``units`` and ``long_name`` metadata to each emitted NetCDF variable,
+which makes the output schema and downstream integrations model-agnostic.
+
+The host feedback placeholders ``surface_albedo``,
+``surface_drag_coefficient_in_air``, and
+``attenuation_coefficient_of_photosynthetic_radiative_flux`` remain present for
+FABM-active runs for compatibility with existing validation reports.  They are
+separate from the model-discovered FABM namespace.
+
+Use ``pygotm schema output --config path/to/gotm.yaml --json`` to inspect the
+exact dynamic output surface before running a FABM-active configuration.
+
 Installation Boundary
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -367,6 +393,13 @@ value.
 
 If the final chunk is smaller than the default chunk size, the buffers are
 reallocated to the smaller size so no stale data is used.
+
+FABM NetCDF output buffers are allocated after ``pyfabm.Model`` has been
+instantiated, because only the live model knows its state and diagnostic output
+names.  Memory for those buffers scales as
+:math:`O(N_\mathrm{vars} N_\mathrm{out} N_\mathrm{lev})` for interior variables
+and :math:`O(N_\mathrm{vars} N_\mathrm{out})` for horizontal variables.  Physics-
+only runs allocate no FABM output buffers.
 
 See Also
 --------

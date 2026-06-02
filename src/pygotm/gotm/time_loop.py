@@ -2745,12 +2745,12 @@ def _simple_freezing_temperature(salinity: float) -> float:
     return -0.0575 * salinity
 
 
-def _populate_simple_ice_reference_scalars(
+def _populate_simple_ice_extra_scalars(
     params: RuntimeParams,
     output: RuntimeOutput,
     written: int,
 ) -> None:
-    tf = output.reference_scalars.get("Tf")
+    tf = output.extra_scalars.get("Tf")
     if tf is None or written <= 0:
         return
 
@@ -2763,11 +2763,11 @@ def _populate_simple_ice_reference_scalars(
         tf[slot] = tf_constant
 
 
-def _populate_observation_reference_profiles(
+def _populate_observation_extra_profiles(
     forcing: RuntimeForcing,
     output: RuntimeOutput,
 ) -> None:
-    eps_obs = output.reference_z_profiles.get("eps_obs")
+    eps_obs = output.extra_z_profiles.get("eps_obs")
     if eps_obs is None:
         return
 
@@ -3288,17 +3288,17 @@ def run_compiled_time_loop(
             output.nucl,
             output.z,
             output.zi,
-            output.reference_scalars["Hfrazil"],
-            output.reference_scalars["Hice"],
-            output.reference_scalars["T1"],
-            output.reference_scalars["T2"],
-            output.reference_scalars["Tf"],
-            output.reference_scalars["Tice_surface"],
-            output.reference_scalars["bottom_ice_energy"],
-            output.reference_scalars["ocean_ice_flux"],
-            output.reference_scalars["ocean_ice_heat_flux"],
-            output.reference_scalars["ocean_ice_salt_flux"],
-            output.reference_scalars["surface_ice_energy"],
+            output.extra_scalars["Hfrazil"],
+            output.extra_scalars["Hice"],
+            output.extra_scalars["T1"],
+            output.extra_scalars["T2"],
+            output.extra_scalars["Tf"],
+            output.extra_scalars["Tice_surface"],
+            output.extra_scalars["bottom_ice_energy"],
+            output.extra_scalars["ocean_ice_flux"],
+            output.extra_scalars["ocean_ice_heat_flux"],
+            output.extra_scalars["ocean_ice_salt_flux"],
+            output.extra_scalars["surface_ice_energy"],
             step_offset,
             out_slot_base,
             write_ic,
@@ -3318,9 +3318,9 @@ def run_compiled_time_loop(
         )
     )
     if written > 0 and params.ice_model == 1:
-        _populate_simple_ice_reference_scalars(params, output, written)
+        _populate_simple_ice_extra_scalars(params, output, written)
     if written > 0:
-        _populate_observation_reference_profiles(forcing, output)
+        _populate_observation_extra_profiles(forcing, output)
     return written
 
 

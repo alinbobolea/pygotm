@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Protocol
 
 import gsw
@@ -960,7 +959,7 @@ def build_runtime_from_run(
     return bundle
 
 
-_ICE_REFERENCE_SCALARS = (
+_ICE_EXTRA_SCALARS = (
     "Hfrazil",
     "Hice",
     "Tf",
@@ -971,71 +970,10 @@ _ICE_REFERENCE_SCALARS = (
     "ocean_ice_salt_flux",
     "surface_ice_energy",
 )
-_WINTON_REFERENCE_SCALARS = ("T1", "T2")
-_FABM_REFERENCE_SCALARS = (
+_WINTON_EXTRA_SCALARS = ("T1", "T2")
+_FABM_FEEDBACK_EXTRA_SCALARS = (
     "surface_albedo",
     "surface_drag_coefficient_in_air",
-)
-_JRC_MED_ERGOM_REFERENCE_SCALARS = (
-    "jrc_med_ergom_DNB",
-    "jrc_med_ergom_OFL",
-    "jrc_med_ergom_PBR",
-    "jrc_med_ergom_SBR",
-    "jrc_med_ergom_fl",
-    "jrc_med_ergom_pb",
-)
-_BSEM_REFERENCE_PROFILES = (
-    "bsem_PAR",
-    "bsem_PPR",
-    "bsem_am",
-    "bsem_dn",
-    "bsem_hs",
-    "bsem_ni",
-    "bsem_o2",
-    "bsem_pl",
-    "bsem_ps",
-    "bsem_zg",
-    "bsem_zl",
-    "bsem_zn",
-    "bsem_zs",
-)
-_JRC_MED_ERGOM_REFERENCE_PROFILES = (
-    "jrc_med_ergom_Amm",
-    "jrc_med_ergom_DNP",
-    "jrc_med_ergom_DO_mg",
-    "jrc_med_ergom_GPP",
-    "jrc_med_ergom_NCP",
-    "jrc_med_ergom_NFX",
-    "jrc_med_ergom_NPR",
-    "jrc_med_ergom_Nit",
-    "jrc_med_ergom_PAR",
-    "jrc_med_ergom_PPR",
-    "jrc_med_ergom_Pho",
-    "jrc_med_ergom_TN",
-    "jrc_med_ergom_TP",
-    "jrc_med_ergom_aa",
-    "jrc_med_ergom_bb",
-    "jrc_med_ergom_bb_chla",
-    "jrc_med_ergom_dd",
-    "jrc_med_ergom_ff",
-    "jrc_med_ergom_ff_chla",
-    "jrc_med_ergom_nn",
-    "jrc_med_ergom_o2",
-    "jrc_med_ergom_po",
-    "jrc_med_ergom_pp",
-    "jrc_med_ergom_pp_chla",
-    "jrc_med_ergom_pw",
-    "jrc_med_ergom_tot_chla",
-    "jrc_med_ergom_zz",
-)
-_NPZD_REFERENCE_PROFILES = (
-    "npzd_NPR",
-    "npzd_PAR",
-    "npzd_PPR",
-    "npzd_det",
-    "npzd_nut",
-    "npzd_phy",
-    "npzd_zoo",
 )
 
 
@@ -1051,36 +989,26 @@ def _document_token(value: object, default: str) -> str:
     return str(value).strip().lower().replace("-", "_")
 
 
-def _fabm_yaml_text(run: Any) -> str:
-    fabm_path = Path(run.yaml_path).with_name("fabm.yaml")
-    if not fabm_path.exists():
-        return ""
-    return fabm_path.read_text(encoding="utf-8").lower()
-
-
-def _reference_scalar_output_names(run: Any, output: RuntimeOutput) -> tuple[str, ...]:
+def _extra_scalar_output_names(run: Any, output: RuntimeOutput) -> tuple[str, ...]:
     names: list[str] = []
     document = _document_mapping(run.document)
     surface = _document_mapping(document.get("surface"))
     ice = _document_mapping(surface.get("ice"))
     ice_model = _document_token(ice.get("model"), "simple")
     if ice_model in {"simple", "basal_melt", "lebedev", "mylake", "winton"}:
-        names.extend(_ICE_REFERENCE_SCALARS)
+        names.extend(_ICE_EXTRA_SCALARS)
         if ice_model == "winton":
-            names.extend(_WINTON_REFERENCE_SCALARS)
+            names.extend(_WINTON_EXTRA_SCALARS)
 
     fabm = _document_mapping(document.get("fabm"))
     if bool(fabm.get("use", False)):
-        names.extend(_FABM_REFERENCE_SCALARS)
-        fabm_text = _fabm_yaml_text(run)
-        if "jrc_med_ergom" in fabm_text:
-            names.extend(_JRC_MED_ERGOM_REFERENCE_SCALARS)
+        names.extend(_FABM_FEEDBACK_EXTRA_SCALARS)
 
-    available = output.reference_scalars
+    available = output.extra_scalars
     return tuple(name for name in names if name in available)
 
 
-def _reference_z_profile_output_names(
+def _extra_z_profile_output_names(
     run: Any,
     output: RuntimeOutput,
 ) -> tuple[str, ...]:
@@ -1096,19 +1024,8 @@ def _reference_z_profile_output_names(
     fabm = _document_mapping(document.get("fabm"))
     if bool(fabm.get("use", False)):
         names.append("attenuation_coefficient_of_photosynthetic_radiative_flux")
-        fabm_text = _fabm_yaml_text(run)
-        if "bsem" in fabm_text:
-            names.extend(_BSEM_REFERENCE_PROFILES)
-            names.append("total_nitrogen")
-        if "jrc_med_ergom" in fabm_text:
-            names.extend(_JRC_MED_ERGOM_REFERENCE_PROFILES)
-        if "npzd" in fabm_text:
-            names.extend(_NPZD_REFERENCE_PROFILES)
-            names.append("total_nitrogen")
-        if "bb/passive" in fabm_text:
-            names.append("sed_c")
 
-    available = output.reference_z_profiles
+    available = output.extra_z_profiles
     return tuple(name for name in names if name in available)
 
 
@@ -1141,10 +1058,14 @@ def runtime_output_to_dataset(
     z_profiles = output.z[:, z_start:]
     zi_profiles = output.zi[:, zi_start:]
 
-    def z_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
+    def z_profile(
+        values: np.ndarray,
+        var_attrs: Mapping[str, str] | None = None,
+    ) -> tuple[tuple[str, ...], np.ndarray, dict[str, str]]:
         return (
             ("time", "z", "lat", "lon"),
             np.asarray(values[:, z_start:], dtype=np.float64)[:, :, None, None],
+            dict(var_attrs or {}),
         )
 
     def zi_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
@@ -1153,10 +1074,14 @@ def runtime_output_to_dataset(
             np.asarray(values[:, zi_start:], dtype=np.float64)[:, :, None, None],
         )
 
-    def scalar(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
+    def scalar(
+        values: np.ndarray,
+        var_attrs: Mapping[str, str] | None = None,
+    ) -> tuple[tuple[str, ...], np.ndarray, dict[str, str]]:
         return (
             ("time", "lat", "lon"),
             np.asarray(values, dtype=np.float64)[:, None, None],
+            dict(var_attrs or {}),
         )
 
     def diagnostic_z_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
@@ -1275,10 +1200,20 @@ def runtime_output_to_dataset(
         "nus": zi_profile(output.nus),
         "nucl": zi_profile(output.nucl),
     }
-    for name in _reference_scalar_output_names(run, output):
-        data_vars[name] = scalar(output.reference_scalars[name])
-    for name in _reference_z_profile_output_names(run, output):
-        data_vars[name] = z_profile(output.reference_z_profiles[name])
+    for name in _extra_scalar_output_names(run, output):
+        data_vars[name] = scalar(output.extra_scalars[name])
+    for name in _extra_z_profile_output_names(run, output):
+        data_vars[name] = z_profile(output.extra_z_profiles[name])
+    for name, values in output.fabm_scalars.items():
+        if name in data_vars:
+            msg = f"FABM output {name!r} collides with an existing output variable"
+            raise ValueError(msg)
+        data_vars[name] = scalar(values, output.fabm_attrs.get(name))
+    for name, values in output.fabm_z_profiles.items():
+        if name in data_vars:
+            msg = f"FABM output {name!r} collides with an existing output variable"
+            raise ValueError(msg)
+        data_vars[name] = z_profile(values, output.fabm_attrs.get(name))
 
     if int(bundle.params.density_method) == 1:
         conservative_temperature = np.asarray(output.T[:, z_start:], dtype=np.float64)

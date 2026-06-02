@@ -86,10 +86,10 @@ def run_fabm_chunk(
     state_scalar_refs: list[tuple[int, np.ndarray, str]] = []
     for idx, name in enumerate(state_names):
         norm_name = name.replace("/", "_")
-        z_arr = output.reference_z_profiles.get(norm_name)
+        z_arr = _z_profile_output(output, norm_name)
         if z_arr is not None and idx < n_interior:
             state_z_refs.append((idx, z_arr))
-        scalar_arr = output.reference_scalars.get(norm_name)
+        scalar_arr = _scalar_output(output, norm_name)
         if scalar_arr is not None:
             state_scalar_refs.append((idx, scalar_arr, norm_name))
 
@@ -309,9 +309,9 @@ def run_fabm_loop(
     function walks those steps in Python, coupling pyfabm to stored GOTM state
     without entering any Numba kernel.
 
-    Reference profile and scalar outputs are written into
-    ``output.reference_z_profiles`` and ``output.reference_scalars`` at the
-    same output-slot indices as the physics outputs.
+    FABM profile and scalar outputs are written into ``output.fabm_z_profiles``
+    and ``output.fabm_scalars`` at the same output-slot indices as the physics
+    outputs.
 
     Optional *forcing_u10* / *forcing_v10* (shape ``(nt+1,)``) provide surface
     wind components for FABM models that need ``wind_speed``. *forcing_yearday*
@@ -644,6 +644,14 @@ def _try_set_scalar(engine: FABMEngine, name: str, value: float) -> None:
         pass
 
 
+def _z_profile_output(output: RuntimeOutput, name: str) -> np.ndarray | None:
+    return output.fabm_z_profiles.get(name)
+
+
+def _scalar_output(output: RuntimeOutput, name: str) -> np.ndarray | None:
+    return output.fabm_scalars.get(name)
+
+
 def _record_fabm_output(
     engine: FABMEngine,
     cc: np.ndarray,
@@ -671,7 +679,7 @@ def _record_fabm_output(
     diags = diagnostics if diagnostics is not None else engine.diagnostics()
     for name, diag_val in diags.items():
         norm_name = name.replace("/", "_")
-        profile_arr = output.reference_z_profiles.get(norm_name)
+        profile_arr = _z_profile_output(output, norm_name)
         if (
             profile_arr is not None
             and isinstance(diag_val, np.ndarray)
@@ -679,7 +687,7 @@ def _record_fabm_output(
         ):
             n = min(diag_val.shape[0], nlev)
             profile_arr[slot, 1 : n + 1] = diag_val[:n]
-        scalar_arr = output.reference_scalars.get(norm_name)
+        scalar_arr = _scalar_output(output, norm_name)
         if scalar_arr is not None:
             scalar_arr[slot] = _scalar_from_value(norm_name, diag_val, nlev)
 

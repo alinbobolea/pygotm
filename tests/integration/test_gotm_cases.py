@@ -103,6 +103,21 @@ def test_couette_driver_advances_velocity_and_turbulence() -> None:
         dataset.close()
 
 
+def test_rouse_fabm_outputs_are_discovered_from_pyfabm_metadata() -> None:
+    case = bundled_case("rouse")
+    dataset = GotmDriver(case.yaml_path).run(max_steps=1)
+    try:
+        assert "sed_c" in dataset.data_vars
+        assert "surface_albedo" in dataset.data_vars
+        assert "surface_drag_coefficient_in_air" in dataset.data_vars
+        assert dataset["sed_c"].dims == ("time", "z", "lat", "lon")
+        assert dataset["sed_c"].attrs["units"] == "mol m-3"
+        assert dataset["sed_c"].attrs["long_name"] == "concentration"
+        assert np.isfinite(dataset["sed_c"].values).all()
+    finally:
+        dataset.close()
+
+
 @pytest.mark.parametrize("case_name", BUNDLED_CASE_NAMES)
 def test_full_case_matches_reference(case_name: str, tmp_path: Path) -> None:
     """Release gate: full simulation must pass Frechet validation.

@@ -81,6 +81,7 @@ from pygotm.gotm.runtime_builder import (
     RuntimePhaseTimings,
     build_runtime_from_run,
 )
+from pygotm.gotm.runtime_output import FABM_PROMOTABLE_EXTRA_OUTPUT_NAMES
 from pygotm.gotm.time_loop import run_compiled_time_loop
 from pygotm.icethm import (
     IceModelEnum,
@@ -1795,6 +1796,18 @@ def integrate_gotm_compiled(
         )
         engine = FABMEngine(run.fabm_config.config_path)
         engine.initialize(nlev=nlev, h_col=h_initial, skip_start=True)
+        for spec in engine.output_variable_specs():
+            bundle.output.declare_fabm_output(
+                spec.name,
+                nlev,
+                z_profile=spec.kind == "z",
+                attrs={
+                    "units": spec.units,
+                    "long_name": spec.long_name,
+                },
+                replace_extra=spec.name in FABM_PROMOTABLE_EXTRA_OUTPUT_NAMES,
+            )
+        bundle.output.validate(nlev)
         run.fabm_engine = engine
 
         cc: np.ndarray | None = None

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -13,7 +14,19 @@ from pygotm.fabm.state import fabm_state_variable_names
 
 FloatArray = NDArray[np.float64]
 
-__all__ = ["FABMEngine"]
+__all__ = ["FABMEngine", "FABMOutputKind", "FABMOutputSpec"]
+
+FABMOutputKind = Literal["z", "scalar"]
+
+
+@dataclass(frozen=True, slots=True)
+class FABMOutputSpec:
+    """Metadata for one FABM output variable exposed by pyfabm."""
+
+    name: str
+    kind: FABMOutputKind
+    units: str
+    long_name: str
 
 
 class FABMEngine:
@@ -291,6 +304,53 @@ class FABMEngine:
 
         return fabm_state_variable_names(self._require_model())
 
+    def output_variable_specs(self) -> tuple[FABMOutputSpec, ...]:
+        """Return state and enabled diagnostic variables for NetCDF output."""
+
+        model = self._require_model()
+        specs: list[FABMOutputSpec] = []
+        seen: set[str] = set()
+
+        def add(variable: Any, kind: FABMOutputKind) -> None:
+            name = self._variable_output_name(variable)
+            if name in seen:
+                msg = f"duplicate FABM output variable {name!r}"
+                raise RuntimeError(msg)
+            seen.add(name)
+            specs.append(
+                FABMOutputSpec(
+                    name=name,
+                    kind=kind,
+                    units=str(getattr(variable, "units", "") or ""),
+                    long_name=str(getattr(variable, "long_name", "") or ""),
+                )
+            )
+
+        for variable in self._interior_state_variables(model):
+            add(variable, "z")
+        for variable in self._bottom_state_variables(model):
+            add(variable, "scalar")
+        for variable in self._surface_state_variables(model):
+            add(variable, "scalar")
+
+        horizontal_diagnostics = [
+            variable
+            for variable in self._horizontal_diagnostic_variables()
+            if self._variable_outputs_enabled(variable)
+        ]
+        horizontal_diagnostic_names = {
+            self._variable_output_name(variable) for variable in horizontal_diagnostics
+        }
+        for variable in self._diagnostic_variables():
+            if not self._variable_outputs_enabled(variable):
+                continue
+            if self._variable_output_name(variable) in horizontal_diagnostic_names:
+                continue
+            add(variable, "z")
+        for variable in horizontal_diagnostics:
+            add(variable, "scalar")
+        return tuple(specs)
+
     def _require_model(self) -> Any:
         if self.model is None:
             msg = "FABMEngine.initialize() has not been called"
@@ -356,6 +416,56 @@ class FABMEngine:
             if variables is not None:
                 return list(variables)
         return []
+
+    def _horizontal_diagnostic_variables(self) -> list[Any]:
+        model = self._require_model()
+        for attr in (
+            "horizontal_diagnostic_variables",
+            "horizontalDiagnosticVariables",
+        ):
+            variables = getattr(model, attr, None)
+            if variables is not None:
+                return list(variables)
+        return []
+
+    @staticmethod
+    def _interior_state_variables(model: Any) -> list[Any]:
+        for attr in (
+            "interior_state_variables",
+            "bulk_state_variables",
+            "state_variables",
+            "stateVariables",
+        ):
+            variables = getattr(model, attr, None)
+            if variables is not None:
+                return list(variables)
+        return []
+
+    @staticmethod
+    def _bottom_state_variables(model: Any) -> list[Any]:
+        variables = getattr(model, "bottom_state_variables", None)
+        return [] if variables is None else list(variables)
+
+    @staticmethod
+    def _surface_state_variables(model: Any) -> list[Any]:
+        variables = getattr(model, "surface_state_variables", None)
+        return [] if variables is None else list(variables)
+
+    @staticmethod
+    def _variable_output_name(variable: Any) -> str:
+        for attr in ("output_name", "name", "id", "long_name"):
+            value = getattr(variable, attr, None)
+            if value:
+                return str(value).replace("/", "_")
+        msg = f"FABM variable {variable!r} does not expose a usable name"
+        raise RuntimeError(msg)
+
+    @staticmethod
+    def _variable_outputs_enabled(variable: Any) -> bool:
+        output = getattr(variable, "output", None)
+        if output is None:
+            return True
+        return bool(output)
 
     def _dependencies(self) -> Iterable[Any]:
         model = self._require_model()

@@ -51,6 +51,9 @@ from tests.fixtures import bundled_case, bundled_case_path
 _COUETTE_CONFIG = bundled_case_path("couette")
 _SEAGRASS_CONFIG = bundled_case_path("seagrass")
 _WAVE_BREAKING_CONFIG = bundled_case_path("wave_breaking")
+_SELMA_MINIMAL_FABM = Path(__file__).resolve().parents[2] / (
+    "tests/fixtures/fabm/selma_minimal.yaml"
+)
 _AIRSEA_FIRST_SLOT_VARIABLES = (
     "es",
     "ea",
@@ -69,6 +72,37 @@ _AIRSEA_FIRST_SLOT_VARIABLES = (
     "I_0",
     "albedo",
 )
+_SELMA_MINIMAL_Z_OUTPUTS = {
+    "selma_dd",
+    "selma_aa",
+    "selma_nn",
+    "selma_po",
+    "selma_o2",
+    "selma_pw",
+    "selma_Nit",
+    "selma_Amm",
+    "selma_Pho",
+    "selma_DO_mg",
+    "selma_DNP",
+    "total_nitrogen",
+    "total_phosphorus",
+    "total_carbon",
+    "attenuation_coefficient_of_photosynthetic_radiative_flux",
+}
+_SELMA_MINIMAL_SCALAR_OUTPUTS = {
+    "selma_fl",
+    "selma_pb",
+    "selma_DNB",
+    "selma_SBR",
+    "selma_PBR",
+    "selma_OFL",
+    "total_nitrogen_at_interfaces",
+    "total_nitrogen_at_bottom",
+    "total_phosphorus_at_interfaces",
+    "total_phosphorus_at_bottom",
+    "total_carbon_at_interfaces",
+    "total_carbon_at_bottom",
+}
 
 
 def _write_vertical_advection_config(path: Path) -> None:
@@ -97,6 +131,69 @@ mimic_3d:
     height:
       method: constant
       constant_value: -5.0
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_minimal_selma_config(path: Path) -> None:
+    path.write_text(
+        """
+version: 7
+title: Minimal SELMA output smoke test
+location:
+  latitude: 55.0
+  longitude: 12.0
+  depth: 10.0
+time:
+  start: 2000-01-01 00:00:00
+  stop: 2000-01-01 00:01:00
+  dt: 60.0
+grid:
+  nlev: 3
+temperature:
+  method: constant
+  constant_value: 10.0
+salinity:
+  method: constant
+  constant_value: 35.0
+surface:
+  fluxes:
+    method: off
+    heat:
+      method: constant
+      constant_value: 0.0
+    tx:
+      method: constant
+      constant_value: 0.0
+    ty:
+      method: constant
+      constant_value: 0.0
+  u10:
+    method: constant
+    constant_value: 0.0
+  v10:
+    method: constant
+    constant_value: 0.0
+  swr:
+    method: constant
+    constant_value: 100.0
+  longwave_radiation:
+    method: constant
+    constant_value: 0.0
+  precip:
+    method: constant
+    constant_value: 0.0
+fabm:
+  use: true
+  config_file: fabm.yaml
+output:
+  selma:
+    time_unit: dt
+    time_step: 1
+    time_method: point
+    variables:
+    - source: /*
 """.lstrip(),
         encoding="utf-8",
     )
@@ -367,7 +464,76 @@ def test_compiled_initial_output_populates_simple_ice_tf_reference() -> None:
     )
 
     assert written == 1
-    assert runtime.output.reference_scalars["Tf"][0] == pytest.approx(-0.0575 * 32.8)
+    assert runtime.output.extra_scalars["Tf"][0] == pytest.approx(-0.0575 * 32.8)
+
+
+def test_fabm_runtime_emits_dynamic_model_outputs() -> None:
+    case = bundled_case("rouse")
+    run = initialize_gotm(case.yaml_path)
+    dataset = None
+    try:
+        runtime = integrate_gotm_compiled(run, max_steps=1, output=True)
+        dataset = runtime_output_to_dataset(run, runtime)
+
+        assert "sed_c" in runtime.output.fabm_z_profiles
+        assert "sed_c" in dataset.data_vars
+        assert "sed_c_sms" not in dataset.data_vars
+        assert "attenuation_coefficient_of_photosynthetic_radiative_flux" in (
+            dataset.data_vars
+        )
+        assert dataset["sed_c"].dims == ("time", "z", "lat", "lon")
+        assert dataset["sed_c"].attrs["units"] == "mol m-3"
+        assert np.isfinite(dataset["sed_c"].values).all()
+        assert "surface_albedo" in dataset.data_vars
+        assert "surface_drag_coefficient_in_air" in dataset.data_vars
+    finally:
+        if dataset is not None:
+            dataset.close()
+        finalize_gotm(run)
+
+
+def test_fabm_runtime_writes_minimal_selma_outputs(tmp_path: Path) -> None:
+    pytest.importorskip("pyfabm")
+    (tmp_path / "fabm.yaml").write_text(
+        _SELMA_MINIMAL_FABM.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "gotm.yaml"
+    _write_minimal_selma_config(config_path)
+    run = initialize_gotm(config_path)
+    dataset = None
+    try:
+        runtime = integrate_gotm_compiled(
+            run,
+            max_steps=1,
+            output=True,
+            chunk_size=1,
+        )
+        dataset = runtime_output_to_dataset(run, runtime)
+
+        expected_outputs = _SELMA_MINIMAL_Z_OUTPUTS | _SELMA_MINIMAL_SCALAR_OUTPUTS
+        assert set(runtime.output.fabm_z_profiles) == _SELMA_MINIMAL_Z_OUTPUTS
+        assert set(runtime.output.fabm_scalars) == _SELMA_MINIMAL_SCALAR_OUTPUTS
+        assert "attenuation_coefficient_of_photosynthetic_radiative_flux" not in (
+            runtime.output.extra_z_profiles
+        )
+        assert expected_outputs.issubset(dataset.data_vars)
+        for name in _SELMA_MINIMAL_Z_OUTPUTS:
+            assert dataset[name].dims == ("time", "z", "lat", "lon")
+            assert np.isfinite(dataset[name].values).all()
+        for name in _SELMA_MINIMAL_SCALAR_OUTPUTS:
+            assert dataset[name].dims == ("time", "lat", "lon")
+            assert np.isfinite(dataset[name].values).all()
+        assert (
+            dataset["attenuation_coefficient_of_photosynthetic_radiative_flux"].attrs[
+                "units"
+            ]
+            == "m-1"
+        )
+    finally:
+        if dataset is not None:
+            dataset.close()
+        finalize_gotm(run)
 
 
 def test_runtime_forcing_precomputes_vertical_advection_series(

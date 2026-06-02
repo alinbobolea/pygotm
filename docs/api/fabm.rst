@@ -19,6 +19,12 @@ Configuration
 Engine
 ------
 
+``FABMEngine.output_variable_specs()`` exposes the model-discovered NetCDF
+surface: interior state and output-enabled diagnostics are reported as
+z-profiles, while surface, bottom, and horizontal variables are reported as
+scalars.  Each spec carries the normalized output name, units, and long name
+from pyfabm.
+
 .. automodule:: pygotm.fabm.engine
    :members:
    :undoc-members:

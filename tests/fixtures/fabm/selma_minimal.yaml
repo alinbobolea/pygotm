@@ -1,0 +1,5 @@
+instances:
+  selma:
+    model: selma/selma
+    parameters:
+      kc: 1.0
