@@ -13,7 +13,6 @@ from pygotm.schema import netcdf_attrs_schema, output_schema
 from tests.fixtures import bundled_case_path
 
 _COUETTE_CONFIG = bundled_case_path("couette")
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_output_schema_has_core_variable_records() -> None:
@@ -91,8 +90,47 @@ def test_output_schema_reports_previously_curated_fabm_model_generically(
     assert variables["sed_c"]["dimensions"] == ("time", "z", "lat", "lon")
 
 
-def test_output_schema_prefers_horizontal_fabm_diagnostic_for_shared_name() -> None:
-    schema = output_schema(_PROJECT_ROOT / "validation/reference/medsea_west/gotm.yaml")
+def test_output_schema_prefers_horizontal_fabm_diagnostic_for_shared_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class HorizontalDiagnosticEngine:
+        def __init__(self, path: str | Path) -> None:
+            self.path = path
+
+        def initialize(
+            self,
+            nlev: int | None = None,
+            *,
+            skip_start: bool = False,
+        ) -> None:
+            pass
+
+        def output_variable_specs(self) -> tuple[FABMOutputSpec, ...]:
+            return (
+                FABMOutputSpec(
+                    "jrc_med_ergom_DNB",
+                    "scalar",
+                    "mmol m-2 d-1",
+                    "denitrification",
+                ),
+                FABMOutputSpec(
+                    "jrc_med_ergom_OFL",
+                    "scalar",
+                    "mmol m-2 d-1",
+                    "oxygen flux",
+                ),
+            )
+
+    monkeypatch.setattr("pygotm.schema.FABMEngine", HorizontalDiagnosticEngine)
+    (tmp_path / "fabm.yaml").write_text("instances: {}\n", encoding="utf-8")
+    config_path = tmp_path / "gotm.yaml"
+    config_path.write_text(
+        "version: 7\nfabm:\n  use: true\n  config_file: fabm.yaml\n",
+        encoding="utf-8",
+    )
+
+    schema = output_schema(config_path)
     variables = {item["name"]: item for item in schema["variables"]}
 
     assert len(variables) == len(schema["variables"])
