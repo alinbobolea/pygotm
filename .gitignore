@@ -54,6 +54,7 @@ Thumbs.db
 !tests/fixtures/cases/**/*.nc
 *.hdf5
 gotm-model/
+gotm-lake/
 papers/
 
 # Validation outputs and external reference data — anchored to repo root so it

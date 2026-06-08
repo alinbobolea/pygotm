@@ -36,6 +36,37 @@ def test_resolves_default_sibling_fabm_yaml(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("key", "relative_path"),
+    (
+        ("config", "fabm.yaml"),
+        ("config_file", "fabm.yaml"),
+        ("yaml", "fabm.yaml"),
+        ("file", "fabm.yaml"),
+        ("config_file", "subdir/fabm.yaml"),
+    ),
+)
+def test_fabm_path_aliases_resolve_relative_to_gotm_yaml(
+    tmp_path: Path,
+    key: str,
+    relative_path: str,
+) -> None:
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    gotm_yaml = case_dir / "gotm.yaml"
+    gotm_yaml.write_text("fabm:\n  use: true\n", encoding="utf-8")
+    fabm_yaml = case_dir / relative_path
+    fabm_yaml.parent.mkdir(parents=True, exist_ok=True)
+    fabm_yaml.write_text("instances: {}\n", encoding="utf-8")
+    document = {"fabm": {"use": True, key: relative_path}}
+
+    config = load_fabm_config(document, gotm_yaml)
+
+    assert config.use
+    assert config.config_path == fabm_yaml.resolve()
+    assert resolve_fabm_config_path(gotm_yaml, document) == fabm_yaml.resolve()
+
+
 def test_invalid_fabm_yaml_path_fails_loudly(tmp_path: Path) -> None:
     gotm_yaml = tmp_path / "gotm.yaml"
     gotm_yaml.write_text("fabm:\n  use: true\n", encoding="utf-8")

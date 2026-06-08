@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
 from pygotm.config import GotmSettings, load_config
+from pygotm.fabm.config import resolve_fabm_config_path
 from pygotm.fabm.engine import FABMEngine
 from pygotm.gotm.run_metadata import (
     PYGOTM_CONFIG_SCHEMA_VERSION,
@@ -897,7 +900,8 @@ def _mapping(value: object) -> Mapping[str, Any]:
 
 def _fabm_output_variables(fabm_path: Path) -> tuple[OutputVariable, ...]:
     engine = FABMEngine(fabm_path)
-    engine.initialize(nlev=1, skip_start=True)
+    with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+        engine.initialize(nlev=1, skip_start=True)
     variables: list[OutputVariable] = []
     for spec in engine.output_variable_specs():
         variables.append(
@@ -975,16 +979,7 @@ def _state_dependent_variables(config_path: Path | None) -> tuple[OutputVariable
 
     fabm = _mapping(document.get("fabm"))
     if bool(fabm.get("use", False)):
-        fabm_config = (
-            fabm.get("config")
-            or fabm.get("config_file")
-            or fabm.get("yaml")
-            or fabm.get("file")
-            or "fabm.yaml"
-        )
-        fabm_path = Path(str(fabm_config))
-        if not fabm_path.is_absolute():
-            fabm_path = config_path.parent / fabm_path
+        fabm_path = resolve_fabm_config_path(config_path, document)
         scalar_names = {"surface_albedo", "surface_drag_coefficient_in_air"}
         variables.extend(
             item for item in _EXTRA_SCALAR_VARIABLES if item.name in scalar_names
