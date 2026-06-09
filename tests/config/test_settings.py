@@ -90,6 +90,26 @@ def test_load_settings_accepts_raw_lake_erken_numeric_codes() -> None:
     assert settings.mimic_3d.w.adv_discr == "p2_pdm"
     assert settings.velocities.u.method == "off"
     assert settings.velocities.v.method == "off"
+    # Raw GOTM eq_state uses numeric mode (2=Jackett) + method (2=potential);
+    # both must combine so the lake gets Jackett *potential* density (no
+    # pressure term), not a silent fallback to full TEOS-10 in-situ density.
+    assert settings.equation_of_state["method"] == "jackett_potential"
+
+
+def test_eos_numeric_mode_method_combinations() -> None:
+    from pygotm.config.settings import _eos_method_token
+
+    assert _eos_method_token(2, 2) == "jackett_potential"
+    assert _eos_method_token(2, 1) == "jackett_in_situ"
+    assert _eos_method_token(1, 2) == "unesco_potential"
+    assert _eos_method_token(1, 1) == "unesco_in_situ"
+    # GOTM defaults (mode=2, method=2) when fields are absent.
+    assert _eos_method_token(None, None) == "jackett_potential"
+    # Linearised methods fall back to the method-only TEOS-10 tokens.
+    assert _eos_method_token(2, 3) == "linear_teos10"
+    assert _eos_method_token(2, 4) == "linear_custom"
+    # Already-named tokens pass straight through.
+    assert _eos_method_token(None, "full_teos10") == "full_teos10"
 
 
 def test_save_settings_roundtrip(tmp_path: Path) -> None:

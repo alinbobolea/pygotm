@@ -200,6 +200,39 @@ _EOS_METHOD_CODES = {
     4: "linear_custom",
 }
 
+# GOTM eq_state ``mode`` selects the formula: 1=UNESCO, 2=Jackett et al. (2005).
+_EOS_MODE_CODES = {1: "unesco", 2: "jackett"}
+
+
+def _eos_method_token(mode: object, method: object) -> str:
+    """Resolve a pyGOTM density-method token from a raw GOTM ``eq_state`` block.
+
+    GOTM splits the equation of state into ``mode`` (1=UNESCO, 2=Jackett et al.
+    2005; default 2) and ``method`` (1=full with in-situ temperature/density,
+    2=full with potential temperature/density, 3=linearised at T0/S0/p0,
+    4=linearised at T0/S0/p0 with custom expansion coefficients; default 2).
+    pyGOTM expresses the same choices as a single token, e.g.
+    ``jackett_potential`` or ``unesco_in_situ``.  The full in-situ/potential
+    distinction (carried only by ``method``) is what selects whether the
+    pressure term is applied, so both fields must be combined; reading
+    ``method`` alone silently collapses Jackett potential density onto
+    full TEOS-10 in-situ density.
+    """
+
+    if isinstance(method, str) and not method.strip().lstrip("+-").isdigit():
+        # Already a named token (e.g. "full_teos10"); leave it for _code_token.
+        return _canonical_token(method, "full_teos10")
+    method_code = 2 if method is None else int(str(method).strip())
+    if method_code in (1, 2):
+        if isinstance(mode, str) and not mode.strip().lstrip("+-").isdigit():
+            formula = _canonical_token(mode, "jackett")
+        else:
+            mode_code = 2 if mode is None else int(str(mode).strip())
+            formula = _EOS_MODE_CODES.get(mode_code, "jackett")
+        suffix = "in_situ" if method_code == 1 else "potential"
+        return f"{formula}_{suffix}"
+    return _EOS_METHOD_CODES.get(method_code, "full_teos10")
+
 
 def _format_timestamp(value: date | datetime) -> str:
     if isinstance(value, datetime):
@@ -464,11 +497,10 @@ def _normalise_eos_section(document: dict[str, object]) -> None:
     legacy = _as_mapping(document.get("eq_state"))
     if legacy and "equation_of_state" not in document:
         equation: dict[str, object] = {}
-        if "method" in legacy:
-            equation["method"] = _code_token(
-                legacy["method"],
-                "full_teos10",
-                _EOS_METHOD_CODES,
+        if "method" in legacy or "mode" in legacy:
+            equation["method"] = _eos_method_token(
+                legacy.get("mode"),
+                legacy.get("method"),
             )
         linear: dict[str, object] = {}
         for source, target in (

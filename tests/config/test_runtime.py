@@ -140,4 +140,7 @@ def test_load_config_normalizes_lake_erken_legacy_document_aliases() -> None:
     assert document["surface"]["ssuv_method"] == "absolute"
     assert document["surface"]["ice"]["model"] == "mylake"
     assert document["mimic_3d"]["int_pressure"]["gradients"]["dtdx"]["method"] == "off"
-    assert document["equation_of_state"]["method"] == "full_teos10"
+    # Raw GOTM eq_state mode=2 (Jackett 2005) + method=2 (potential density)
+    # must map to Jackett *potential* density, not a fallback to TEOS-10 in-situ
+    # (which would add a spurious pressure term to the freshwater density).
+    assert document["equation_of_state"]["method"] == "jackett_potential"
