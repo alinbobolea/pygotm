@@ -25,7 +25,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import gsw
 import numpy as np
@@ -103,6 +103,7 @@ from pygotm.input.input import (
 from pygotm.meanflow.coriolis import coriolis
 from pygotm.meanflow.external_pressure import external_pressure
 from pygotm.meanflow.friction import friction
+from pygotm.meanflow.hypsograph import read_hypsograph
 from pygotm.meanflow.internal_pressure import internal_pressure
 from pygotm.meanflow.meanflow import (
     MeanflowState,
@@ -124,6 +125,11 @@ from pygotm.observations.observations import (
     get_all_obs,
     init_observations,
     post_init_observations,
+)
+from pygotm.observations.streams import (
+    StreamsState,
+    configure_streams_from_document,
+    post_init_streams,
 )
 from pygotm.stokes_drift.stokes_drift import (
     CONSTANT as STOKES_CONSTANT,
@@ -196,9 +202,13 @@ from pygotm.turbulence.turbulence import (
 )
 from pygotm.util.density import (
     CP0,
+    METHOD_JACKETT_FULL,
+    METHOD_JACKETT_POTENTIAL,
     METHOD_LINEAR_TEOS10,
     METHOD_LINEAR_USER,
     METHOD_TEOS10,
+    METHOD_UNESCO_FULL,
+    METHOD_UNESCO_POTENTIAL,
     DensityState,
     clean_density,
     do_density,
@@ -224,6 +234,10 @@ _DENSITY_METHOD = {
     "linear_teos10": METHOD_LINEAR_TEOS10,
     "linear_teos_10": METHOD_LINEAR_TEOS10,
     "linear_custom": METHOD_LINEAR_USER,
+    "unesco_in_situ": METHOD_UNESCO_FULL,
+    "unesco_potential": METHOD_UNESCO_POTENTIAL,
+    "jackett_in_situ": METHOD_JACKETT_FULL,
+    "jackett_potential": METHOD_JACKETT_POTENTIAL,
 }
 _FLUX_METHOD = {"off": 0, "kondo": KONDO, "fairall": FAIRALL}
 _HUM_METHOD = {"relative": 1, "wet_bulb": 2, "dew_point": 3, "specific": 4}
@@ -285,6 +299,13 @@ _IW_MODEL = {"off": 0, "mellor": 1, "large": 2}
 _KB_METHOD = {"algebraic": kb_algebraic, "prognostic": kb_dynamic}
 _EPSB_METHOD = {"algebraic": epsb_algebraic, "prognostic": epsb_dynamic}
 _GOTM_ICE_ZETA_RHO0 = 1027.0
+_WATER_BALANCE_METHOD = {
+    "none": 0,
+    "off": 0,
+    "surface": 1,
+    "all_layers": 2,
+    "free_surface": 3,
+}
 
 
 @dataclass
@@ -327,6 +348,7 @@ class GotmRun:
     meanflow: MeanflowState
     density: DensityState
     observations: ObservationsState
+    streams: StreamsState
     airsea: AirSeaDriverState
     stokes_drift: StokesDriftState
     seagrass: SeagrassState
@@ -358,6 +380,19 @@ def _mapping(value: object) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
+
+
+def _method_code(value: object, mapping: dict[str, int], default: int) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    token = _canonical_token(value, "")
+    if token and token.lstrip("+-").isdigit():
+        return int(token)
+    return mapping.get(token, default)
 
 
 def _surface_value(input_: ScalarInput | None, default: float = 0.0) -> float:
@@ -600,6 +635,7 @@ def _configure_airsea_from_document(
     albedo = _mapping(surface.get("albedo"))
     hum = _mapping(surface.get("hum"))
     ice = _mapping(surface.get("ice"))
+    location = _mapping(document.get("location"))
 
     flux_method = _canonical_token(fluxes.get("method"), "off")
     ssuv_method = _canonical_token(surface.get("ssuv_method"), "relative")
@@ -608,6 +644,12 @@ def _configure_airsea_from_document(
     longwave_method = _canonical_token(longwave.get("method"), "clark")
     albedo_method = _canonical_token(albedo.get("method"), "payne")
     ice_model = _canonical_token(ice.get("model"), "simple")
+    shortwave_type = int(
+        swr.get(
+            "type",
+            2 if bool(location.get("hypsograph")) and swr_method != "constant" else 1,
+        )
+    )
 
     if ssuv_method not in {"absolute", "relative"}:
         msg = f"unsupported surface.ssuv_method {ssuv_method!r}"
@@ -629,7 +671,7 @@ def _configure_airsea_from_document(
         fluxes_method=_FLUX_METHOD.get(flux_method, 0),
         hum_method=_HUM_METHOD[hum_type],
         shortwave_method=3 if swr_method == "calculate" else 1,
-        shortwave_type=int(swr.get("type", 1)),
+        shortwave_type=shortwave_type,
         shortwave_scale_factor=float(swr.get("scale_factor", 1.0)),
         longwave_method=_LONGWAVE_METHOD[longwave_method],
         longwave_type=int(longwave.get("type", 1)),
@@ -895,12 +937,30 @@ def _apply_initial_profiles(run: GotmRun) -> None:
     # ``initial_salinity_type == 1`` (practical), this means Sobs starts at 0
     # for one timestep, matching the Fortran reference behaviour. Without this,
     # pyGOTM and Fortran disagree on the first salinity relaxation pull.
-    if observations.initial_salinity_type == 1:
+    lake = bool(getattr(meanflow, "lake", False))
+    if lake:
+        if observations.sprof_input.method == 0:
+            meanflow.S[1 : run.nlev + 1] = 0.0
+        else:
+            meanflow.S[1 : run.nlev + 1] = observations.sprof_input.data[
+                1 : run.nlev + 1
+            ]
+        meanflow.Sp[1 : run.nlev + 1] = meanflow.S[1 : run.nlev + 1]
+    elif observations.initial_salinity_type == 1:
         meanflow.Sp[1 : run.nlev + 1] = observations.sprof_input.data[1 : run.nlev + 1]
     else:
         meanflow.S[1 : run.nlev + 1] = observations.sprof_input.data[1 : run.nlev + 1]
 
-    if observations.initial_temperature_type == 1:
+    if lake:
+        if observations.tprof_input.method == 0:
+            meanflow.T[1 : run.nlev + 1] = 0.0
+        else:
+            meanflow.T[1 : run.nlev + 1] = observations.tprof_input.data[
+                1 : run.nlev + 1
+            ]
+        meanflow.Ti[1 : run.nlev + 1] = meanflow.T[1 : run.nlev + 1]
+        meanflow.Tp[1 : run.nlev + 1] = meanflow.T[1 : run.nlev + 1]
+    elif observations.initial_temperature_type == 1:
         meanflow.Ti[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
     elif observations.initial_temperature_type == 2:
         meanflow.Tp[1 : run.nlev + 1] = observations.tprof_input.data[1 : run.nlev + 1]
@@ -910,7 +970,9 @@ def _apply_initial_profiles(run: GotmRun) -> None:
     meanflow.Sobs[:] = meanflow.S
     meanflow.Tobs[:] = meanflow.T
 
-    if observations.initial_salinity_type == 1:
+    if lake:
+        pass
+    elif observations.initial_salinity_type == 1:
         meanflow.S[1 : run.nlev + 1] = gsw_sa_from_sp(
             meanflow.Sp[1 : run.nlev + 1],
             pressure,
@@ -925,7 +987,9 @@ def _apply_initial_profiles(run: GotmRun) -> None:
             run.latitude,
         )
 
-    if observations.initial_temperature_type == 1:
+    if lake:
+        pass
+    elif observations.initial_temperature_type == 1:
         meanflow.T[1 : run.nlev + 1] = gsw.CT_from_t(
             meanflow.S[1 : run.nlev + 1],
             meanflow.Ti[1 : run.nlev + 1],
@@ -978,7 +1042,11 @@ def _update_relaxation_targets(run: GotmRun) -> None:
         observations.sprof_input.method != 0
         and observations.sprof_input.data is not None
     ):
-        if observations.initial_salinity_type == 1:
+        if bool(getattr(meanflow, "lake", False)):
+            meanflow.Sobs[1 : run.nlev + 1] = observations.sprof_input.data[
+                1 : run.nlev + 1
+            ]
+        elif observations.initial_salinity_type == 1:
             meanflow.Sobs[1 : run.nlev + 1] = gsw_sa_from_sp(
                 observations.sprof_input.data[1 : run.nlev + 1],
                 pressure,
@@ -1077,11 +1145,28 @@ def initialize_gotm_from_settings(
     _configure_meanflow_from_document(meanflow, resolved_document)
     meanflow.depth = depth
     meanflow.zeta = initial_zeta
-    meanflow.grid_method = _GRID_METHOD[settings.grid.method]
+    meanflow.grid_method = _GRID_METHOD[cast(str, settings.grid.method)]
+    meanflow.water_balance_method = _method_code(
+        resolved_document.get("water_balance_method"),
+        _WATER_BALANCE_METHOD,
+        0,
+    )
     meanflow.ddu = settings.grid.ddu
     meanflow.ddl = settings.grid.ddl
     meanflow.grid_file = settings.grid.file
     post_init_meanflow(meanflow, nlev, settings.location.latitude)
+    if settings.location.hypsograph:
+        meanflow.lake = True
+        meanflow.hypsograph_file = settings.location.hypsograph
+        meanflow.hypsograph = read_hypsograph(
+            settings.location.hypsograph,
+            meanflow.depth0,
+        )
+        hypsograph_depth = -float(meanflow.hypsograph.zi_input[0])
+        if abs(hypsograph_depth - meanflow.depth0) > 1.0e-8:
+            meanflow.depth0 = hypsograph_depth
+            meanflow.depth = hypsograph_depth + meanflow.zeta
+            depth = hypsograph_depth
     updategrid(meanflow, nlev, settings.time.dt, zeta=meanflow.zeta)
 
     density = DensityState()
@@ -1105,6 +1190,8 @@ def initialize_gotm_from_settings(
         meanflow.gravity,
         density,
     )
+    streams = configure_streams_from_document(resolved_document, lake=meanflow.lake)
+    post_init_streams(streams, nlev)
 
     post_init_airsea(airsea, settings.location.latitude, settings.location.longitude)
 
@@ -1147,6 +1234,7 @@ def initialize_gotm_from_settings(
             meanflow=meanflow,
             density=density,
             observations=observations,
+            streams=streams,
             airsea=airsea,
             stokes_drift=stokes,
             seagrass=seagrass,
@@ -1186,6 +1274,7 @@ def initialize_gotm_from_settings(
         meanflow=meanflow,
         density=density,
         observations=observations,
+        streams=streams,
         airsea=airsea,
         stokes_drift=stokes,
         seagrass=seagrass,
@@ -1430,8 +1519,15 @@ def _integrate_gotm_python(
         ssf = float(meanflow.S[run.nlev]) * swf
         if run.ice_params is not None and run.ice_state is not None:
             ice_state = run.ice_state
+            ice_qsw = run.current_i0
+            if ice_state.ice_cover[0] == 2:
+                airsea.albedo = float(ice_state.albedo_ice[0])
+                run.current_i0 = airsea.shortwave * (
+                    1.0 - airsea.albedo - airsea.bio_albedo
+                )
+                ice_qsw = run.current_i0
             diff_t_up = -shf / (density.rho0 * density.cp)
-            diff_t_up = step_ice(
+            diff_t_up, ice_T_w = step_ice(
                 int(run.ice_params.model),
                 float(meanflow.T[run.nlev]),
                 float(meanflow.S[run.nlev]),
@@ -1439,7 +1535,7 @@ def _integrate_gotm_python(
                 float(meanflow.h[run.nlev]),
                 run.dt,
                 diff_t_up,
-                airsea.shortwave,
+                ice_qsw,
                 airsea.ql,
                 airsea.qh,
                 airsea.qe,
@@ -1450,6 +1546,8 @@ def _integrate_gotm_python(
                 ice_state.Hice,
                 ice_state.Hsnow,
                 ice_state.Hfrazil,
+                ice_state.dHis,
+                ice_state.dHib,
                 ice_state.T1,
                 ice_state.T2,
                 ice_state.Tice_surface,
@@ -1457,6 +1555,7 @@ def _integrate_gotm_python(
                 ice_state.ice_cover,
                 ice_state.Tf,
                 ice_state.albedo_ice,
+                ice_state.attenuation_ice,
                 ice_state.transmissivity,
                 ice_state.ocean_ice_flux,
                 ice_state.ocean_ice_heat_flux,
@@ -1467,6 +1566,8 @@ def _integrate_gotm_python(
                 ice_state.T_melt,
                 ice_state.S_melt,
             )
+            if run.ice_params.model == IceModelEnum.MYLAKE:
+                meanflow.T[run.nlev] = ice_T_w
             shf = -diff_t_up * density.rho0 * density.cp
             ssf -= float(ice_state.ocean_ice_salt_flux[0])
             meanflow.Hice = float(ice_state.Hice[0])
@@ -1786,6 +1887,15 @@ def integrate_gotm_compiled(
         hydro_nuh = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
         hydro_rad = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
         hydro_taub = np.zeros((chunk_size + 1,), dtype=np.float64)
+        hydro_Vc = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_Vco = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_Afo = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_wq = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_Qres = np.zeros((chunk_size + 1, nlev + 1), dtype=np.float64)
+        hydro_stream_Q = np.zeros(
+            (chunk_size + 1, bundle.params.nstreams, nlev + 1),
+            dtype=np.float64,
+        )
 
         # Initialise FABM engine once
         assert run.fabm_config is not None
@@ -1848,6 +1958,15 @@ def integrate_gotm_compiled(
                 hydro_nuh = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
                 hydro_rad = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
                 hydro_taub = np.zeros((this_chunk + 1,), dtype=np.float64)
+                hydro_Vc = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_Vco = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_Afo = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_wq = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_Qres = np.zeros((this_chunk + 1, nlev + 1), dtype=np.float64)
+                hydro_stream_Q = np.zeros(
+                    (this_chunk + 1, bundle.params.nstreams, nlev + 1),
+                    dtype=np.float64,
+                )
 
             # Physics chunk
             compiled_t0 = time.perf_counter()
@@ -1866,6 +1985,7 @@ def integrate_gotm_compiled(
                     init_int_swr=init_int_swr,
                     init_int_heat=init_int_heat,
                     init_int_total=init_int_total,
+                    output_reduce_mode=bundle.output_reduce_mode,
                     hydro_store=1,
                     hydro_T=hydro_T,
                     hydro_S=hydro_S,
@@ -1874,6 +1994,12 @@ def integrate_gotm_compiled(
                     hydro_nuh=hydro_nuh,
                     hydro_rad=hydro_rad,
                     hydro_taub=hydro_taub,
+                    hydro_Vc=hydro_Vc,
+                    hydro_Vco=hydro_Vco,
+                    hydro_Afo=hydro_Afo,
+                    hydro_wq=hydro_wq,
+                    hydro_Qres=hydro_Qres,
+                    hydro_stream_Q=hydro_stream_Q,
                 )
             finally:
                 if timings is not None:
@@ -1897,6 +2023,12 @@ def integrate_gotm_compiled(
                         hydro_nuh=hydro_nuh,
                         hydro_rad=hydro_rad,
                         hydro_taub=hydro_taub,
+                        hydro_Vc=hydro_Vc,
+                        hydro_Vco=hydro_Vco,
+                        hydro_Afo=hydro_Afo,
+                        hydro_wq=hydro_wq,
+                        hydro_Qres=hydro_Qres,
+                        hydro_stream_Q=hydro_stream_Q,
                         cc_in=cc,
                         out_index_base=fabm_out_index,
                         forcing_u10=bundle.forcing.u10[
@@ -1914,6 +2046,18 @@ def integrate_gotm_compiled(
                         forcing_precip=bundle.forcing.precip[
                             step_cursor : step_cursor + this_chunk + 1
                         ],
+                        forcing_stream_flow=bundle.forcing.stream_flow[
+                            step_cursor : step_cursor + this_chunk + 1
+                        ],
+                        forcing_stream_concentrations={
+                            name: values[step_cursor : step_cursor + this_chunk + 1]
+                            for name, values in (
+                                bundle.forcing.stream_concentrations.items()
+                            )
+                        },
+                        forcing_stream_concentration_masks=(
+                            bundle.forcing.stream_concentration_masks
+                        ),
                         step_offset=step_cursor,
                         is_first_chunk=(step_cursor == 0),
                     )
@@ -1947,6 +2091,8 @@ def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:
             target = getattr(run.turbulence, name)
         elif hasattr(run.density, name):
             target = getattr(run.density, name)
+        elif hasattr(run.observations, name):
+            target = getattr(run.observations, name)
         else:
             continue
         if isinstance(target, np.ndarray):
@@ -1959,6 +2105,12 @@ def _copy_runtime_state_to_run(run: GotmRun, bundle: RuntimeBundle) -> None:
     run.meanflow.u_taubo = float(state.u_taubo[0])
     run.meanflow.u_taus = float(state.u_taus[0])
     run.meanflow.taub = float(state.taub[0])
+    run.meanflow.net_water_balance = float(state.net_water_balance[0])
+    run.meanflow.int_water_balance = float(state.int_water_balance[0])
+    run.meanflow.int_fwf = float(state.int_fwf[0])
+    run.meanflow.int_flows = float(state.int_flows[0])
+    run.streams.int_inflow = float(state.stream_int_inflow[0])
+    run.streams.int_outflow = float(state.stream_int_outflow[0])
     if run.ice_state is not None:
         for name in (
             "Hice",

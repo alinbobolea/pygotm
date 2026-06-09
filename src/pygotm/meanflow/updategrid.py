@@ -70,10 +70,12 @@ r"""
 
 import math
 from pathlib import Path
+from typing import cast
 
 import numba
 import numpy as np
 
+from pygotm.meanflow.hypsograph import HypsographState, update_hypsograph
 from pygotm.meanflow.meanflow import MeanflowState
 
 __all__ = ["step_updategrid_single", "updategrid"]
@@ -151,12 +153,20 @@ def updategrid(
     assert state.ho is not None
     assert state.z is not None
     assert state.zi is not None
+    assert state.Vc is not None
+    assert state.Vco is not None
+    assert state.Af is not None
+    assert state.Afo is not None
 
     ga = state.ga
     h = state.h
     ho = state.ho
     z = state.z
     zi = state.zi
+    vc = state.Vc
+    vco = state.Vco
+    af = state.Af
+    afo = state.Afo
 
     # BOC
     if not state.grid_ready:  # Build up dimensionless grid (0 <= ga <= 1)
@@ -224,6 +234,8 @@ def updategrid(
         h[:] = ga[:] * state.depth
     elif method == 2:
         ho[:] = h[:]
+        if state.lake:
+            h[nlev] = state.depth - float(np.sum(h[1:nlev]))
     else:
         raise ValueError(
             f"updategrid: No valid grid_method specified: {state.grid_method}"
@@ -235,6 +247,17 @@ def updategrid(
     zi[0] = -state.depth0
     zi[1:] = zi[0] + np.cumsum(h[1:])
     z[1:] = zi[:-1] + 0.5 * h[1:]
+
+    if state.lake:
+        if state.hypsograph is None:
+            raise ValueError("lake grid update requires a hypsograph")
+        vco[:] = vc[:]
+        afo[:] = af[:]
+        hypsograph = cast(HypsographState, state.hypsograph)
+        update_hypsograph(hypsograph, nlev, zi, af, vc)
+    else:
+        vco[:] = ho[:]
+        vc[:] = h[:]
 
 
 # ---------------------------------------------------------------------------

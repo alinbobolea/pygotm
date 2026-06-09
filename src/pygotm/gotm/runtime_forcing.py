@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import NDArray
@@ -46,6 +46,14 @@ _SCALAR_SERIES = (
 )
 
 _PROFILE_SERIES = (
+    "h",
+    "ho",
+    "Vc",
+    "Vco",
+    "Af",
+    "Afo",
+    "z",
+    "zi",
     "Tobs",
     "Sobs",
     "Tprof",
@@ -72,12 +80,25 @@ def _profile_series(nt: int, nlev: int) -> FloatArray:
     return np.zeros((nt + 1, nlev + 1), dtype=np.float64)
 
 
+def _stream_static_int(nstreams: int) -> IntArray:
+    return np.zeros(nstreams, dtype=np.int64)
+
+
+def _stream_static_float(nstreams: int) -> FloatArray:
+    return np.zeros(nstreams, dtype=np.float64)
+
+
+def _stream_series(nt: int, nstreams: int) -> FloatArray:
+    return np.zeros((nt + 1, nstreams), dtype=np.float64)
+
+
 @dataclass(slots=True)
 class RuntimeForcing:
     """Dense forcing and observation inputs prepared before Numba integration."""
 
     nlev: int
     nt: int
+    nstreams: int
     yearday: IntArray
 
     time: FloatArray
@@ -109,6 +130,24 @@ class RuntimeForcing:
     light_g1: FloatArray
     light_g2: FloatArray
 
+    stream_method: IntArray
+    stream_has_T: IntArray
+    stream_has_S: IntArray
+    stream_zl: FloatArray
+    stream_zu: FloatArray
+    stream_flow: FloatArray
+    stream_temp: FloatArray
+    stream_salt: FloatArray
+
+    h: FloatArray
+    ho: FloatArray
+    Vc: FloatArray
+    Vco: FloatArray
+    Af: FloatArray
+    Afo: FloatArray
+    z: FloatArray
+    zi: FloatArray
+
     Tobs: FloatArray
     Sobs: FloatArray
     Tprof: FloatArray
@@ -124,6 +163,8 @@ class RuntimeForcing:
     vs: FloatArray
     dusdz: FloatArray
     dvsdz: FloatArray
+    stream_concentrations: dict[str, FloatArray] = field(default_factory=dict)
+    stream_concentration_masks: dict[str, IntArray] = field(default_factory=dict)
 
     def iter_scalar_series(self) -> Iterator[tuple[str, FloatArray]]:
         """Yield scalar forcing series in stable declaration order."""
@@ -145,6 +186,9 @@ class RuntimeForcing:
             raise ValueError(msg)
         if self.nt < 0:
             msg = f"nt must be non-negative, got {self.nt}"
+            raise ValueError(msg)
+        if self.nstreams < 0:
+            msg = f"nstreams must be non-negative, got {self.nstreams}"
             raise ValueError(msg)
         if self.yearday.dtype != np.int64:
             msg = f"yearday must have dtype int64, got {self.yearday.dtype}"
@@ -168,6 +212,88 @@ class RuntimeForcing:
                 msg = f"{name} must be C-contiguous"
                 raise ValueError(msg)
 
+        stream_shape = (self.nstreams,)
+        for name in ("stream_method", "stream_has_T", "stream_has_S"):
+            array = getattr(self, name)
+            if array.dtype != np.int64:
+                msg = f"{name} must have dtype int64, got {array.dtype}"
+                raise TypeError(msg)
+            if array.shape != stream_shape:
+                msg = f"{name} must have shape {stream_shape}, got {array.shape}"
+                raise ValueError(msg)
+            if not array.flags.c_contiguous:
+                msg = f"{name} must be C-contiguous"
+                raise ValueError(msg)
+        for name in ("stream_zl", "stream_zu"):
+            array = getattr(self, name)
+            if array.dtype != np.float64:
+                msg = f"{name} must have dtype float64, got {array.dtype}"
+                raise TypeError(msg)
+            if array.shape != stream_shape:
+                msg = f"{name} must have shape {stream_shape}, got {array.shape}"
+                raise ValueError(msg)
+            if not array.flags.c_contiguous:
+                msg = f"{name} must be C-contiguous"
+                raise ValueError(msg)
+        stream_series_shape = (self.nt + 1, self.nstreams)
+        for name in ("stream_flow", "stream_temp", "stream_salt"):
+            array = getattr(self, name)
+            if array.dtype != np.float64:
+                msg = f"{name} must have dtype float64, got {array.dtype}"
+                raise TypeError(msg)
+            if array.shape != stream_series_shape:
+                msg = f"{name} must have shape {stream_series_shape}, got {array.shape}"
+                raise ValueError(msg)
+            if not array.flags.c_contiguous:
+                msg = f"{name} must be C-contiguous"
+                raise ValueError(msg)
+        extra_concentration_names = set(self.stream_concentrations) - set(
+            self.stream_concentration_masks
+        )
+        if extra_concentration_names:
+            name = sorted(extra_concentration_names)[0]
+            msg = f"stream concentration {name!r} is missing a configured mask"
+            raise ValueError(msg)
+        extra_mask_names = set(self.stream_concentration_masks) - set(
+            self.stream_concentrations
+        )
+        if extra_mask_names:
+            name = sorted(extra_mask_names)[0]
+            msg = f"stream concentration mask {name!r} is missing values"
+            raise ValueError(msg)
+        for name, array in self.stream_concentrations.items():
+            if array.dtype != np.float64:
+                msg = (
+                    f"stream concentration {name!r} must have dtype float64, "
+                    f"got {array.dtype}"
+                )
+                raise TypeError(msg)
+            if array.shape != stream_series_shape:
+                msg = (
+                    f"stream concentration {name!r} must have shape "
+                    f"{stream_series_shape}, got {array.shape}"
+                )
+                raise ValueError(msg)
+            if not array.flags.c_contiguous:
+                msg = f"stream concentration {name!r} must be C-contiguous"
+                raise ValueError(msg)
+            mask = self.stream_concentration_masks[name]
+            if mask.dtype != np.int64:
+                msg = (
+                    f"stream concentration mask {name!r} must have dtype int64, "
+                    f"got {mask.dtype}"
+                )
+                raise TypeError(msg)
+            if mask.shape != stream_shape:
+                msg = (
+                    f"stream concentration mask {name!r} must have shape "
+                    f"{stream_shape}, got {mask.shape}"
+                )
+                raise ValueError(msg)
+            if not mask.flags.c_contiguous:
+                msg = f"stream concentration mask {name!r} must be C-contiguous"
+                raise ValueError(msg)
+
         profile_shape = (self.nt + 1, self.nlev + 1)
         for name, array in self.iter_profile_series():
             if array.dtype != np.float64:
@@ -181,12 +307,18 @@ class RuntimeForcing:
                 raise ValueError(msg)
 
 
-def allocate_runtime_forcing(nlev: int, nt: int) -> RuntimeForcing:
+def allocate_runtime_forcing(
+    nlev: int,
+    nt: int,
+    *,
+    nstreams: int = 0,
+) -> RuntimeForcing:
     """Allocate dense runtime forcing arrays for steps 0:nt."""
 
     forcing = RuntimeForcing(
         nlev=nlev,
         nt=nt,
+        nstreams=nstreams,
         yearday=np.zeros(nt + 1, dtype=np.int64),
         time=_scalar_series(nt),
         secondsofday=_scalar_series(nt),
@@ -216,6 +348,22 @@ def allocate_runtime_forcing(nlev: int, nt: int) -> RuntimeForcing:
         light_A=_scalar_series(nt),
         light_g1=_scalar_series(nt),
         light_g2=_scalar_series(nt),
+        stream_method=_stream_static_int(nstreams),
+        stream_has_T=_stream_static_int(nstreams),
+        stream_has_S=_stream_static_int(nstreams),
+        stream_zl=_stream_static_float(nstreams),
+        stream_zu=_stream_static_float(nstreams),
+        stream_flow=_stream_series(nt, nstreams),
+        stream_temp=_stream_series(nt, nstreams),
+        stream_salt=_stream_series(nt, nstreams),
+        h=_profile_series(nt, nlev),
+        ho=_profile_series(nt, nlev),
+        Vc=_profile_series(nt, nlev),
+        Vco=_profile_series(nt, nlev),
+        Af=_profile_series(nt, nlev),
+        Afo=_profile_series(nt, nlev),
+        z=_profile_series(nt, nlev),
+        zi=_profile_series(nt, nlev),
         Tobs=_profile_series(nt, nlev),
         Sobs=_profile_series(nt, nlev),
         Tprof=_profile_series(nt, nlev),

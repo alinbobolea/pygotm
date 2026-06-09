@@ -21,6 +21,8 @@ class IceState:
     Hice: np.ndarray
     Hsnow: np.ndarray
     Hfrazil: np.ndarray
+    dHis: np.ndarray
+    dHib: np.ndarray
     T1: np.ndarray
     T2: np.ndarray
     Tice_surface: np.ndarray
@@ -28,6 +30,7 @@ class IceState:
     ice_cover: np.ndarray
     Tf: np.ndarray
     albedo_ice: np.ndarray
+    attenuation_ice: np.ndarray
     transmissivity: np.ndarray
     ocean_ice_flux: np.ndarray
     ocean_ice_heat_flux: np.ndarray
@@ -58,6 +61,8 @@ def make_ice_state() -> IceState:
         Hice=_scalar(0.0),
         Hsnow=_scalar(0.0),
         Hfrazil=_scalar(0.0),
+        dHis=_scalar(0.0),
+        dHib=_scalar(0.0),
         T1=_scalar(0.0),
         T2=_scalar(0.0),
         Tice_surface=_scalar(0.0),
@@ -65,6 +70,7 @@ def make_ice_state() -> IceState:
         ice_cover=_int_scalar(0),
         Tf=_scalar(0.0),
         albedo_ice=_scalar(ALB_OCEAN),
+        attenuation_ice=_scalar(0.0),
         transmissivity=_scalar(1.0),
         ocean_ice_flux=_scalar(0.0),
         ocean_ice_heat_flux=_scalar(0.0),

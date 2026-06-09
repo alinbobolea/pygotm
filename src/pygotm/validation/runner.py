@@ -28,7 +28,10 @@ def run_case(
 ) -> tuple[Path, float]:
     """Run a compiled parity case, write NetCDF, return (path, elapsed_s)."""
     from pygotm.driver import GotmDriver
-    from pygotm.validation.reference import resolve_reference_case
+    from pygotm.validation.reference import (
+        open_reference_dataset,
+        resolve_reference_case,
+    )
 
     case = resolve_reference_case(case_name, cases_root=cases_root)
     case_dir = runs_dir / case.run_name
@@ -36,13 +39,20 @@ def run_case(
     nc_path = case_dir / f"{case.run_name}.nc"
 
     t0 = time.monotonic()
-    dataset = GotmDriver(case.yaml_path).run(output_path=nc_path)
+    dataset = GotmDriver(case.yaml_path).run()
     try:
         if dataset.attrs.get("runtime") != "compiled":
             msg = (
                 f"parity case {case.run_name!r} did not use the Numba compiled runtime"
             )
             raise RuntimeError(msg)
+        reference = open_reference_dataset(case)
+        try:
+            keep = [name for name in reference.data_vars if name in dataset.data_vars]
+            dataset = dataset[keep]
+            GotmDriver.write_dataset(dataset, nc_path)
+        finally:
+            reference.close()
     finally:
         dataset.close()
     elapsed = time.monotonic() - t0

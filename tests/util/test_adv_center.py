@@ -20,6 +20,7 @@ from pygotm.util.adv_center import (
     AdvectionWorkspace,
     adv_center,
     adv_center_batch,
+    adv_center_lake,
     clean_adv_center,
     init_adv_center,
 )
@@ -265,6 +266,57 @@ def test_conservative_split_iterations_match_reference() -> None:
     )
     np.testing.assert_allclose(result[1:], expected[1:], rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(cu_result, expected_flux, rtol=1e-12, atol=1e-12)
+
+
+def test_lake_rectangular_geometry_matches_ocean_conservative() -> None:
+    nlev = 4
+    dt = 0.75
+    h = np.array([0.0, 1.0, 0.8, 1.1, 0.9], dtype=np.float64)
+    ho = h.copy()
+    af = np.ones(nlev + 1, dtype=np.float64)
+    ww = np.array([0.0, 0.2, -0.15, 0.1, 0.0], dtype=np.float64)
+    y = np.array([0.0, 1.0, 0.4, 1.6, 0.8], dtype=np.float64)
+    q_sour = np.zeros(nlev + 1, dtype=np.float64)
+    l_sour = np.zeros(nlev + 1, dtype=np.float64)
+
+    expected, _ = _call_adv_center(
+        nlev,
+        dt,
+        h,
+        ho,
+        ww,
+        ONE_SIDED,
+        ONE_SIDED,
+        0.0,
+        0.0,
+        P2_PDM,
+        CONSERVATIVE,
+        y,
+    )
+
+    actual = y.copy()
+    cu = np.zeros(nlev + 1, dtype=np.float64)
+    adv_center_lake(
+        nlev,
+        dt,
+        h,
+        ho,
+        h,
+        af,
+        ww,
+        ONE_SIDED,
+        ONE_SIDED,
+        0.0,
+        0.0,
+        l_sour,
+        q_sour,
+        P2_PDM,
+        CONSERVATIVE,
+        actual,
+        cu,
+    )
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
 
 
 def test_nonconservative_matches_reference() -> None:

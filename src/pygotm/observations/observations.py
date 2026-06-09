@@ -80,6 +80,10 @@ _EXTINCTION_METHOD = {
 }
 
 
+def _method_name(value: str | int) -> str:
+    return str(value)
+
+
 def _vertical_velocity_settings(parsed: GotmSettings) -> VerticalVelocitySettings:
     if "w" in parsed.mimic_3d.model_fields_set:
         return parsed.mimic_3d.w
@@ -329,6 +333,14 @@ class ObservationsState:
     b_obs_surf: float = 0.0
     b_obs_NN: float = 0.0
     b_obs_sbf: float = 0.0
+    Qs: np.ndarray | None = None
+    Qt: np.ndarray | None = None
+    Ls: np.ndarray | None = None
+    Lt: np.ndarray | None = None
+    Qlayer: np.ndarray | None = None
+    Qres: np.ndarray | None = None
+    FQ: np.ndarray | None = None
+    wq: np.ndarray | None = None
 
 
 def init_observations(
@@ -369,7 +381,9 @@ def init_observations(
     state.SRelaxSurf = parsed.salinity.relax.h_s
     state.SRelaxBott = parsed.salinity.relax.h_b
 
-    state.extinct_method = _EXTINCTION_METHOD[parsed.light_extinction.method]
+    state.extinct_method = _EXTINCTION_METHOD[
+        _method_name(parsed.light_extinction.method)
+    ]
     state.ext_press_mode = _EXT_PRESS_MODE[parsed.mimic_3d.ext_pressure.type]
     state.int_press_type = _INT_PRESS_TYPE[parsed.mimic_3d.int_pressure.type]
     state.s_adv = parsed.mimic_3d.int_pressure.s_adv
@@ -402,7 +416,9 @@ def init_observations(
 
     state.tprof_input = _profile_input(
         name="temperature",
-        method=_profile_method(parsed.temperature.method, analytical_constant=True),
+        method=_profile_method(
+            _method_name(parsed.temperature.method), analytical_constant=True
+        ),
         path=parsed.temperature.path,
         index=parsed.temperature.column,
         constant_value=parsed.temperature.constant_value,
@@ -415,7 +431,9 @@ def init_observations(
     )
     state.sprof_input = _profile_input(
         name="salinity",
-        method=_profile_method(parsed.salinity.method, analytical_constant=True),
+        method=_profile_method(
+            _method_name(parsed.salinity.method), analytical_constant=True
+        ),
         path=parsed.salinity.path,
         index=parsed.salinity.column,
         constant_value=parsed.salinity.constant_value,
@@ -430,7 +448,9 @@ def init_observations(
     gradients = parsed.mimic_3d.int_pressure.gradients
     state.dtdx_input = _profile_input(
         name="dtdx",
-        method=_profile_method(gradients.dtdx.method, analytical_constant=False),
+        method=_profile_method(
+            _method_name(gradients.dtdx.method), analytical_constant=False
+        ),
         path=gradients.dtdx.path,
         index=gradients.dtdx.column,
         constant_value=gradients.dtdx.constant_value,
@@ -439,7 +459,9 @@ def init_observations(
     )
     state.dtdy_input = _profile_input(
         name="dtdy",
-        method=_profile_method(gradients.dtdy.method, analytical_constant=False),
+        method=_profile_method(
+            _method_name(gradients.dtdy.method), analytical_constant=False
+        ),
         path=gradients.dtdy.path,
         index=gradients.dtdy.column,
         constant_value=gradients.dtdy.constant_value,
@@ -448,7 +470,9 @@ def init_observations(
     )
     state.dsdx_input = _profile_input(
         name="dsdx",
-        method=_profile_method(gradients.dsdx.method, analytical_constant=False),
+        method=_profile_method(
+            _method_name(gradients.dsdx.method), analytical_constant=False
+        ),
         path=gradients.dsdx.path,
         index=gradients.dsdx.column,
         constant_value=gradients.dsdx.constant_value,
@@ -457,7 +481,9 @@ def init_observations(
     )
     state.dsdy_input = _profile_input(
         name="dsdy",
-        method=_profile_method(gradients.dsdy.method, analytical_constant=False),
+        method=_profile_method(
+            _method_name(gradients.dsdy.method), analytical_constant=False
+        ),
         path=gradients.dsdy.path,
         index=gradients.dsdy.column,
         constant_value=gradients.dsdy.constant_value,
@@ -467,7 +493,9 @@ def init_observations(
 
     state.uprof_input = _profile_input(
         name="u_obs",
-        method=_profile_method(parsed.velocities.u.method, analytical_constant=False),
+        method=_profile_method(
+            _method_name(parsed.velocities.u.method), analytical_constant=False
+        ),
         path=parsed.velocities.u.path,
         index=parsed.velocities.u.column,
         constant_value=parsed.velocities.u.constant_value,
@@ -476,7 +504,9 @@ def init_observations(
     )
     state.vprof_input = _profile_input(
         name="v_obs",
-        method=_profile_method(parsed.velocities.v.method, analytical_constant=False),
+        method=_profile_method(
+            _method_name(parsed.velocities.v.method), analytical_constant=False
+        ),
         path=parsed.velocities.v.path,
         index=parsed.velocities.v.column,
         constant_value=parsed.velocities.v.constant_value,
@@ -489,7 +519,7 @@ def init_observations(
     state.epsprof_input = _profile_input(
         name="eps_obs",
         method=_profile_method(
-            parsed.turbulence.epsprof.method, analytical_constant=False
+            _method_name(parsed.turbulence.epsprof.method), analytical_constant=False
         ),
         path=parsed.turbulence.epsprof.path,
         index=parsed.turbulence.epsprof.column,
@@ -503,7 +533,7 @@ def init_observations(
 
     state.dpdx_input = _scalar_input(
         name="dpdx",
-        method=_scalar_method(parsed.mimic_3d.ext_pressure.dpdx.method),
+        method=_scalar_method(_method_name(parsed.mimic_3d.ext_pressure.dpdx.method)),
         path=parsed.mimic_3d.ext_pressure.dpdx.path,
         index=parsed.mimic_3d.ext_pressure.dpdx.column,
         constant_value=parsed.mimic_3d.ext_pressure.dpdx.constant_value,
@@ -512,7 +542,7 @@ def init_observations(
     )
     state.dpdy_input = _scalar_input(
         name="dpdy",
-        method=_scalar_method(parsed.mimic_3d.ext_pressure.dpdy.method),
+        method=_scalar_method(_method_name(parsed.mimic_3d.ext_pressure.dpdy.method)),
         path=parsed.mimic_3d.ext_pressure.dpdy.path,
         index=parsed.mimic_3d.ext_pressure.dpdy.column,
         constant_value=parsed.mimic_3d.ext_pressure.dpdy.constant_value,
@@ -521,7 +551,7 @@ def init_observations(
     )
     state.h_press_input = _scalar_input(
         name="h_press",
-        method=_scalar_method(parsed.mimic_3d.ext_pressure.h.method),
+        method=_scalar_method(_method_name(parsed.mimic_3d.ext_pressure.h.method)),
         path=parsed.mimic_3d.ext_pressure.h.path,
         index=parsed.mimic_3d.ext_pressure.h.column,
         constant_value=parsed.mimic_3d.ext_pressure.h.constant_value,
@@ -530,7 +560,7 @@ def init_observations(
     )
     state.zeta_input = _scalar_input(
         name="zeta",
-        method=_scalar_method(parsed.mimic_3d.zeta.method),
+        method=_scalar_method(_method_name(parsed.mimic_3d.zeta.method)),
         path=parsed.mimic_3d.zeta.path,
         index=parsed.mimic_3d.zeta.column,
         constant_value=parsed.mimic_3d.zeta.constant_value,
@@ -539,7 +569,9 @@ def init_observations(
     )
     state.w_adv_input = _scalar_input(
         name="w_adv",
-        method=_scalar_method(w_adv_setting.method, constant_method=CONSTANT),
+        method=_scalar_method(
+            _method_name(w_adv_setting.method), constant_method=CONSTANT
+        ),
         path=w_adv_setting.path,
         index=w_adv_setting.column,
         constant_value=w_adv_setting.constant_value,
@@ -549,7 +581,7 @@ def init_observations(
     )
     state.w_height_input = _scalar_input(
         name="w_height",
-        method=_scalar_method(w_height_setting.method),
+        method=_scalar_method(_method_name(w_height_setting.method)),
         path=w_height_setting.path,
         index=w_height_setting.column,
         constant_value=w_height_setting.constant_value,
@@ -558,7 +590,7 @@ def init_observations(
     )
     state.A_input = _scalar_input(
         name="A",
-        method=_scalar_method(parsed.light_extinction.A.method),
+        method=_scalar_method(_method_name(parsed.light_extinction.A.method)),
         path=parsed.light_extinction.A.path,
         index=parsed.light_extinction.A.column,
         constant_value=parsed.light_extinction.A.constant_value,
@@ -567,7 +599,7 @@ def init_observations(
     )
     state.g1_input = _scalar_input(
         name="g1",
-        method=_scalar_method(parsed.light_extinction.g1.method),
+        method=_scalar_method(_method_name(parsed.light_extinction.g1.method)),
         path=parsed.light_extinction.g1.path,
         index=parsed.light_extinction.g1.column,
         constant_value=parsed.light_extinction.g1.constant_value,
@@ -576,7 +608,7 @@ def init_observations(
     )
     state.g2_input = _scalar_input(
         name="g2",
-        method=_scalar_method(parsed.light_extinction.g2.method),
+        method=_scalar_method(_method_name(parsed.light_extinction.g2.method)),
         path=parsed.light_extinction.g2.path,
         index=parsed.light_extinction.g2.column,
         constant_value=parsed.light_extinction.g2.constant_value,
@@ -585,7 +617,7 @@ def init_observations(
     )
     state.Hs_input = _scalar_input(
         name="Hs",
-        method=_scalar_method(parsed.waves.Hs.method),
+        method=_scalar_method(_method_name(parsed.waves.Hs.method)),
         path=parsed.waves.Hs.path,
         index=parsed.waves.Hs.column,
         constant_value=parsed.waves.Hs.constant_value,
@@ -594,7 +626,7 @@ def init_observations(
     )
     state.Tz_input = _scalar_input(
         name="Tz",
-        method=_scalar_method(parsed.waves.Tz.method),
+        method=_scalar_method(_method_name(parsed.waves.Tz.method)),
         path=parsed.waves.Tz.path,
         index=parsed.waves.Tz.column,
         constant_value=parsed.waves.Tz.constant_value,
@@ -603,7 +635,7 @@ def init_observations(
     )
     state.phiw_input = _scalar_input(
         name="phiw",
-        method=_scalar_method(parsed.waves.phiw.method),
+        method=_scalar_method(_method_name(parsed.waves.phiw.method)),
         path=parsed.waves.phiw.path,
         index=parsed.waves.phiw.column,
         constant_value=parsed.waves.phiw.constant_value,
@@ -628,6 +660,14 @@ def post_init_observations(
     state.idpdy = np.zeros(nlev + 1, dtype=np.float64)
     state.SRelaxTau = np.zeros(nlev + 1, dtype=np.float64)
     state.TRelaxTau = np.zeros(nlev + 1, dtype=np.float64)
+    state.Qs = np.zeros(nlev + 1, dtype=np.float64)
+    state.Qt = np.zeros(nlev + 1, dtype=np.float64)
+    state.Ls = np.zeros(nlev + 1, dtype=np.float64)
+    state.Lt = np.zeros(nlev + 1, dtype=np.float64)
+    state.Qlayer = np.zeros(nlev + 1, dtype=np.float64)
+    state.Qres = np.zeros(nlev + 1, dtype=np.float64)
+    state.FQ = np.zeros(nlev + 1, dtype=np.float64)
+    state.wq = np.zeros(nlev + 1, dtype=np.float64)
 
     db = 0.0
     ds = depth
@@ -802,3 +842,11 @@ def clean_observations(state: ObservationsState) -> None:
     state.idpdy = None
     state.SRelaxTau = None
     state.TRelaxTau = None
+    state.Qs = None
+    state.Qt = None
+    state.Ls = None
+    state.Lt = None
+    state.Qlayer = None
+    state.Qres = None
+    state.FQ = None
+    state.wq = None

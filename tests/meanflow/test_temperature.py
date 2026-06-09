@@ -8,6 +8,7 @@ from pygotm.meanflow.temperature import (
     _G1_DEFAULT,
     _G2_DEFAULT,
     step_temperature,
+    step_temperature_lake_single,
     temperature,
 )
 from pygotm.meanflow.updategrid import updategrid
@@ -286,6 +287,99 @@ def test_relaxation_towards_observed():
     for k in range(1, nlev + 1):
         assert float(state.T[k]) > 10.0
         assert float(state.T[k]) < 20.0
+
+
+def test_lake_rectangular_geometry_matches_ocean_temperature_step():
+    nlev = 5
+    dt = 120.0
+    cnpar = 0.7
+    I_0 = 180.0
+    hflux = -50.0
+    nuh = np.full(nlev + 1, 1.0e-4, dtype=np.float64)
+    gamh = _zeros(nlev)
+
+    reference = _make_state(nlev=nlev, depth=10.0, T_init=10.0, S_init=0.0)
+    assert reference.T is not None
+    reference.T[1:] = np.linspace(4.0, 12.0, nlev)
+    initial_T = reference.T.copy()
+    _run_step(
+        reference,
+        nlev,
+        dt,
+        cnpar,
+        I_0=I_0,
+        hflux=hflux,
+        nuh=nuh,
+        gamh=gamh,
+    )
+
+    state = _make_state(nlev=nlev, depth=10.0, T_init=10.0, S_init=0.0)
+    assert state.T is not None
+    assert state.S is not None
+    assert state.h is not None
+    assert state.u is not None
+    assert state.v is not None
+    assert state.w is not None
+    assert state.bioshade is not None
+    assert state.rad is not None
+    assert state.avh is not None
+    state.T[:] = initial_T
+
+    n = nlev + 1
+    zeros = np.zeros(n, dtype=np.float64)
+    step_temperature_lake_single(
+        nlev,
+        dt,
+        cnpar,
+        state.avmolT,
+        _RHO0,
+        _CP,
+        _A_DEFAULT,
+        _G1_DEFAULT,
+        _G2_DEFAULT,
+        0,
+        4,
+        0,
+        state.T,
+        state.S,
+        state.h,
+        state.h.copy(),
+        state.h.copy(),
+        np.ones(n, dtype=np.float64),
+        np.ones(n, dtype=np.float64),
+        state.w,
+        zeros.copy(),
+        state.u,
+        state.v,
+        nuh,
+        gamh,
+        state.bioshade,
+        state.rad,
+        zeros.copy(),
+        np.full(n, _LONG, dtype=np.float64),
+        I_0,
+        -hflux / (_RHO0 * _CP),
+        0.0,
+        0.0,
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        0,
+        zeros.copy(),
+        zeros.copy(),
+        state.avh,
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+    )
+
+    np.testing.assert_allclose(state.T, reference.T, rtol=1.0e-12, atol=1.0e-12)
 
 
 def test_multicol_parity():

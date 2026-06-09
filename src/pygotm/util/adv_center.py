@@ -96,6 +96,7 @@ __all__ = [
     "VALUE",
     "ZERO_DIVERGENCE",
     "adv_center",
+    "adv_center_lake",
     "adv_center_batch",
     "clean_adv_center",
     "init_adv_center",
@@ -299,6 +300,114 @@ def adv_center(
         else:
             for k in range(1, nlev + 1):
                 y[k] = y[k] - dt / iterations_f * ((cu[k] - cu[k - 1]) / h[k])
+
+
+@numba.njit(cache=True)
+def adv_center_lake(
+    nlev: int,
+    dt: float,
+    h: np.ndarray,
+    vco: np.ndarray,
+    vc: np.ndarray,
+    af: np.ndarray,
+    ww: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    method: int,
+    mode: int,
+    y: np.ndarray,
+    cu: np.ndarray,
+) -> None:
+    """Advance a cell-centred tracer with lake volume/area geometry."""
+
+    cmax = 0.0
+    for level in range(nlev + 1):
+        cu[level] = 0.0
+
+    for k in range(1, nlev):
+        courant = abs(ww[k]) * dt / (0.5 * (h[k] + h[k + 1]))
+        if courant > cmax:
+            cmax = courant
+
+    iterations = min(_ITMAX, int(cmax) + 1)
+    iterations_f = float(iterations)
+    dti = dt / iterations_f
+
+    for iteration in range(iterations):
+        for k in range(1, nlev):
+            courant = 0.0
+            y_upstream = 0.0
+            y_central = 0.0
+            y_downstream = 0.0
+            if ww[k] > 0.0:
+                courant = ww[k] * dti / (0.5 * (h[k] + h[k + 1]))
+                if k > 1:
+                    y_upstream = y[k - 1]
+                else:
+                    y_upstream = y[k]
+                y_central = y[k]
+                y_downstream = y[k + 1]
+            else:
+                courant = -ww[k] * dti / (0.5 * (h[k] + h[k + 1]))
+                if k < nlev - 1:
+                    y_upstream = y[k + 2]
+                else:
+                    y_upstream = y[k + 1]
+                y_central = y[k + 1]
+                y_downstream = y[k]
+
+            reconstructed = _adv_reconstruct(
+                method,
+                courant,
+                y_upstream,
+                y_central,
+                y_downstream,
+            )
+            cu[k] = ww[k] * reconstructed
+
+        if bc_up == FLUX:
+            cu[nlev] = -y_up
+        elif bc_up == VALUE:
+            cu[nlev] = ww[nlev] * y_up
+        elif bc_up == ONE_SIDED:
+            if ww[nlev] >= 0.0:
+                cu[nlev] = ww[nlev] * y[nlev]
+            else:
+                cu[nlev] = 0.0
+        else:
+            cu[nlev] = cu[nlev - 1]
+
+        if bc_down == FLUX:
+            cu[0] = y_down
+        elif bc_down == VALUE:
+            cu[0] = ww[0] * y_down
+        elif bc_down == ONE_SIDED:
+            if ww[0] <= 0.0:
+                cu[0] = ww[0] * y[1]
+            else:
+                cu[0] = 0.0
+        else:
+            cu[0] = cu[1]
+
+        if mode == NON_CONSERVATIVE:
+            for k in range(1, nlev + 1):
+                y[k] = y[k] - dti * (
+                    (cu[k] - cu[k - 1]) / h[k] - y[k] * (ww[k] - ww[k - 1]) / h[k]
+                )
+        else:
+            for k in range(nlev + 1):
+                cu[k] = af[k] * cu[k]
+            for k in range(1, nlev + 1):
+                d_v = (vc[k] - vco[k]) / iterations_f
+                v_old = vco[k] + iteration * d_v
+                v_new = vc[k] - (iterations - iteration - 1) * d_v
+                y[k] = (v_old * y[k] - dti * (cu[k] - cu[k - 1] - q_sour[k])) / (
+                    v_new - dti * l_sour[k]
+                )
 
 
 @numba.njit(parallel=True, cache=True)

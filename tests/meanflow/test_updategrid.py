@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pygotm.meanflow.hypsograph import HypsographState
 from pygotm.meanflow.meanflow import (
     MeanflowState,
     init_meanflow,
@@ -23,6 +24,20 @@ from pygotm.meanflow.updategrid import updategrid
 _NLEV = 10
 _DEPTH = 25.0
 _DT = 3600.0
+
+
+def _rectangular_hypsograph(depth: float, area: float) -> HypsographState:
+    zi_input = np.asarray([-depth, 0.0], dtype=np.float64)
+    af_input = np.asarray([area, area], dtype=np.float64)
+    sqrt_af_input = np.sqrt(af_input)
+    v_input = np.asarray([0.0, depth * area], dtype=np.float64)
+    return HypsographState(
+        nlev_input=1,
+        zi_input=zi_input,
+        af_input=af_input,
+        sqrt_af_input=sqrt_af_input,
+        v_input=v_input,
+    )
 
 
 def _make_state(
@@ -104,6 +119,41 @@ def test_equidistant_depth_sum() -> None:
 
     assert state.h is not None
     assert np.sum(state.h[1:]) == pytest.approx(depth, rel=1e-12)
+
+
+def test_ocean_volume_arrays_track_layer_thicknesses() -> None:
+    """Ocean mode keeps Vc/Vco equivalent to h/ho for existing cases."""
+    state = _make_state()
+    _call(state)
+
+    assert state.h is not None
+    assert state.ho is not None
+    assert state.Vc is not None
+    assert state.Vco is not None
+    np.testing.assert_allclose(state.Vc, state.h, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(state.Vco, state.ho, rtol=0.0, atol=0.0)
+
+
+def test_lake_updategrid_populates_area_and_volume() -> None:
+    """Lake mode maps grid interfaces through the hypsograph frustum geometry."""
+    nlev = 5
+    depth = 10.0
+    area = 123.0
+    state = _make_state(nlev=nlev, depth=depth)
+    state.lake = True
+    state.hypsograph = _rectangular_hypsograph(depth, area)
+
+    _call(state, nlev=nlev)
+
+    assert state.h is not None
+    assert state.Af is not None
+    assert state.Afo is not None
+    assert state.Vc is not None
+    assert state.Vco is not None
+    np.testing.assert_allclose(state.Af, area, rtol=1.0e-14, atol=1.0e-14)
+    np.testing.assert_allclose(state.Afo, np.ones(nlev + 1), rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(state.Vc[1:], state.h[1:] * area, rtol=1.0e-14)
+    np.testing.assert_allclose(state.Vco, np.zeros(nlev + 1), rtol=0.0, atol=0.0)
 
 
 # ---------------------------------------------------------------------------

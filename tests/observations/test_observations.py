@@ -211,6 +211,37 @@ def test_post_init_observations_creates_two_layer_profile_and_relaxation() -> No
     assert np.any(np.isclose(state.SRelaxTau[1:], 40.0))
 
 
+def test_post_init_observations_keeps_legacy_off_profile_constants() -> None:
+    settings = GotmSettings.model_validate(
+        {
+            "temperature": {"method": "off", "constant_value": 7.0},
+            "salinity": {"method": "off", "constant_value": 20.0},
+        }
+    )
+    state = ObservationsState()
+    init_observations(state, settings)
+    meanflow, density = _grid()
+    assert meanflow.z is not None
+    assert meanflow.zi is not None
+    assert meanflow.h is not None
+    init_input(6)
+    post_init_observations(
+        state,
+        meanflow.depth,
+        6,
+        meanflow.z,
+        meanflow.zi,
+        meanflow.h,
+        meanflow.gravity,
+        density,
+    )
+
+    assert state.sprof_input.data is not None
+    assert state.tprof_input.data is not None
+    np.testing.assert_array_equal(state.sprof_input.data, np.full(7, 20.0))
+    np.testing.assert_array_equal(state.tprof_input.data, np.full(7, 7.0))
+
+
 def test_const_nn_profile_requires_constant_counterpart() -> None:
     settings = GotmSettings.model_validate(
         {

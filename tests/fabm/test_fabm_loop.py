@@ -6,6 +6,7 @@ import numpy as np
 
 from pygotm.fabm.fabm_loop import _apply_sinking
 from pygotm.fabm.gotm_fabm import (
+    step_fabm_lake_advection_single,
     step_fabm_post_rates_single,
     step_fabm_transport_single,
 )
@@ -150,6 +151,53 @@ def test_compiled_fabm_transport_matches_python_path_for_100_steps() -> None:
 
     np.testing.assert_allclose(actual, expected, rtol=0.0, atol=0.0)
     assert step_fabm_transport_single.nopython_signatures
+
+
+def test_compiled_fabm_lake_advection_applies_stream_concentrations() -> None:
+    nlev = 2
+    dt = 0.1
+    cc = np.array([[1.0, 2.0], [4.0, 5.0]], dtype=np.float64)
+    stream_flow = np.array([2.0], dtype=np.float64)
+    stream_Q = np.array([[0.0, 0.0, 2.0]], dtype=np.float64)
+    stream_concentrations = np.array([[3.0], [0.0]], dtype=np.float64)
+    stream_has_concentration = np.array([[1], [0]], dtype=np.int64)
+    no_river_dilution = np.array([1, 1], dtype=np.int64)
+    h_step = np.array([0.0, 1.0, 1.0], dtype=np.float64)
+    vco_step = np.array([0.0, 1.0, 1.0], dtype=np.float64)
+    vc_step = np.array([0.0, 1.0, 1.0], dtype=np.float64)
+    afo_step = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+    wq_step = np.zeros(nlev + 1, dtype=np.float64)
+    qres_step = np.zeros(nlev + 1, dtype=np.float64)
+    y = np.zeros(nlev + 1, dtype=np.float64)
+    adv_cu = np.zeros(nlev + 1, dtype=np.float64)
+    l_sour = np.zeros(nlev + 1, dtype=np.float64)
+    q_sour = np.zeros(nlev + 1, dtype=np.float64)
+
+    step_fabm_lake_advection_single(
+        nlev,
+        dt,
+        6,
+        2,
+        stream_flow,
+        stream_Q,
+        stream_concentrations,
+        stream_has_concentration,
+        no_river_dilution,
+        h_step,
+        vco_step,
+        vc_step,
+        afo_step,
+        wq_step,
+        qres_step,
+        cc,
+        y,
+        adv_cu,
+        l_sour,
+        q_sour,
+    )
+
+    np.testing.assert_allclose(cc, [[1.0, 2.6], [4.0, 6.0]])
+    assert step_fabm_lake_advection_single.nopython_signatures
 
 
 def test_compiled_fabm_post_rates_matches_python_update_for_boundaries() -> None:

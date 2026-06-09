@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 __all__ = [
     "FABMConfig",
@@ -12,6 +16,8 @@ __all__ = [
     "load_fabm_config",
     "resolve_fabm_config_path",
 ]
+
+_LEGACY_SELMA_PHYTOPLANKTON_PARAMETERS = frozenset(("alpha", "beta"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +66,38 @@ def resolve_fabm_config_path(
     if not path.is_file():
         msg = f"FABM model YAML not found: {path}"
         raise RuntimeError(msg)
-    return path
+    return _normalized_fabm_config_path(path)
+
+
+def _normalized_fabm_config_path(path: Path) -> Path:
+    """Return a pyfabm-compatible FABM YAML path derived from *path*."""
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return path
+
+    changed = False
+    instances = _mapping(raw.get("instances"))
+    for instance in instances.values():
+        if not isinstance(instance, dict):
+            continue
+        if str(instance.get("model", "")) != "selmaprotbas/phytoplankton":
+            continue
+        parameters = _mapping(instance.get("parameters"))
+        for key in _LEGACY_SELMA_PHYTOPLANKTON_PARAMETERS:
+            if key in parameters:
+                del parameters[key]
+                changed = True
+
+    if not changed:
+        return path
+
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    target_dir = Path(tempfile.gettempdir()) / "pygotm-fabm"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{path.stem}-{digest}.yaml"
+    target.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    return target
 
 
 def load_fabm_config(

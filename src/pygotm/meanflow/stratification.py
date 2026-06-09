@@ -12,7 +12,7 @@ r"""
 import numpy as np
 
 from pygotm.meanflow.meanflow import MeanflowState
-from pygotm.util.density import DensityState
+from pygotm.util.density import DensityState, _is_legacy_lake_method, _legacy_density
 
 __all__ = [
     "stratification",
@@ -43,6 +43,84 @@ def stratification(
     alpha = density_state.alpha
     beta = density_state.beta
     g = state.gravity
+
+    if _is_legacy_lake_method(density_state.density_method):
+        assert state.buoy is not None
+        assert density_state.rho is not None
+        assert density_state.rho_p is not None
+
+        z_face = 0.0
+        z_center = 0.5 * h[nlev]
+        rho = _legacy_density(
+            density_state.density_method,
+            float(S[nlev]),
+            float(T[nlev]),
+            z_center / 10.0,
+        )
+        state.buoy[nlev] = -g * (rho - density_state.rho0) / density_state.rho0
+        density_state.rho[nlev] = rho
+        density_state.rho_p[nlev] = rho
+
+        for i_lake in range(nlev - 1, 0, -1):
+            dz_lake = 0.5 * (h[i_lake] + h[i_lake + 1])
+            z_face += h[i_lake + 1]
+            z_center += dz_lake
+            p_face = z_face / 10.0
+
+            denom = h[i_lake + 1] + h[i_lake]
+            Sface = (S[i_lake + 1] * h[i_lake] + S[i_lake] * h[i_lake + 1]) / denom
+            Tface = (T[i_lake + 1] * h[i_lake] + T[i_lake] * h[i_lake + 1]) / denom
+
+            rho_p = _legacy_density(
+                density_state.density_method,
+                float(Sface),
+                float(T[i_lake + 1]),
+                p_face,
+            )
+            rho_m = _legacy_density(
+                density_state.density_method,
+                float(Sface),
+                float(T[i_lake]),
+                p_face,
+            )
+            buoy_p = -g * (rho_p - density_state.rho0) / density_state.rho0
+            buoy_m = -g * (rho_m - density_state.rho0) / density_state.rho0
+            state.NNT[i_lake] = (buoy_p - buoy_m) / dz_lake
+
+            rho_p = _legacy_density(
+                density_state.density_method,
+                float(S[i_lake + 1]),
+                float(Tface),
+                p_face,
+            )
+            rho_m = _legacy_density(
+                density_state.density_method,
+                float(S[i_lake]),
+                float(Tface),
+                p_face,
+            )
+            buoy_p = -g * (rho_p - density_state.rho0) / density_state.rho0
+            buoy_m = -g * (rho_m - density_state.rho0) / density_state.rho0
+            state.NNS[i_lake] = (buoy_p - buoy_m) / dz_lake
+            state.NN[i_lake] = state.NNT[i_lake] + state.NNS[i_lake]
+
+            rho = _legacy_density(
+                density_state.density_method,
+                float(S[i_lake]),
+                float(T[i_lake]),
+                z_center / 10.0,
+            )
+            state.buoy[i_lake] = -g * (rho - density_state.rho0) / density_state.rho0
+            density_state.rho[i_lake] = rho
+            density_state.rho_p[i_lake] = rho
+
+        state.NNT[0] = 0.0
+        state.NNT[nlev] = 0.0
+        state.NNS[0] = 0.0
+        state.NNS[nlev] = 0.0
+        state.NN[0] = 0.0
+        state.NN[nlev] = 0.0
+        return
 
     i = np.arange(1, nlev)
 

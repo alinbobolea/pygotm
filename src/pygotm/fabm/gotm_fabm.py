@@ -36,7 +36,13 @@ from typing import Any
 import numba
 import numpy as np
 
-from pygotm.util.adv_center import CONSERVATIVE, FLUX, P2_PDM, adv_center
+from pygotm.util.adv_center import (
+    CONSERVATIVE,
+    FLUX,
+    P2_PDM,
+    adv_center,
+    adv_center_lake,
+)
 from pygotm.util.diff_center import NEUMANN, diff_center
 
 __all__ = [
@@ -69,6 +75,7 @@ __all__ = [
     "save_diagnostics",
     "set_env_gotm_fabm",
     "start_gotm_fabm",
+    "step_fabm_lake_advection_single",
     "step_fabm_post_rates_single",
     "step_fabm_transport_single",
 ]
@@ -190,6 +197,91 @@ def par_with_bioext_from_attenuation_single(
         # Add the extinction of the second half of the grid box.
         bioext += local_ext * h[idx + 1] * 0.5
     return surface_par
+
+
+@numba.njit(cache=True)
+def step_fabm_lake_advection_single(
+    nlev: int,
+    dt: float,
+    w_adv_ctr: int,
+    n_interior: int,
+    stream_flow: np.ndarray,
+    stream_Q: np.ndarray,
+    stream_concentrations: np.ndarray,
+    stream_has_concentration: np.ndarray,
+    no_river_dilution: np.ndarray,
+    h_step: np.ndarray,
+    vco_step: np.ndarray,
+    vc_step: np.ndarray,
+    afo_step: np.ndarray,
+    wq_step: np.ndarray,
+    qres_step: np.ndarray,
+    cc: np.ndarray,
+    y: np.ndarray,
+    adv_cu: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+) -> None:
+    """Apply lake stream/residual water-balance advection to FABM tracers."""
+
+    nstreams = stream_flow.shape[0]
+    for var in range(n_interior):
+        for k in range(nlev + 1):
+            l_sour[k] = 0.0
+            q_sour[k] = 0.0
+
+        for stream in range(nstreams):
+            flow = stream_flow[stream]
+            if flow >= 0.0:
+                if (
+                    stream_has_concentration[var, stream] != 0
+                    or no_river_dilution[var] == 0
+                ):
+                    stream_conc = 0.0
+                    if stream_has_concentration[var, stream] != 0:
+                        stream_conc = stream_concentrations[var, stream]
+                else:
+                    stream_conc = cc[var, nlev - 1]
+                for k in range(1, nlev + 1):
+                    q_sour[k] += stream_Q[stream, k] * stream_conc
+            else:
+                if stream_has_concentration[var, stream] != 0:
+                    stream_conc = stream_concentrations[var, stream]
+                    for k in range(1, nlev + 1):
+                        q_sour[k] += stream_Q[stream, k] * stream_conc
+                else:
+                    for k in range(1, nlev + 1):
+                        l_sour[k] += stream_Q[stream, k]
+
+        for k in range(1, nlev + 1):
+            qres = qres_step[k]
+            if qres > 0.0:
+                q_sour[k] += qres * cc[var, k - 1]
+            else:
+                l_sour[k] += qres
+            y[k] = cc[var, k - 1]
+
+        adv_center_lake(
+            nlev,
+            dt,
+            h_step,
+            vco_step,
+            vc_step,
+            afo_step,
+            wq_step,
+            FLUX,
+            FLUX,
+            0.0,
+            0.0,
+            l_sour,
+            q_sour,
+            w_adv_ctr,
+            CONSERVATIVE,
+            y,
+            adv_cu,
+        )
+        for k in range(nlev):
+            cc[var, k] = y[k + 1]
 
 
 @numba.njit(cache=True)

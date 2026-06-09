@@ -29,6 +29,7 @@ REFERENCE_CASE_NAMES: tuple[str, ...] = (
     "flex",
     "gotland",
     "lago_maggiore",
+    "lake_erken",
     "langmuir",
     "liverpool_bay",
     "medsea_east",

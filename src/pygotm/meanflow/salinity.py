@@ -75,14 +75,16 @@ import numba
 import numpy as np
 
 from pygotm.meanflow.meanflow import MeanflowState
-from pygotm.util.adv_center import adv_center
-from pygotm.util.diff_center import diff_center
+from pygotm.util.adv_center import adv_center, adv_center_lake
+from pygotm.util.diff_center import diff_center, diff_center_lake
 from pygotm.util.util import Neumann as _NEUMANN
+from pygotm.util.util import flux as _FLUX
 from pygotm.util.util import oneSided as _ONE_SIDED
 
 __all__ = [
     "salinity",
     "step_salinity",
+    "step_salinity_lake_single",
     "step_salinity_single",
 ]
 
@@ -158,6 +160,136 @@ def _step_salinity(
         cnpar,
         _POS_CONC,
         h,
+        _NEUMANN,
+        _NEUMANN,
+        diff_s_up,
+        0.0,
+        avh,
+        l_sour,
+        q_sour,
+        tau_r,
+        Sobs,
+        S,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+    )
+
+
+@numba.njit(cache=True)
+def _step_salinity_lake(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    avmolS: float,
+    w_adv_active: int,
+    w_adv_discr: int,
+    s_adv: int,
+    S: np.ndarray,
+    h: np.ndarray,
+    vco: np.ndarray,
+    vc: np.ndarray,
+    af: np.ndarray,
+    afo: np.ndarray,
+    w: np.ndarray,
+    wq: np.ndarray,
+    u: np.ndarray,
+    v: np.ndarray,
+    nus: np.ndarray,
+    gams: np.ndarray,
+    Sobs: np.ndarray,
+    tau_r: np.ndarray,
+    diff_s_up: float,
+    Qres: np.ndarray,
+    Qs: np.ndarray,
+    Ls: np.ndarray,
+    dsdx: np.ndarray,
+    dsdy: np.ndarray,
+    avh: np.ndarray,
+    q_sour: np.ndarray,
+    l_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+    adv_cu: np.ndarray,
+) -> None:
+    for k in range(nlev + 1):
+        avh[k] = nus[k] + avmolS
+
+    for k in range(1, nlev + 1):
+        if Qres[k] > 0.0:
+            Qs[k] = Qs[k] + Qres[k] * S[k]
+        else:
+            Ls[k] = Ls[k] + Qres[k]
+    adv_center_lake(
+        nlev,
+        dt,
+        h,
+        vco,
+        vc,
+        afo,
+        wq,
+        _FLUX,
+        _FLUX,
+        0.0,
+        0.0,
+        Ls,
+        Qs,
+        w_adv_discr,
+        1,
+        S,
+        adv_cu,
+    )
+
+    if w_adv_active == 1:
+        for k in range(nlev + 1):
+            q_sour[k] = 0.0
+            l_sour[k] = 0.0
+        adv_center_lake(
+            nlev,
+            dt,
+            h,
+            vc,
+            vc,
+            af,
+            w,
+            _ONE_SIDED,
+            _ONE_SIDED,
+            0.0,
+            0.0,
+            l_sour,
+            q_sour,
+            w_adv_discr,
+            _ADV_MODE,
+            S,
+            adv_cu,
+        )
+
+    for k in range(nlev + 1):
+        q_sour[k] = 0.0
+        l_sour[k] = 0.0
+
+    for k in range(1, nlev + 1):
+        q_sour[k] -= (gams[k] - gams[k - 1]) / h[k]
+
+    if s_adv == 1:
+        for k in range(1, nlev + 1):
+            q_sour[k] -= u[k] * dsdx[k] + v[k] * dsdy[k]
+
+    diff_center_lake(
+        nlev,
+        dt,
+        cnpar,
+        _POS_CONC,
+        h,
+        vc,
+        af,
         _NEUMANN,
         _NEUMANN,
         diff_s_up,
@@ -347,3 +479,4 @@ def salinity(
 
 
 step_salinity_single = _step_salinity
+step_salinity_lake_single = _step_salinity_lake

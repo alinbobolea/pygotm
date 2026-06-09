@@ -17,7 +17,12 @@ def _write_config(path: Path) -> None:
             {
                 "version": 7,
                 "title": "runtime config",
-                "location": {"latitude": 55.0, "longitude": 12.0, "depth": 25.0},
+                "location": {
+                    "latitude": 55.0,
+                    "longitude": 12.0,
+                    "depth": 25.0,
+                    "hypsograph": "hypsograph.dat",
+                },
                 "time": {
                     "start": "2000-01-01 00:00:00",
                     "stop": "2000-01-01 01:00:00",
@@ -75,9 +80,16 @@ def test_load_config_resolves_relative_file_paths_without_mutating_document(
 
     assert config.source_path == config_path.resolve()
     assert config.document["temperature"]["file"] == "t_prof.dat"
+    assert config.document["location"]["hypsograph"] == "hypsograph.dat"
     assert config.document["surface"]["u10"]["file"] == "meteo.dat"
     assert config.document["turbulence"]["turb_method"] == "second_order"
+    assert resolved["location"]["hypsograph"] == str(
+        (tmp_path / "hypsograph.dat").resolve()
+    )
     assert resolved["surface"]["u10"]["file"] == str((tmp_path / "meteo.dat").resolve())
+    assert resolved_settings.location.hypsograph == str(
+        (tmp_path / "hypsograph.dat").resolve()
+    )
     assert resolved_settings.grid.file == str((tmp_path / "grid.dat").resolve())
     assert resolved_settings.temperature.file == str(
         (tmp_path / "t_prof.dat").resolve()
@@ -115,3 +127,17 @@ def test_from_settings_without_source_path_leaves_relative_paths_unmodified() ->
 
     assert resolved.temperature.file == "t_prof.dat"
     assert resolved.mimic_3d.zeta.file == "zeta.dat"
+
+
+def test_load_config_normalizes_lake_erken_legacy_document_aliases() -> None:
+    config = load_config("validation/reference/lake_erken/gotm.yaml")
+    document = config.resolved_document()
+
+    assert document["location"]["hypsograph"].endswith("hypsograph.dat")
+    assert document["surface"]["u10"]["file"].endswith("Erken_MetFile_1960-2020.dat")
+    assert document["surface"]["u10"]["method"] == "file"
+    assert document["surface"]["fluxes"]["method"] == "fairall"
+    assert document["surface"]["ssuv_method"] == "absolute"
+    assert document["surface"]["ice"]["model"] == "mylake"
+    assert document["mimic_3d"]["int_pressure"]["gradients"]["dtdx"]["method"] == "off"
+    assert document["equation_of_state"]["method"] == "full_teos10"

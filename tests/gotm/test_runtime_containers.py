@@ -31,7 +31,13 @@ def test_runtime_state_allocates_float64_column_profiles() -> None:
     names = []
     for name, array in state.iter_profile_arrays():
         names.append(name)
-        _assert_float64_c_profile(array, nlev)
+        if name in {"Af", "Afo"}:
+            assert array.dtype == np.float64
+            assert array.shape == (nlev + 1,)
+            assert array.flags.c_contiguous
+            assert np.all(array == 1.0)
+        else:
+            _assert_float64_c_profile(array, nlev)
 
     assert "u" in names
     assert "T" in names

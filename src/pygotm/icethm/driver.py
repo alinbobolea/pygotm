@@ -1,10 +1,12 @@
 """Driver helpers for pyGOTM ice thermodynamics models."""
 
+import math
+
 import numba
 import numpy as np
 
 from pygotm.icethm._util import freezing_temperature, require_ice_state
-from pygotm.icethm.constants import C_WATER_VOL
+from pygotm.icethm.constants import C_WATER_VOL, MYLAKE_ATTN
 from pygotm.icethm.models.basal_melt import step_basal_melt
 from pygotm.icethm.models.lebedev import step_lebedev
 from pygotm.icethm.models.mylake import step_mylake
@@ -32,10 +34,16 @@ def init_ice(params: IceParams, *, T_air_init: float, S_sfc_init: float) -> IceS
         # Simple limiter has no prognostic ice surface temperature; match
         # Fortran reference which leaves Tice_surface at its allocated zero.
         state.Tice_surface[0] = 0.0
+    elif params.model == IceModelEnum.MYLAKE:
+        state.Tice_surface[0] = 0.0
     else:
         state.Tice_surface[0] = state.Tf[0]
     if state.Hice[0] > 0.0:
         state.ice_cover[0] = 2
+    if params.model == IceModelEnum.MYLAKE:
+        state.albedo_ice[0] = 0.0
+        state.attenuation_ice[0] = MYLAKE_ATTN
+        state.transmissivity[0] = math.exp(-state.Hice[0] * MYLAKE_ATTN)
     require_ice_state(state)
     return state
 
@@ -60,6 +68,8 @@ def step_ice(
     Hice: np.ndarray,
     Hsnow: np.ndarray,
     Hfrazil: np.ndarray,
+    dHis: np.ndarray,
+    dHib: np.ndarray,
     T1: np.ndarray,
     T2: np.ndarray,
     Tice_surface: np.ndarray,
@@ -67,6 +77,7 @@ def step_ice(
     ice_cover: np.ndarray,
     Tf: np.ndarray,
     albedo_ice: np.ndarray,
+    attenuation_ice: np.ndarray,
     transmissivity: np.ndarray,
     ocean_ice_flux: np.ndarray,
     ocean_ice_heat_flux: np.ndarray,
@@ -76,18 +87,18 @@ def step_ice(
     melt_rate: np.ndarray,
     T_melt: np.ndarray,
     S_melt: np.ndarray,
-) -> float:
-    """Dispatch one ice-model step and return the surface temperature flux."""
+) -> tuple[float, float]:
+    """Dispatch one ice-model step and return temperature flux and water T."""
 
     if model == 0:
         Tf[0] = freezing_temperature(S_w)
-        return diff_t_up
+        return diff_t_up, T_w
     if model == 1:
-        return float(step_simple(T_w, S_w, diff_t_up, Tf, Hice, ice_cover))
+        return float(step_simple(T_w, S_w, diff_t_up, Tf, Hice, ice_cover)), T_w
     if model == 2:
         basal_melt_cache_version = 1
         if basal_melt_cache_version < 0:
-            return diff_t_up
+            return diff_t_up, T_w
         step_basal_melt(
             T_w,
             S_w,
@@ -101,7 +112,7 @@ def step_ice(
             ocean_ice_salt_flux,
             Tf,
         )
-        return float(diff_t_up - ocean_ice_heat_flux[0] / C_WATER_VOL)
+        return float(diff_t_up - ocean_ice_heat_flux[0] / C_WATER_VOL), T_w
     if model == 3:
         step_lebedev(
             T_air,
@@ -115,9 +126,9 @@ def step_ice(
             transmissivity,
             Tf,
         )
-        return diff_t_up
+        return diff_t_up, T_w
     if model == 4:
-        step_mylake(
+        T_w = step_mylake(
             T_w,
             S_w,
             T_air,
@@ -127,21 +138,27 @@ def step_ice(
             Qe,
             Ql,
             dt,
+            precip,
             Hice,
             Hfrazil,
+            dHis,
+            dHib,
             Tice_surface,
             ice_cover,
             albedo_ice,
+            attenuation_ice,
             transmissivity,
             Tf,
+            ocean_ice_flux,
             ocean_ice_heat_flux,
             ocean_ice_salt_flux,
+            bottom_ice_energy,
         )
-        return float(diff_t_up - ocean_ice_heat_flux[0] / C_WATER_VOL)
+        return float(diff_t_up - ocean_ice_heat_flux[0] / C_WATER_VOL), T_w
 
     winton_cache_version = 1
     if winton_cache_version < 0:
-        return diff_t_up
+        return diff_t_up, T_w
     step_winton(
         T_w,
         S_w,
@@ -170,7 +187,7 @@ def step_ice(
         surface_ice_energy,
         bottom_ice_energy,
     )
-    return float(diff_t_up - ocean_ice_heat_flux[0] / C_WATER_VOL)
+    return float(diff_t_up - ocean_ice_heat_flux[0] / C_WATER_VOL), T_w
 
 
 def compute_diff_t_up_from_ice(
@@ -195,6 +212,8 @@ def outputs_to_buffers(
     mapping = {
         "Hfrazil": state.Hfrazil,
         "Hice": state.Hice,
+        "dHis": state.dHis,
+        "dHib": state.dHib,
         "T1": state.T1,
         "T2": state.T2,
         "Tf": state.Tf,

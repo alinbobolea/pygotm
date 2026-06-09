@@ -20,6 +20,18 @@ _PROFILE_FIELDS = (
     "zi",
     "h",
     "ho",
+    "Vc",
+    "Vco",
+    "Af",
+    "Afo",
+    "Qs",
+    "Qt",
+    "Ls",
+    "Lt",
+    "Qlayer",
+    "Qres",
+    "FQ",
+    "wq",
     "u",
     "uo",
     "v",
@@ -105,6 +117,8 @@ _SCALAR_FIELDS = (
     "Hice",
     "Hsnow",
     "Hfrazil",
+    "dHis",
+    "dHib",
     "T1",
     "T2",
     "Tice_surface",
@@ -112,6 +126,7 @@ _SCALAR_FIELDS = (
     "ice_cover",
     "Tf",
     "albedo_ice",
+    "attenuation_ice",
     "transmissivity",
     "ocean_ice_flux",
     "ocean_ice_heat_flux",
@@ -121,6 +136,12 @@ _SCALAR_FIELDS = (
     "melt_rate",
     "T_melt",
     "S_melt",
+    "net_water_balance",
+    "int_water_balance",
+    "int_fwf",
+    "int_flows",
+    "stream_int_inflow",
+    "stream_int_outflow",
 )
 
 
@@ -146,6 +167,18 @@ class RuntimeState:
     zi: FloatArray
     h: FloatArray
     ho: FloatArray
+    Vc: FloatArray
+    Vco: FloatArray
+    Af: FloatArray
+    Afo: FloatArray
+    Qs: FloatArray
+    Qt: FloatArray
+    Ls: FloatArray
+    Lt: FloatArray
+    Qlayer: FloatArray
+    Qres: FloatArray
+    FQ: FloatArray
+    wq: FloatArray
     u: FloatArray
     uo: FloatArray
     v: FloatArray
@@ -232,6 +265,8 @@ class RuntimeState:
     Hice: FloatArray
     Hsnow: FloatArray
     Hfrazil: FloatArray
+    dHis: FloatArray
+    dHib: FloatArray
     T1: FloatArray
     T2: FloatArray
     Tice_surface: FloatArray
@@ -239,6 +274,7 @@ class RuntimeState:
     ice_cover: FloatArray
     Tf: FloatArray
     albedo_ice: FloatArray
+    attenuation_ice: FloatArray
     transmissivity: FloatArray
     ocean_ice_flux: FloatArray
     ocean_ice_heat_flux: FloatArray
@@ -248,6 +284,12 @@ class RuntimeState:
     melt_rate: FloatArray
     T_melt: FloatArray
     S_melt: FloatArray
+    net_water_balance: FloatArray
+    int_water_balance: FloatArray
+    int_fwf: FloatArray
+    int_flows: FloatArray
+    stream_int_inflow: FloatArray
+    stream_int_outflow: FloatArray
 
     def iter_profile_arrays(self) -> Iterator[tuple[str, FloatArray]]:
         """Yield every physical profile array in stable declaration order."""
@@ -299,6 +341,18 @@ def allocate_runtime_state(nlev: int) -> RuntimeState:
         zi=_new_profile(nlev),
         h=_new_profile(nlev),
         ho=_new_profile(nlev),
+        Vc=_new_profile(nlev),
+        Vco=_new_profile(nlev),
+        Af=np.ones(nlev + 1, dtype=np.float64),
+        Afo=np.ones(nlev + 1, dtype=np.float64),
+        Qs=_new_profile(nlev),
+        Qt=_new_profile(nlev),
+        Ls=_new_profile(nlev),
+        Lt=_new_profile(nlev),
+        Qlayer=_new_profile(nlev),
+        Qres=_new_profile(nlev),
+        FQ=_new_profile(nlev),
+        wq=_new_profile(nlev),
         u=_new_profile(nlev),
         uo=_new_profile(nlev),
         v=_new_profile(nlev),
@@ -381,6 +435,8 @@ def allocate_runtime_state(nlev: int) -> RuntimeState:
         Hice=np.zeros(1, dtype=np.float64),
         Hsnow=np.zeros(1, dtype=np.float64),
         Hfrazil=np.zeros(1, dtype=np.float64),
+        dHis=np.zeros(1, dtype=np.float64),
+        dHib=np.zeros(1, dtype=np.float64),
         T1=np.zeros(1, dtype=np.float64),
         T2=np.zeros(1, dtype=np.float64),
         Tice_surface=np.zeros(1, dtype=np.float64),
@@ -388,6 +444,7 @@ def allocate_runtime_state(nlev: int) -> RuntimeState:
         ice_cover=np.zeros(1, dtype=np.float64),
         Tf=np.zeros(1, dtype=np.float64),
         albedo_ice=np.zeros(1, dtype=np.float64),
+        attenuation_ice=np.zeros(1, dtype=np.float64),
         transmissivity=np.ones(1, dtype=np.float64),
         ocean_ice_flux=np.zeros(1, dtype=np.float64),
         ocean_ice_heat_flux=np.zeros(1, dtype=np.float64),
@@ -397,6 +454,12 @@ def allocate_runtime_state(nlev: int) -> RuntimeState:
         melt_rate=np.zeros(1, dtype=np.float64),
         T_melt=np.zeros(1, dtype=np.float64),
         S_melt=np.zeros(1, dtype=np.float64),
+        net_water_balance=np.zeros(1, dtype=np.float64),
+        int_water_balance=np.zeros(1, dtype=np.float64),
+        int_fwf=np.zeros(1, dtype=np.float64),
+        int_flows=np.zeros(1, dtype=np.float64),
+        stream_int_inflow=np.zeros(1, dtype=np.float64),
+        stream_int_outflow=np.zeros(1, dtype=np.float64),
     )
     state.validate()
     return state

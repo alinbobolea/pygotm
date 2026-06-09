@@ -191,6 +191,7 @@ class RuntimeOutput:
     qh: FloatArray
     qe: FloatArray
     ql: FloatArray
+    qlobs: FloatArray
     heat: FloatArray
     tx: FloatArray
     ty: FloatArray
@@ -207,6 +208,17 @@ class RuntimeOutput:
     Ekin: FloatArray
     Epot: FloatArray
     Eturb: FloatArray
+    int_flow: FloatArray
+    int_water_balance: FloatArray
+    int_inflow: FloatArray
+    int_outflow: FloatArray
+    Q_Stensta: FloatArray
+    Q_Unguaged: FloatArray
+    T_Unguaged: FloatArray
+    Q_Kristine: FloatArray
+    T_Kristine: FloatArray
+    dHis: FloatArray
+    dHib: FloatArray
     extra_scalars: dict[str, FloatArray]
     fabm_scalars: dict[str, FloatArray]
 
@@ -230,6 +242,13 @@ class RuntimeOutput:
     num: FloatArray
     nuh: FloatArray
     h: FloatArray
+    Af: FloatArray
+    Qlayer: FloatArray
+    Qs: FloatArray
+    Qt: FloatArray
+    wq: FloatArray
+    FQ: FloatArray
+    Qres: FloatArray
     xP: FloatArray
     fric: FloatArray
     drag: FloatArray
@@ -261,6 +280,7 @@ class RuntimeOutput:
     gamh: FloatArray
     gams: FloatArray
     Rig: FloatArray
+    xRf: FloatArray
     gamb: FloatArray
     gam: FloatArray
     r: FloatArray
@@ -364,6 +384,7 @@ class RuntimeOutput:
             "qh",
             "qe",
             "ql",
+            "qlobs",
             "heat",
             "tx",
             "ty",
@@ -380,6 +401,17 @@ class RuntimeOutput:
             "Ekin",
             "Epot",
             "Eturb",
+            "int_flow",
+            "int_water_balance",
+            "int_inflow",
+            "int_outflow",
+            "Q_Stensta",
+            "Q_Unguaged",
+            "T_Unguaged",
+            "Q_Kristine",
+            "T_Kristine",
+            "dHis",
+            "dHib",
         ):
             array = getattr(self, name)
             if array.dtype != np.float64:
@@ -419,6 +451,13 @@ class RuntimeOutput:
             "num",
             "nuh",
             "h",
+            "Af",
+            "Qlayer",
+            "Qs",
+            "Qt",
+            "wq",
+            "FQ",
+            "Qres",
             "xP",
             "fric",
             "drag",
@@ -450,6 +489,7 @@ class RuntimeOutput:
             "gamh",
             "gams",
             "Rig",
+            "xRf",
             "gamb",
             "gam",
             "r",
@@ -547,6 +587,7 @@ def allocate_runtime_output(
         qh=_output_scalar(nout),
         qe=_output_scalar(nout),
         ql=_output_scalar(nout),
+        qlobs=_output_scalar(nout),
         heat=_output_scalar(nout),
         tx=_output_scalar(nout),
         ty=_output_scalar(nout),
@@ -563,6 +604,17 @@ def allocate_runtime_output(
         Ekin=_output_scalar(nout),
         Epot=_output_scalar(nout),
         Eturb=_output_scalar(nout),
+        int_flow=_output_scalar(nout),
+        int_water_balance=_output_scalar(nout),
+        int_inflow=_output_scalar(nout),
+        int_outflow=_output_scalar(nout),
+        Q_Stensta=_output_scalar(nout),
+        Q_Unguaged=_output_scalar(nout),
+        T_Unguaged=_output_scalar(nout),
+        Q_Kristine=_output_scalar(nout),
+        T_Kristine=_output_scalar(nout),
+        dHis=_output_scalar(nout),
+        dHib=_output_scalar(nout),
         extra_scalars={
             name: _output_scalar(nout) for name in EXTRA_SCALAR_OUTPUT_NAMES
         },
@@ -587,6 +639,13 @@ def allocate_runtime_output(
         num=_output_profile(nout, nlev),
         nuh=_output_profile(nout, nlev),
         h=_output_profile(nout, nlev),
+        Af=_output_profile(nout, nlev),
+        Qlayer=_output_profile(nout, nlev),
+        Qs=_output_profile(nout, nlev),
+        Qt=_output_profile(nout, nlev),
+        wq=_output_profile(nout, nlev),
+        FQ=_output_profile(nout, nlev),
+        Qres=_output_profile(nout, nlev),
         xP=_output_profile(nout, nlev),
         fric=_output_profile(nout, nlev),
         drag=_output_profile(nout, nlev),
@@ -618,6 +677,7 @@ def allocate_runtime_output(
         gamh=_output_profile(nout, nlev),
         gams=_output_profile(nout, nlev),
         Rig=_output_profile(nout, nlev),
+        xRf=_output_profile(nout, nlev),
         gamb=_output_profile(nout, nlev),
         gam=_output_profile(nout, nlev),
         r=_output_profile(nout, nlev),

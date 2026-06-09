@@ -3,7 +3,7 @@
 import numpy as np
 
 from pygotm.meanflow.meanflow import MeanflowState, init_meanflow, post_init_meanflow
-from pygotm.meanflow.salinity import salinity, step_salinity
+from pygotm.meanflow.salinity import salinity, step_salinity, step_salinity_lake_single
 from pygotm.meanflow.updategrid import updategrid
 
 _NLEV = 20
@@ -222,6 +222,73 @@ def test_relaxation_towards_observed():
     for k in range(1, nlev + 1):
         assert float(state.S[k]) > 35.0
         assert float(state.S[k]) < 38.0
+
+
+def test_lake_rectangular_geometry_matches_ocean_salinity_step():
+    nlev = 5
+    dt = 120.0
+    cnpar = 0.7
+    nus = np.full(nlev + 1, 1.0e-4, dtype=np.float64)
+    gams = _zeros(nlev)
+
+    reference = _make_state(nlev=nlev, depth=10.0, S_init=35.0)
+    assert reference.S is not None
+    reference.S[1:] = np.linspace(30.0, 35.0, nlev)
+    initial_S = reference.S.copy()
+    _run_step(reference, nlev, dt, cnpar, nus=nus, gams=gams)
+
+    state = _make_state(nlev=nlev, depth=10.0, S_init=35.0)
+    assert state.S is not None
+    assert state.h is not None
+    assert state.u is not None
+    assert state.v is not None
+    assert state.w is not None
+    assert state.avh is not None
+    state.S[:] = initial_S
+
+    n = nlev + 1
+    zeros = np.zeros(n, dtype=np.float64)
+    step_salinity_lake_single(
+        nlev,
+        dt,
+        cnpar,
+        state.avmolS,
+        0,
+        4,
+        0,
+        state.S,
+        state.h,
+        state.h.copy(),
+        state.h.copy(),
+        np.ones(n, dtype=np.float64),
+        np.ones(n, dtype=np.float64),
+        state.w,
+        zeros.copy(),
+        state.u,
+        state.v,
+        nus,
+        gams,
+        zeros.copy(),
+        np.full(n, _LONG, dtype=np.float64),
+        0.0,
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        state.avh,
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+        zeros.copy(),
+    )
+
+    np.testing.assert_allclose(state.S, reference.S, rtol=1.0e-12, atol=1.0e-12)
 
 
 def test_multicol_parity():

@@ -32,6 +32,9 @@ class RuntimeParams:
     latitude: float
     longitude: float
     depth: float
+    lake: int
+    water_balance_method: int
+    nstreams: int
 
     gravity: float
     rho0: float
@@ -183,6 +186,7 @@ class RuntimeParams:
             msg = f"nlev must be at least 1, got {self.nlev}"
             raise ValueError(msg)
         _require_nonnegative_int("nt", self.nt)
+        _require_nonnegative_int("nstreams", self.nstreams)
         _require_positive("dt", self.dt)
         _require_positive("depth", self.depth)
         _require_positive("gravity", self.gravity)
@@ -203,6 +207,9 @@ def make_runtime_params(
     latitude: float = 0.0,
     longitude: float = 0.0,
     depth: float = 1.0,
+    lake: int = 0,
+    water_balance_method: int = 0,
+    nstreams: int = 0,
     gravity: float = STANDARD_GRAVITY_M_S2,
     rho0: float = 1027.0,
     cori: float = 0.0,
@@ -349,6 +356,9 @@ def make_runtime_params(
         latitude=latitude,
         longitude=longitude,
         depth=depth,
+        lake=lake,
+        water_balance_method=water_balance_method,
+        nstreams=nstreams,
         gravity=gravity,
         rho0=rho0,
         cori=cori,

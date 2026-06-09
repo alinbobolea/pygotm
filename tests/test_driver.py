@@ -12,7 +12,6 @@ import xarray as xr
 
 from pygotm.config import GotmConfig, GotmSettings
 from pygotm.driver import GotmDriver
-from pygotm.gotm.runtime_builder import UnsupportedConfigurationError
 from tests.fixtures import bundled_case_path
 
 yaml: Any = import_module("yaml")
@@ -223,7 +222,10 @@ def _config_with_heat_flux(time_method: str, time_step: int = 1) -> dict[str, ob
         "temperature": {"method": "constant"},
         "salinity": {"method": "off"},
         "surface": {
-            "heat": {"method": "constant", "constant_value": -200.0},
+            "fluxes": {
+                "method": "off",
+                "heat": {"method": "constant", "constant_value": -200.0},
+            },
             "swr": {"method": "constant", "constant_value": 0.0},
         },
         "output": {
@@ -244,17 +246,32 @@ def test_output_time_method_raises_for_unknown_method() -> None:
 
 
 def test_output_time_method_mean_averages_values_over_interval() -> None:
-    """time_method: mean is rejected until compiled averaging is implemented."""
-    with pytest.raises(UnsupportedConfigurationError, match="output.time_method"):
-        GotmDriver(GotmSettings.model_validate(_config_with_heat_flux("mean", 2))).run()
+    point = GotmDriver(
+        GotmSettings.model_validate(_config_with_heat_flux("point", 1))
+    ).run()
+    mean = GotmDriver(
+        GotmSettings.model_validate(_config_with_heat_flux("mean", 2))
+    ).run()
+
+    np.testing.assert_allclose(
+        mean["heat"].values[:, 0, 0],
+        np.asarray([-200.0, -200.0, -200.0], dtype=np.float64),
+    )
+    np.testing.assert_allclose(
+        mean["temp"].isel(time=1).values,
+        point["temp"].isel(time=slice(1, 3)).mean("time").values,
+    )
 
 
 def test_output_time_method_integrated_sums_values_over_interval() -> None:
-    """time_method: integrated is rejected until compiled accumulation exists."""
-    with pytest.raises(UnsupportedConfigurationError, match="output.time_method"):
-        GotmDriver(
-            GotmSettings.model_validate(_config_with_heat_flux("integrated", 2))
-        ).run()
+    dataset = GotmDriver(
+        GotmSettings.model_validate(_config_with_heat_flux("integrated", 2))
+    ).run()
+
+    np.testing.assert_allclose(
+        dataset["heat"].values[:, 0, 0],
+        np.asarray([-200.0, -400.0, -400.0], dtype=np.float64),
+    )
 
 
 def test_output_time_method_initial_snapshot_is_always_point() -> None:

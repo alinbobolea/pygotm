@@ -46,7 +46,9 @@ LEBEDEV_ALBEDO: float = 0.545
 LEBEDEV_ATTN: float = -1.6
 
 MAX_FRAZIL: float = 0.03
+MYLAKE_ALBEDO: float = 0.3
 MYLAKE_ATTN: float = 5.0
+MYLAKE_K_ICE: float = 2.1
 MIN_ICE_THICKNESS: float = 1.0e-6
 
 # McDougall-Jackett potential-temperature freezing polynomial written as

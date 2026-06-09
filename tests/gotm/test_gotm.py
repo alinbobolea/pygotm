@@ -70,7 +70,7 @@ def _write_vertical_advection_config(path: Path) -> None:
                     "dt": 60.0,
                 },
                 "grid": {"nlev": 8},
-                "temperature": {"method": "off"},
+                "temperature": {"method": "constant", "constant_value": 7.0},
                 "salinity": {"method": "off"},
                 "mimic_3d": {
                     "w": {
@@ -78,6 +78,68 @@ def _write_vertical_advection_config(path: Path) -> None:
                         "height": {"method": "constant", "constant_value": -5.0},
                     }
                 },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_lake_salinity_config(path: Path) -> None:
+    (path.parent / "hypsograph.dat").write_text(
+        "2 1\n-10.0 1000.0\n0.0 1000.0\n",
+        encoding="utf-8",
+    )
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 7,
+                "location": {
+                    "latitude": 55.0,
+                    "longitude": 12.0,
+                    "depth": 10.0,
+                    "hypsograph": "hypsograph.dat",
+                },
+                "time": {
+                    "start": "2000-01-01 00:00:00",
+                    "stop": "2000-01-01 00:00:00",
+                    "dt": 600.0,
+                },
+                "grid": {"nlev": 2},
+                "temperature": {"method": "constant", "constant_value": 7.0},
+                "salinity": {
+                    "method": "constant",
+                    "type": "practical",
+                    "constant_value": 20.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_lake_off_profile_config(path: Path) -> None:
+    (path.parent / "hypsograph.dat").write_text(
+        "2 1\n-10.0 1000.0\n0.0 1000.0\n",
+        encoding="utf-8",
+    )
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 7,
+                "location": {
+                    "latitude": 55.0,
+                    "longitude": 12.0,
+                    "depth": 10.0,
+                    "hypsograph": "hypsograph.dat",
+                },
+                "time": {
+                    "start": "2000-01-01 00:00:00",
+                    "stop": "2000-01-01 00:00:00",
+                    "dt": 600.0,
+                },
+                "grid": {"nlev": 2},
+                "temperature": {"method": "off", "constant_value": 7.0},
+                "salinity": {"method": "off", "constant_value": 20.0},
             }
         ),
         encoding="utf-8",
@@ -158,6 +220,44 @@ def test_integrate_gotm_accepts_active_vertical_advection(tmp_path: Path) -> Non
         finalize_gotm(run)
 
 
+def test_initialize_lake_keeps_practical_salinity_and_raw_temperature_units(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_lake_salinity_config(config_path)
+    run = initialize_gotm(config_path)
+    try:
+        assert run.meanflow.lake
+        assert run.meanflow.S is not None
+        assert run.meanflow.Sp is not None
+        assert run.meanflow.T is not None
+        assert run.meanflow.Ti is not None
+        assert run.meanflow.Tp is not None
+        np.testing.assert_array_equal(run.meanflow.S[1:], np.asarray([20.0, 20.0]))
+        np.testing.assert_array_equal(run.meanflow.Sp[1:], np.asarray([20.0, 20.0]))
+        np.testing.assert_array_equal(run.meanflow.T[1:], np.asarray([7.0, 7.0]))
+        np.testing.assert_array_equal(run.meanflow.Ti[1:], np.asarray([7.0, 7.0]))
+        np.testing.assert_array_equal(run.meanflow.Tp[1:], np.asarray([7.0, 7.0]))
+    finally:
+        finalize_gotm(run)
+
+
+def test_initialize_lake_zeroes_off_profiles(tmp_path: Path) -> None:
+    config_path = tmp_path / "gotm.yaml"
+    _write_lake_off_profile_config(config_path)
+    run = initialize_gotm(config_path)
+    try:
+        assert run.meanflow.lake
+        assert run.meanflow.S is not None
+        assert run.meanflow.Sp is not None
+        assert run.meanflow.T is not None
+        np.testing.assert_array_equal(run.meanflow.S[1:], np.zeros(2))
+        np.testing.assert_array_equal(run.meanflow.Sp[1:], np.zeros(2))
+        np.testing.assert_array_equal(run.meanflow.T[1:], np.zeros(2))
+    finally:
+        finalize_gotm(run)
+
+
 @pytest.mark.parametrize(
     "eqstate_method",
     ["full_teos-10", "full_teos_10", "linear_teos-10", "linear_teos_10"],
@@ -199,6 +299,31 @@ def test_airsea_configuration_accepts_validation_ice_models(ice_model: str) -> N
         "winton": IceModelEnum.WINTON,
     }
     assert ice_params.model == expected[ice_model]
+
+
+def test_lake_airsea_file_shortwave_defaults_to_downward_type() -> None:
+    state = AirSeaDriverState()
+
+    _configure_airsea_from_document(
+        state,
+        {
+            "location": {"hypsograph": "hypsograph.dat"},
+            "surface": {"swr": {"method": "file", "file": "swr.dat"}},
+        },
+    )
+
+    assert state.shortwave_type == 2
+
+
+def test_ocean_airsea_file_shortwave_keeps_net_default() -> None:
+    state = AirSeaDriverState()
+
+    _configure_airsea_from_document(
+        state,
+        {"surface": {"swr": {"method": "file", "file": "swr.dat"}}},
+    )
+
+    assert state.shortwave_type == 1
 
 
 def test_output_schedule_tracks_active_vertical_slice() -> None:

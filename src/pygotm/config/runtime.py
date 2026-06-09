@@ -8,7 +8,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-from pygotm.config.settings import GotmSettings, _normalize_settings_document
+from pygotm.config.settings import GotmSettings, _normalize_gotm_document
 
 yaml: Any = import_module("yaml")
 
@@ -28,7 +28,7 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         msg = f"top-level YAML document in {path} must be a mapping"
         raise TypeError(msg)
-    normalized = _normalize_settings_document(raw)
+    normalized = _normalize_gotm_document(raw)
     assert isinstance(normalized, dict)
     return normalized
 
@@ -44,7 +44,7 @@ def _deep_merge(target: dict[str, Any], update: dict[str, Any]) -> None:
 def _resolve_relative_file_paths(node: object, base_dir: Path) -> None:
     if isinstance(node, dict):
         for key, value in node.items():
-            if key == "file" and isinstance(value, str):
+            if key in {"file", "hypsograph"} and isinstance(value, str):
                 if value and not Path(value).is_absolute():
                     node[key] = str((base_dir / value).resolve())
             else:

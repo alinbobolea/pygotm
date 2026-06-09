@@ -83,14 +83,16 @@ import numba
 import numpy as np
 
 from pygotm.meanflow.meanflow import MeanflowState
-from pygotm.util.adv_center import adv_center
-from pygotm.util.diff_center import diff_center
+from pygotm.util.adv_center import adv_center, adv_center_lake
+from pygotm.util.diff_center import diff_center, diff_center_lake
 from pygotm.util.util import Neumann as _NEUMANN
+from pygotm.util.util import flux as _FLUX
 from pygotm.util.util import oneSided as _ONE_SIDED
 
 __all__ = [
     "temperature",
     "step_temperature",
+    "step_temperature_lake_single",
     "step_temperature_single",
 ]
 
@@ -200,6 +202,168 @@ def _step_temperature(
         cnpar,
         _POS_CONC,
         h,
+        _NEUMANN,
+        _NEUMANN,
+        diff_t_up,
+        0.0,
+        avh,
+        l_sour,
+        q_sour,
+        tau_r,
+        Tobs,
+        T,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+    )
+
+
+@numba.njit(cache=True)
+def _step_temperature_lake(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    avmolT: float,
+    rho0: float,
+    cp: float,
+    A: float,
+    g1: float,
+    g2: float,
+    w_adv_active: int,
+    w_adv_discr: int,
+    t_adv: int,
+    T: np.ndarray,
+    S: np.ndarray,
+    h: np.ndarray,
+    vco: np.ndarray,
+    vc: np.ndarray,
+    af: np.ndarray,
+    afo: np.ndarray,
+    w: np.ndarray,
+    wq: np.ndarray,
+    u: np.ndarray,
+    v: np.ndarray,
+    nuh: np.ndarray,
+    gamh: np.ndarray,
+    bioshade: np.ndarray,
+    rad: np.ndarray,
+    Tobs: np.ndarray,
+    tau_r: np.ndarray,
+    i_0: float,
+    diff_t_up: float,
+    precip: float,
+    evap: float,
+    Qres: np.ndarray,
+    Qt: np.ndarray,
+    Lt: np.ndarray,
+    apply_freezing_correction: int,
+    dtdx: np.ndarray,
+    dtdy: np.ndarray,
+    avh: np.ndarray,
+    q_sour: np.ndarray,
+    l_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+    adv_cu: np.ndarray,
+) -> None:
+    if apply_freezing_correction != 0 and T[nlev] <= -_FREEZE_SLOPE * S[nlev]:
+        if diff_t_up > 0.0:
+            diff_t_up = 0.0
+
+    rad[nlev] = i_0
+    z = 0.0
+    for j in range(nlev):
+        i = nlev - 1 - j
+        z += h[i + 1]
+        rad[i] = i_0 * (
+            A * math.exp(-z / g1) + (1.0 - A) * math.exp(-z / g2) * bioshade[i + 1]
+        )
+        avh[i] = nuh[i] + avmolT
+
+    net_precip = precip + evap
+    if net_precip > 0.0:
+        Qt[nlev] = Qt[nlev] + net_precip * afo[nlev] * T[nlev]
+    else:
+        Lt[nlev] = Lt[nlev] + net_precip * afo[nlev]
+    for k in range(1, nlev + 1):
+        if Qres[k] > 0.0:
+            Qt[k] = Qt[k] + Qres[k] * T[k]
+        else:
+            Lt[k] = Lt[k] + Qres[k]
+    adv_center_lake(
+        nlev,
+        dt,
+        h,
+        vco,
+        vc,
+        afo,
+        wq,
+        _FLUX,
+        _FLUX,
+        0.0,
+        0.0,
+        Lt,
+        Qt,
+        w_adv_discr,
+        1,
+        T,
+        adv_cu,
+    )
+
+    if w_adv_active == 1:
+        for k in range(nlev + 1):
+            q_sour[k] = 0.0
+            l_sour[k] = 0.0
+        adv_center_lake(
+            nlev,
+            dt,
+            h,
+            vc,
+            vc,
+            af,
+            w,
+            _ONE_SIDED,
+            _ONE_SIDED,
+            0.0,
+            0.0,
+            l_sour,
+            q_sour,
+            w_adv_discr,
+            _ADV_MODE,
+            T,
+            adv_cu,
+        )
+
+    for k in range(nlev + 1):
+        q_sour[k] = 0.0
+        l_sour[k] = 0.0
+
+    q_sour[nlev] = (i_0 - rad[nlev - 1]) / (rho0 * cp * h[nlev])
+    for k in range(1, nlev):
+        q_sour[k] = (rad[k] - rad[k - 1]) / (rho0 * cp * h[k])
+
+    for k in range(1, nlev + 1):
+        q_sour[k] -= (gamh[k] - gamh[k - 1]) / h[k]
+
+    if t_adv == 1:
+        for k in range(1, nlev + 1):
+            q_sour[k] -= u[k] * dtdx[k] + v[k] * dtdy[k]
+
+    diff_center_lake(
+        nlev,
+        dt,
+        cnpar,
+        _POS_CONC,
+        h,
+        vc,
+        af,
         _NEUMANN,
         _NEUMANN,
         diff_t_up,
@@ -443,3 +607,4 @@ def temperature(
 
 
 step_temperature_single = _step_temperature
+step_temperature_lake_single = _step_temperature_lake

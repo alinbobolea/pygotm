@@ -76,6 +76,22 @@ def test_load_settings_lifts_nested_tidal_periods_from_real_case() -> None:
     assert settings.mimic_3d.zeta.period_2 == 43200.0
 
 
+def test_load_settings_accepts_raw_lake_erken_numeric_codes() -> None:
+    settings = load_settings("validation/reference/lake_erken/gotm.yaml")
+
+    assert settings.location.hypsograph == "hypsograph.dat"
+    assert settings.grid.method == "analytical"
+    assert settings.temperature.method == "file"
+    assert settings.salinity.method == "off"
+    assert settings.light_extinction.method == "custom"
+    assert settings.mimic_3d.ext_pressure.type == "elevation"
+    assert settings.mimic_3d.w.max.method == "off"
+    assert settings.mimic_3d.w.height.method == "constant"
+    assert settings.mimic_3d.w.adv_discr == "p2_pdm"
+    assert settings.velocities.u.method == "off"
+    assert settings.velocities.v.method == "off"
+
+
 def test_save_settings_roundtrip(tmp_path: Path) -> None:
     settings = GotmSettings()
     out_path = tmp_path / "saved.yaml"

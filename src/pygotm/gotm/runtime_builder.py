@@ -19,6 +19,7 @@ from pygotm.gotm.runtime_work import RuntimeWork, allocate_runtime_work
 from pygotm.gotm.time_loop import run_compiled_time_loop
 from pygotm.input.input import do_input
 from pygotm.meanflow.updategrid import updategrid
+from pygotm.meanflow.water_balance import WATER_BALANCE_ZETA
 from pygotm.observations.observations import get_all_obs
 from pygotm.stokes_drift.stokes_drift import do_stokes_drift
 from pygotm.turbulence.turbulence import (
@@ -36,6 +37,13 @@ from pygotm.turbulence.turbulence import (
     tke_keps,
     tke_MY,
     weak_Eq_Kb_Eq,
+)
+from pygotm.util.density import (
+    METHOD_JACKETT_FULL,
+    METHOD_JACKETT_POTENTIAL,
+    METHOD_TEOS10,
+    METHOD_UNESCO_FULL,
+    METHOD_UNESCO_POTENTIAL,
 )
 from pygotm.util.gsw import gsw_sa_from_sp, gsw_saar, gsw_sp_from_sa
 from pygotm.util.gsw.modules.gsw_mod_teos10_constants import gsw_sso, gsw_ups
@@ -73,6 +81,29 @@ class TimeLoopRunner(Protocol):
         work: RuntimeWork,
         forcing: RuntimeForcing,
         output: RuntimeOutput,
+        step_offset: int = 0,
+        out_slot_base: int = 0,
+        write_ic: int = 1,
+        init_int_precip: float = 0.0,
+        init_int_evap: float = 0.0,
+        init_int_swr: float = 0.0,
+        init_int_heat: float = 0.0,
+        init_int_total: float = 0.0,
+        output_reduce_mode: int = 0,
+        hydro_store: int = 0,
+        hydro_T: np.ndarray | None = None,
+        hydro_S: np.ndarray | None = None,
+        hydro_rho: np.ndarray | None = None,
+        hydro_h: np.ndarray | None = None,
+        hydro_nuh: np.ndarray | None = None,
+        hydro_rad: np.ndarray | None = None,
+        hydro_taub: np.ndarray | None = None,
+        hydro_Vc: np.ndarray | None = None,
+        hydro_Vco: np.ndarray | None = None,
+        hydro_Afo: np.ndarray | None = None,
+        hydro_wq: np.ndarray | None = None,
+        hydro_Qres: np.ndarray | None = None,
+        hydro_stream_Q: np.ndarray | None = None,
     ) -> int: ...
 
 
@@ -98,6 +129,7 @@ class RuntimeBundle:
     forcing: RuntimeForcing
     output: RuntimeOutput
     runner: TimeLoopRunner
+    output_reduce_mode: int = 0
 
     def run(self) -> int:
         """Execute the selected compiled time-loop wrapper."""
@@ -108,6 +140,7 @@ class RuntimeBundle:
             self.work,
             self.forcing,
             self.output,
+            output_reduce_mode=self.output_reduce_mode,
         )
 
 
@@ -198,10 +231,10 @@ def build_runtime_work(nlev: int) -> RuntimeWork:
     return allocate_runtime_work(nlev)
 
 
-def build_runtime_forcing(nlev: int, nt: int) -> RuntimeForcing:
+def build_runtime_forcing(nlev: int, nt: int, *, nstreams: int = 0) -> RuntimeForcing:
     """Allocate dense forcing arrays for a compiled runtime."""
 
-    return allocate_runtime_forcing(nlev, nt)
+    return allocate_runtime_forcing(nlev, nt, nstreams=nstreams)
 
 
 def build_runtime_output(
@@ -229,6 +262,7 @@ def build_runtime(
     output: bool = True,
     output_every: int = 1,
     force_final: bool = True,
+    output_reduce_mode: int = 0,
 ) -> RuntimeBundle:
     """Allocate containers and select the compiled loop for *params*."""
 
@@ -237,7 +271,11 @@ def build_runtime(
         params=params,
         state=build_runtime_state(params.nlev),
         work=build_runtime_work(params.nlev),
-        forcing=build_runtime_forcing(params.nlev, params.nt),
+        forcing=build_runtime_forcing(
+            params.nlev,
+            params.nt,
+            nstreams=params.nstreams,
+        ),
         output=build_runtime_output(
             params.nlev,
             params.nt,
@@ -246,7 +284,16 @@ def build_runtime(
             force_final=force_final,
         ),
         runner=runner,
+        output_reduce_mode=output_reduce_mode,
     )
+
+
+def _output_reduce_mode(time_method: str) -> int:
+    if time_method == "mean":
+        return 1
+    if time_method == "integrated":
+        return 2
+    return 0
 
 
 def _profile(value: object, name: str, nlev: int) -> np.ndarray:
@@ -308,10 +355,13 @@ def _stokes_runtime_active(stokes: Any) -> bool:
 def _validate_run_supported_by_compiled_runtime(run: Any, *, output: bool) -> None:
     unsupported: list[str] = []
 
-    if output and str(run.output_schedule.time_method) != "point":
-        unsupported.append(f"output.time_method={run.output_schedule.time_method!r}")
     if not bool(run.output_schedule.capture_initial):
         unsupported.append("output.capture_initial=False")
+    if (
+        bool(getattr(run.meanflow, "lake", False))
+        and int(getattr(run.meanflow, "water_balance_method", 0)) == WATER_BALANCE_ZETA
+    ):
+        unsupported.append("lake water_balance_method=zeta")
 
     if unsupported:
         names = ", ".join(unsupported)
@@ -340,6 +390,9 @@ def _make_runtime_params_from_run(run: Any, nt: int) -> RuntimeParams:
         latitude=float(run.latitude),
         longitude=float(run.longitude),
         depth=float(run.depth),
+        lake=1 if bool(getattr(meanflow, "lake", False)) else 0,
+        water_balance_method=int(getattr(meanflow, "water_balance_method", 0)),
+        nstreams=int(getattr(getattr(run, "streams", None), "nstreams", 0)),
         gravity=float(meanflow.gravity),
         rho0=rho0,
         cori=float(meanflow.cori),
@@ -493,6 +546,37 @@ def _copy_profile_data(input_: Any | None, target: np.ndarray) -> None:
         target.fill(0.0)
 
 
+def _copy_stream_static(run: Any, forcing: RuntimeForcing) -> None:
+    streams = getattr(run, "streams", None)
+    if streams is None or forcing.nstreams == 0:
+        return
+    for source_name, target_name in (
+        ("methods", "stream_method"),
+        ("has_T", "stream_has_T"),
+        ("has_S", "stream_has_S"),
+        ("zl", "stream_zl"),
+        ("zu", "stream_zu"),
+    ):
+        source = getattr(streams, source_name, None)
+        if source is not None:
+            np.copyto(getattr(forcing, target_name), source)
+    forcing.stream_concentrations.clear()
+    forcing.stream_concentration_masks.clear()
+    for name in getattr(streams, "concentration_names", ()):
+        values = getattr(streams, "concentration_values", {}).get(name)
+        mask = getattr(streams, "concentration_has", {}).get(name)
+        if values is None or mask is None:
+            continue
+        forcing.stream_concentrations[name] = np.zeros(
+            (forcing.nt + 1, forcing.nstreams),
+            dtype=np.float64,
+        )
+        forcing.stream_concentration_masks[name] = np.ascontiguousarray(
+            mask,
+            dtype=np.int64,
+        )
+
+
 @dataclass(slots=True)
 class _SalinityConversionCache:
     pressure: np.ndarray
@@ -568,7 +652,11 @@ def _update_runtime_relaxation_targets(
         observations.sprof_input.method != 0
         and observations.sprof_input.data is not None
     ):
-        if observations.initial_salinity_type == 1:
+        if bool(getattr(meanflow, "lake", False)):
+            meanflow.Sobs[1 : run.nlev + 1] = observations.sprof_input.data[
+                1 : run.nlev + 1
+            ]
+        elif observations.initial_salinity_type == 1:
             _copy_absolute_salinity_from_practical(
                 observations.sprof_input.data[1 : run.nlev + 1],
                 pressure,
@@ -586,7 +674,11 @@ def _update_runtime_relaxation_targets(
         observations.tprof_input.method != 0
         and observations.tprof_input.data is not None
     ):
-        if observations.initial_temperature_type == 1:
+        if bool(getattr(meanflow, "lake", False)):
+            meanflow.Tobs[1 : run.nlev + 1] = observations.tprof_input.data[
+                1 : run.nlev + 1
+            ]
+        elif observations.initial_temperature_type == 1:
             meanflow.Tobs[1 : run.nlev + 1] = gsw.CT_from_t(
                 meanflow.Sobs[1 : run.nlev + 1],
                 observations.tprof_input.data[1 : run.nlev + 1],
@@ -636,10 +728,38 @@ def _record_forcing_step(run: Any, forcing: RuntimeForcing, step: int) -> None:
     forcing.w_adv[step] = _surface_input_value(observations.w_adv_input)
     forcing.w_height[step] = _surface_input_value(observations.w_height_input)
 
+    np.copyto(forcing.h[step], run.meanflow.h)
+    np.copyto(forcing.ho[step], run.meanflow.ho)
+    np.copyto(forcing.Vc[step], run.meanflow.Vc)
+    np.copyto(forcing.Vco[step], run.meanflow.Vco)
+    np.copyto(forcing.Af[step], run.meanflow.Af)
+    np.copyto(forcing.Afo[step], run.meanflow.Afo)
+    np.copyto(forcing.z[step], run.meanflow.z)
+    np.copyto(forcing.zi[step], run.meanflow.zi)
+
+    streams = getattr(run, "streams", None)
+    if streams is not None and forcing.nstreams != 0:
+        streams.update_values_from_inputs()
+        if streams.flow_values is not None:
+            np.copyto(forcing.stream_flow[step], streams.flow_values)
+        if streams.temp_values is not None:
+            np.copyto(forcing.stream_temp[step], streams.temp_values)
+        if streams.salt_values is not None:
+            np.copyto(forcing.stream_salt[step], streams.salt_values)
+        for name, values in getattr(streams, "concentration_values", {}).items():
+            target = forcing.stream_concentrations.get(name)
+            if target is not None:
+                np.copyto(target[step], values)
+
     np.copyto(forcing.Tobs[step], run.meanflow.Tobs)
     np.copyto(forcing.Sobs[step], run.meanflow.Sobs)
     _copy_profile_data(observations.tprof_input, forcing.Tprof[step])
     _copy_profile_data(observations.sprof_input, forcing.Sprof[step])
+    if bool(getattr(run.meanflow, "lake", False)):
+        if observations.tprof_input.method == 0:
+            forcing.Tprof[step, :] = 0.0
+        if observations.sprof_input.method == 0:
+            forcing.Sprof[step, :] = 0.0
     _copy_profile_data(observations.epsprof_input, forcing.epsprof[step])
     _copy_profile_data(observations.uprof_input, forcing.uprof[step])
     _copy_profile_data(observations.vprof_input, forcing.vprof[step])
@@ -673,6 +793,7 @@ def _populate_runtime_forcing_from_run(
     meanflow = run.meanflow
 
     if forcing.nt == 0:
+        _copy_stream_static(run, forcing)
         _record_forcing_step(run, forcing, 0)
         forcing.validate()
         return
@@ -681,6 +802,10 @@ def _populate_runtime_forcing_from_run(
     initial_grid = (
         np.array(meanflow.h, copy=True),
         np.array(meanflow.ho, copy=True),
+        np.array(meanflow.Vc, copy=True),
+        np.array(meanflow.Vco, copy=True),
+        np.array(meanflow.Af, copy=True),
+        np.array(meanflow.Afo, copy=True),
         np.array(meanflow.z, copy=True),
         np.array(meanflow.zi, copy=True),
     )
@@ -689,6 +814,7 @@ def _populate_runtime_forcing_from_run(
         float(run.longitude),
         float(run.latitude),
     )
+    _copy_stream_static(run, forcing)
     _record_forcing_step(run, forcing, 0)
     try:
         for step in range(1, forcing.nt + 1):
@@ -734,8 +860,12 @@ def _populate_runtime_forcing_from_run(
         meanflow.zeta = initial_zeta
         np.copyto(meanflow.h, initial_grid[0])
         np.copyto(meanflow.ho, initial_grid[1])
-        np.copyto(meanflow.z, initial_grid[2])
-        np.copyto(meanflow.zi, initial_grid[3])
+        np.copyto(meanflow.Vc, initial_grid[2])
+        np.copyto(meanflow.Vco, initial_grid[3])
+        np.copyto(meanflow.Af, initial_grid[4])
+        np.copyto(meanflow.Afo, initial_grid[5])
+        np.copyto(meanflow.z, initial_grid[6])
+        np.copyto(meanflow.zi, initial_grid[7])
         run.time.update_time(0)
 
     forcing.validate()
@@ -745,6 +875,7 @@ def _populate_initial_runtime_forcing_from_run(
     run: Any,
     forcing: RuntimeForcing,
 ) -> None:
+    _copy_stream_static(run, forcing)
     _record_forcing_step(run, forcing, 0)
     forcing.validate()
 
@@ -762,7 +893,12 @@ def build_runtime_forcing_from_run(
     last_step = (
         int(run.time.MaxN) if max_steps is None else min(run.time.MaxN, max_steps)
     )
-    forcing = build_runtime_forcing(int(run.nlev), int(last_step))
+    nstreams = int(getattr(getattr(run, "streams", None), "nstreams", 0))
+    forcing = build_runtime_forcing(
+        int(run.nlev),
+        int(last_step),
+        nstreams=nstreams,
+    )
     _populate_runtime_forcing_from_run(run, forcing)
     return forcing
 
@@ -786,12 +922,14 @@ def build_runtime_from_run(
         int(run.time.MaxN) if max_steps is None else min(run.time.MaxN, max_steps)
     )
     params = _make_runtime_params_from_run(run, int(last_step))
-    output_every = int(run.output_schedule.interval_steps)
+    requested_output_every = int(run.output_schedule.interval_steps)
+    output_every = requested_output_every
     bundle = build_runtime(
         params,
         output=output,
         output_every=output_every,
-        force_final=max_steps is not None or last_step < output_every,
+        force_final=max_steps is not None or last_step < requested_output_every,
+        output_reduce_mode=_output_reduce_mode(run.output_schedule.time_method),
     )
 
     state = bundle.state
@@ -804,6 +942,10 @@ def build_runtime_from_run(
             "zi",
             "h",
             "ho",
+            "Vc",
+            "Vco",
+            "Af",
+            "Afo",
             "u",
             "uo",
             "v",
@@ -888,6 +1030,21 @@ def build_runtime_from_run(
     if run.density.rho is not None:
         np.copyto(state.rho, run.density.rho)
 
+    _copy_profiles(
+        run.observations,
+        state,
+        (
+            "Qs",
+            "Qt",
+            "Ls",
+            "Lt",
+            "Qlayer",
+            "Qres",
+            "FQ",
+            "wq",
+        ),
+    )
+
     state.z0b[0] = float(run.meanflow.z0b)
     state.z0s[0] = float(run.meanflow.z0s)
     state.za[0] = float(run.meanflow.za)
@@ -897,12 +1054,20 @@ def build_runtime_from_run(
     state.taub[0] = float(run.meanflow.taub)
     state.tx[0] = params.tx
     state.ty[0] = params.ty
+    state.net_water_balance[0] = float(run.meanflow.net_water_balance)
+    state.int_water_balance[0] = float(run.meanflow.int_water_balance)
+    state.int_fwf[0] = float(run.meanflow.int_fwf)
+    state.int_flows[0] = float(run.meanflow.int_flows)
+    state.stream_int_inflow[0] = float(getattr(run.streams, "int_inflow", 0.0))
+    state.stream_int_outflow[0] = float(getattr(run.streams, "int_outflow", 0.0))
     ice_state = getattr(run, "ice_state", None)
     if ice_state is not None:
         for name in (
             "Hice",
             "Hsnow",
             "Hfrazil",
+            "dHis",
+            "dHib",
             "T1",
             "T2",
             "Tice_surface",
@@ -910,6 +1075,7 @@ def build_runtime_from_run(
             "ice_cover",
             "Tf",
             "albedo_ice",
+            "attenuation_ice",
             "transmissivity",
             "ocean_ice_flux",
             "ocean_ice_heat_flux",
@@ -1045,7 +1211,73 @@ def runtime_output_to_dataset(
     nlev = bundle.params.nlev
     output.validate(nlev)
 
-    time = np.asarray(output.time, dtype=np.float64)
+    time_method = str(getattr(run.output_schedule, "time_method", "point"))
+    interval_steps = max(int(getattr(run.output_schedule, "interval_steps", 1)), 1)
+    nt = int(bundle.params.nt)
+
+    if time_method in {"mean", "integrated"} and output.output_every == 1:
+        steps: list[int] = [0]
+        windows: list[tuple[int, int]] = [(0, 0)]
+        previous = 0
+        for step in range(interval_steps, nt + 1, interval_steps):
+            steps.append(step)
+            windows.append((previous + 1, step))
+            previous = step
+        if output.force_final and previous < nt:
+            steps.append(nt)
+            windows.append((previous + 1, nt))
+
+        step_indices = np.asarray(steps, dtype=np.int64)
+
+        def output_values(values: np.ndarray) -> np.ndarray:
+            raw = np.asarray(values, dtype=np.float64)
+            reduced = np.empty((len(windows),) + raw.shape[1:], dtype=np.float64)
+            reduced[0] = raw[0]
+            for i, (start, stop) in enumerate(windows[1:], start=1):
+                window = raw[start : stop + 1]
+                if time_method == "mean":
+                    reduced[i] = np.mean(window, axis=0)
+                else:
+                    reduced[i] = np.sum(window, axis=0)
+            return reduced
+
+        time = np.asarray(output.time[step_indices], dtype=np.float64)
+    else:
+
+        def output_values(values: np.ndarray) -> np.ndarray:
+            return np.asarray(values, dtype=np.float64)
+
+        time = np.asarray(output.time, dtype=np.float64)
+
+    def output_window_values(values: np.ndarray) -> np.ndarray:
+        raw = np.asarray(values, dtype=np.float64)
+        if time_method not in {"mean", "integrated"}:
+            return output_values(raw)
+        steps = np.asarray(output.output_step, dtype=np.int64)
+        reduced = np.empty((steps.size,) + raw.shape[1:], dtype=np.float64)
+        if steps.size == 0:
+            return reduced
+        first_step = min(max(int(steps[0]), 0), raw.shape[0] - 1)
+        reduced[0] = raw[first_step]
+        previous = int(steps[0])
+        for i in range(1, steps.size):
+            step = int(steps[i])
+            if step < 0:
+                reduced[i] = np.nan
+                continue
+            start = max(previous + 1, 0)
+            stop = min(step, raw.shape[0] - 1)
+            if stop < start:
+                reduced[i] = raw[min(max(step, 0), raw.shape[0] - 1)]
+            else:
+                window = raw[start : stop + 1]
+                if time_method == "mean":
+                    reduced[i] = np.mean(window, axis=0)
+                else:
+                    reduced[i] = np.sum(window, axis=0)
+            previous = step
+        return reduced
+
     time_attrs = {
         "long_name": "time",
         "units": f"seconds since {run.time.start}",
@@ -1055,8 +1287,8 @@ def runtime_output_to_dataset(
     z_start = min(max(int(getattr(run.output_schedule, "k_start", 1)), 1), nlev)
     zi_start = min(max(int(getattr(run.output_schedule, "k1_start", 1)) - 1, 0), nlev)
 
-    z_profiles = output.z[:, z_start:]
-    zi_profiles = output.zi[:, zi_start:]
+    z_profiles = output_values(output.z)[:, z_start:]
+    zi_profiles = output_values(output.zi)[:, zi_start:]
 
     def z_profile(
         values: np.ndarray,
@@ -1064,17 +1296,27 @@ def runtime_output_to_dataset(
     ) -> tuple[tuple[str, ...], np.ndarray, dict[str, str]]:
         return (
             ("time", "z", "lat", "lon"),
-            np.asarray(values[:, z_start:], dtype=np.float64)[:, :, None, None],
+            output_values(values)[:, z_start:][:, :, None, None],
             dict(var_attrs or {}),
         )
 
     def zi_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
         return (
             ("time", "zi", "lat", "lon"),
-            np.asarray(values[:, zi_start:], dtype=np.float64)[:, :, None, None],
+            output_values(values)[:, zi_start:][:, :, None, None],
         )
 
     def scalar(
+        values: np.ndarray,
+        var_attrs: Mapping[str, str] | None = None,
+    ) -> tuple[tuple[str, ...], np.ndarray, dict[str, str]]:
+        return (
+            ("time", "lat", "lon"),
+            output_values(values)[:, None, None],
+            dict(var_attrs or {}),
+        )
+
+    def scalar_series(
         values: np.ndarray,
         var_attrs: Mapping[str, str] | None = None,
     ) -> tuple[tuple[str, ...], np.ndarray, dict[str, str]]:
@@ -1087,7 +1329,7 @@ def runtime_output_to_dataset(
     def diagnostic_z_profile(values: np.ndarray) -> tuple[tuple[str, ...], np.ndarray]:
         return (
             ("time", "z", "lat", "lon"),
-            np.asarray(values, dtype=np.float64)[:, :, None, None],
+            output_values(values)[:, :, None, None],
         )
 
     coords: dict[str, Any] = {
@@ -1200,6 +1442,35 @@ def runtime_output_to_dataset(
         "nus": zi_profile(output.nus),
         "nucl": zi_profile(output.nucl),
     }
+    if int(bundle.params.ice_model) != 0:
+        data_vars["dHis"] = scalar(output.dHis)
+        data_vars["dHib"] = scalar(output.dHib)
+    if int(bundle.params.lake) != 0:
+        data_vars.update(
+            {
+                "qlobs": scalar(output.qlobs),
+                "int_flow": scalar(output.int_flow),
+                "int_water_balance": scalar(output.int_water_balance),
+                "int_inflow": scalar(output.int_inflow),
+                "int_outflow": scalar(output.int_outflow),
+                "Af": z_profile(output.Af),
+                "Qlayer": z_profile(output.Qlayer),
+                "Qs": z_profile(output.Qs),
+                "Qt": z_profile(output.Qt),
+                "wq": z_profile(output.wq),
+                "FQ": z_profile(output.FQ),
+                "Qres": z_profile(output.Qres),
+                "xRf": zi_profile(output.xRf),
+            }
+        )
+    if int(bundle.params.nstreams) > 0:
+        data_vars["Q_Kristine"] = scalar(output.Q_Kristine)
+        data_vars["T_Kristine"] = scalar(output.T_Kristine)
+    if int(bundle.params.nstreams) > 1:
+        data_vars["Q_Unguaged"] = scalar(output.Q_Unguaged)
+        data_vars["T_Unguaged"] = scalar(output.T_Unguaged)
+    if int(bundle.params.nstreams) > 2:
+        data_vars["Q_Stensta"] = scalar(output.Q_Stensta)
     for name in _extra_scalar_output_names(run, output):
         data_vars[name] = scalar(output.extra_scalars[name])
     for name in _extra_z_profile_output_names(run, output):
@@ -1215,13 +1486,109 @@ def runtime_output_to_dataset(
             raise ValueError(msg)
         data_vars[name] = z_profile(values, output.fabm_attrs.get(name))
 
-    if int(bundle.params.density_method) == 1:
-        conservative_temperature = np.asarray(output.T[:, z_start:], dtype=np.float64)
-        absolute_salinity = np.asarray(output.S[:, z_start:], dtype=np.float64)
+    if int(bundle.params.lake) != 0:
+        for name in (
+            "selmaprotbas_fl_c",
+            "selmaprotbas_fl_p",
+            "selmaprotbas_fl_n",
+            "selmaprotbas_fl_si",
+            "selmaprotbas_pb",
+        ):
+            if name in output.fabm_scalars:
+                values = output_values(output.fabm_scalars[name])[:, None, None, None]
+                data_vars[name] = (
+                    ("time", "z", "lat", "lon"),
+                    np.broadcast_to(
+                        values,
+                        (values.shape[0], z_profiles.shape[1], 1, 1),
+                    ).copy(),
+                    dict(output.fabm_attrs.get(name) or {}),
+                )
+
+    calculator_aliases = [
+        ("total_silica_calculator_result", "total_silicon"),
+        ("total_carbon_calculator_result", "total_carbon"),
+        ("total_phosphorus_calculator_result", "total_phosphorus"),
+        ("total_nitrogen_calculator_result", "total_nitrogen"),
+        ("total_chlorophyll_calculator_result", "total_chlorophyll"),
+        (
+            "total_phosphorus_at_interfaces_calculator_result",
+            "total_phosphorus_at_interfaces",
+        ),
+    ]
+    if int(bundle.params.lake) != 0:
+        calculator_aliases.append(
+            (
+                "attenuation_coefficient_of_photosynthetic_radiative_flux_calculator_result",
+                "attenuation_coefficient_of_photosynthetic_radiative_flux",
+            )
+        )
+    for target, source in calculator_aliases:
+        if target not in data_vars and source in data_vars:
+            data_vars[target] = data_vars[source]
+
+    if int(bundle.params.lake) != 0:
+        data_vars["SS"] = z_profile(output.SS)
+        data_vars["NN"] = z_profile(output.NN)
+        data_vars["NNT"] = z_profile(output.NNT)
+        data_vars["NNS"] = z_profile(output.NNS)
+
+    if time_method == "mean":
+        forcing = bundle.forcing
+        for name, values in (
+            ("u10", forcing.u10),
+            ("v10", forcing.v10),
+            ("airt", forcing.airt),
+            ("airp", forcing.airp),
+            ("hum", forcing.hum),
+            ("cloud", forcing.cloud),
+            ("precip", forcing.precip),
+            ("us0", forcing.us0),
+            ("vs0", forcing.vs0),
+            ("ds", forcing.ds),
+        ):
+            data_vars[name] = scalar_series(output_window_values(values))
+        data_vars["sst_obs"] = scalar_series(
+            np.nan_to_num(output_window_values(forcing.sst_obs), nan=0.0)
+        )
+        data_vars["sss"] = scalar_series(
+            np.nan_to_num(output_window_values(forcing.sss_obs), nan=0.0)
+        )
+        if int(bundle.params.nstreams) > 0:
+            data_vars["Q_Kristine"] = scalar_series(
+                output_window_values(forcing.stream_flow[:, 0])
+            )
+            data_vars["T_Kristine"] = scalar_series(
+                output_window_values(forcing.stream_temp[:, 0])
+            )
+        if int(bundle.params.nstreams) > 1:
+            data_vars["Q_Unguaged"] = scalar_series(
+                output_window_values(forcing.stream_flow[:, 1])
+            )
+            data_vars["T_Unguaged"] = scalar_series(
+                output_window_values(forcing.stream_temp[:, 1])
+            )
+        if int(bundle.params.nstreams) > 2:
+            data_vars["Q_Stensta"] = scalar_series(
+                output_window_values(forcing.stream_flow[:, 2])
+            )
+
+    density_method = int(bundle.params.density_method)
+    if density_method in {
+        METHOD_TEOS10,
+        METHOD_UNESCO_FULL,
+        METHOD_UNESCO_POTENTIAL,
+        METHOD_JACKETT_FULL,
+        METHOD_JACKETT_POTENTIAL,
+    }:
+        data_vars["rho"] = z_profile(output.rho)
+
+    if density_method == METHOD_TEOS10:
+        conservative_temperature = output_values(output.T)[:, z_start:]
+        absolute_salinity = output_values(output.S)[:, z_start:]
         pressure = np.asarray(-z_profiles, dtype=np.float64)
         data_vars.update(
             {
-                "rho": z_profile(output.rho),
                 "temp_p": diagnostic_z_profile(
                     gsw.pt_from_CT(absolute_salinity, conservative_temperature)
                 ),

@@ -14,12 +14,17 @@ from pygotm.gotm.runtime_work import RuntimeWork
 from pygotm.icethm.driver import step_ice
 from pygotm.meanflow.coriolis import step_coriolis_single
 from pygotm.meanflow.friction import step_friction_single
-from pygotm.meanflow.salinity import step_salinity_single
+from pygotm.meanflow.salinity import step_salinity_lake_single, step_salinity_single
 from pygotm.meanflow.shear import step_shear_single
-from pygotm.meanflow.temperature import step_temperature_single
+from pygotm.meanflow.temperature import (
+    step_temperature_lake_single,
+    step_temperature_single,
+)
 from pygotm.meanflow.uequation import step_uequation_single
 from pygotm.meanflow.updategrid import step_updategrid_single
 from pygotm.meanflow.vequation import step_vequation_single
+from pygotm.meanflow.water_balance import step_water_balance_single
+from pygotm.observations.streams import update_streams_kernel
 from pygotm.turbulence.alpha_mnb import step_alpha_mnb_single
 from pygotm.turbulence.cmue_c import step_cmue_c_single
 from pygotm.turbulence.cmue_d import step_cmue_d_single
@@ -37,6 +42,12 @@ from pygotm.turbulence.production import step_production_single
 from pygotm.turbulence.q2over2eq import _step_q2over2eq as _step_q2over2eq_single
 from pygotm.turbulence.tkeeq import step_tkeeq_single
 from pygotm.turbulence.variances import step_variances_single
+from pygotm.util.density import (
+    METHOD_JACKETT_FULL,
+    METHOD_JACKETT_POTENTIAL,
+    METHOD_UNESCO_FULL,
+    METHOD_UNESCO_POTENTIAL,
+)
 from pygotm.util.gsw import gsw_alpha, gsw_beta, gsw_rho, gsw_sigma0
 
 __all__ = [
@@ -316,6 +327,7 @@ def _write_output_slot(
     qh_value: float,
     qe_value: float,
     ql_value: float,
+    qlobs_value: float,
     heat_value: float,
     tx_surface_value: float,
     ty_surface_value: float,
@@ -330,6 +342,17 @@ def _write_output_slot(
     ekin_value: float,
     epot_value: float,
     eturb_value: float,
+    int_flow_value: float,
+    int_water_balance_value: float,
+    int_inflow_value: float,
+    int_outflow_value: float,
+    q_stensta_value: float,
+    q_unguaged_value: float,
+    t_unguaged_value: float,
+    q_kristine_value: float,
+    t_kristine_value: float,
+    dhis_value: float,
+    dhib_value: float,
     u_taus: np.ndarray,
     u_taub: np.ndarray,
     taub: np.ndarray,
@@ -353,6 +376,13 @@ def _write_output_slot(
     num: np.ndarray,
     nuh: np.ndarray,
     h: np.ndarray,
+    Af: np.ndarray,
+    Qlayer: np.ndarray,
+    Qs: np.ndarray,
+    Qt: np.ndarray,
+    wq: np.ndarray,
+    FQ: np.ndarray,
+    Qres: np.ndarray,
     xP: np.ndarray,
     fric: np.ndarray,
     drag: np.ndarray,
@@ -367,6 +397,7 @@ def _write_output_slot(
     NNS: np.ndarray,
     buoy: np.ndarray,
     SS: np.ndarray,
+    xRf: np.ndarray,
     P: np.ndarray,
     B: np.ndarray,
     Pb: np.ndarray,
@@ -390,6 +421,7 @@ def _write_output_slot(
     nucl: np.ndarray,
     z: np.ndarray,
     zi: np.ndarray,
+    profiles_already_written: int,
     output_step: np.ndarray,
     output_time: np.ndarray,
     output_zeta: np.ndarray,
@@ -417,6 +449,7 @@ def _write_output_slot(
     output_qh: np.ndarray,
     output_qe: np.ndarray,
     output_ql: np.ndarray,
+    output_qlobs: np.ndarray,
     output_heat: np.ndarray,
     output_tx: np.ndarray,
     output_ty: np.ndarray,
@@ -433,6 +466,17 @@ def _write_output_slot(
     output_Ekin: np.ndarray,
     output_Epot: np.ndarray,
     output_Eturb: np.ndarray,
+    output_int_flow: np.ndarray,
+    output_int_water_balance: np.ndarray,
+    output_int_inflow: np.ndarray,
+    output_int_outflow: np.ndarray,
+    output_Q_Stensta: np.ndarray,
+    output_Q_Unguaged: np.ndarray,
+    output_T_Unguaged: np.ndarray,
+    output_Q_Kristine: np.ndarray,
+    output_T_Kristine: np.ndarray,
+    output_dHis: np.ndarray,
+    output_dHib: np.ndarray,
     output_rho_p: np.ndarray,
     output_rho: np.ndarray,
     output_u: np.ndarray,
@@ -453,6 +497,13 @@ def _write_output_slot(
     output_num: np.ndarray,
     output_nuh: np.ndarray,
     output_h: np.ndarray,
+    output_Af: np.ndarray,
+    output_Qlayer: np.ndarray,
+    output_Qs: np.ndarray,
+    output_Qt: np.ndarray,
+    output_wq: np.ndarray,
+    output_FQ: np.ndarray,
+    output_Qres: np.ndarray,
     output_xP: np.ndarray,
     output_fric: np.ndarray,
     output_drag: np.ndarray,
@@ -484,6 +535,7 @@ def _write_output_slot(
     output_gamh: np.ndarray,
     output_gams: np.ndarray,
     output_Rig: np.ndarray,
+    output_xRf: np.ndarray,
     output_gamb: np.ndarray,
     output_gam: np.ndarray,
     output_r: np.ndarray,
@@ -526,6 +578,7 @@ def _write_output_slot(
     output_qh[slot] = qh_value
     output_qe[slot] = qe_value
     output_ql[slot] = ql_value
+    output_qlobs[slot] = qlobs_value
     output_heat[slot] = heat_value
     output_tx[slot] = tx_surface_value
     output_ty[slot] = ty_surface_value
@@ -542,7 +595,18 @@ def _write_output_slot(
     output_Ekin[slot] = ekin_value
     output_Epot[slot] = epot_value
     output_Eturb[slot] = eturb_value
-    if step != 0:
+    output_int_flow[slot] = int_flow_value
+    output_int_water_balance[slot] = int_water_balance_value
+    output_int_inflow[slot] = int_inflow_value
+    output_int_outflow[slot] = int_outflow_value
+    output_Q_Stensta[slot] = q_stensta_value
+    output_Q_Unguaged[slot] = q_unguaged_value
+    output_T_Unguaged[slot] = t_unguaged_value
+    output_Q_Kristine[slot] = q_kristine_value
+    output_T_Kristine[slot] = t_kristine_value
+    output_dHis[slot] = dhis_value
+    output_dHib[slot] = dhib_value
+    if profiles_already_written == 0 and step != 0:
         ekin = 0.0
         epot = 0.0
         eturb = 0.0
@@ -556,6 +620,8 @@ def _write_output_slot(
         output_Ekin[slot] = ekin * rho0_value
         output_Epot[slot] = epot * rho0_value
         output_Eturb[slot] = eturb * rho0_value
+    if profiles_already_written != 0:
+        return
     for k in range(nlev + 1):
         output_rho_p[slot, k] = rho_p[k]
         output_rho[slot, k] = rho[k]
@@ -577,6 +643,13 @@ def _write_output_slot(
         output_num[slot, k] = num[k]
         output_nuh[slot, k] = nuh[k]
         output_h[slot, k] = h[k]
+        output_Af[slot, k] = Af[k]
+        output_Qlayer[slot, k] = Qlayer[k]
+        output_Qs[slot, k] = Qs[k]
+        output_Qt[slot, k] = Qt[k]
+        output_wq[slot, k] = wq[k]
+        output_FQ[slot, k] = FQ[k]
+        output_Qres[slot, k] = Qres[k]
         output_xP[slot, k] = xP[k]
         output_fric[slot, k] = fric[k]
         output_drag[slot, k] = drag[k]
@@ -608,6 +681,7 @@ def _write_output_slot(
         output_gamh[slot, k] = gamh[k]
         output_gams[slot, k] = gams[k]
         output_Rig[slot, k] = 0.0 if step == 0 else NN[k] / (SS[k] + 1.0e-10)
+        output_xRf[slot, k] = xRf[k]
         output_gamb[slot, k] = 0.0
         output_gam[slot, k] = 0.0
         output_r[slot, k] = 0.0
@@ -687,6 +761,7 @@ def time_loop_compiled(
     cnpar: float,
     output_every: int,
     output_enabled: int,
+    output_reduce_mode: int,
     force_final_output: int,
     gravity: float,
     rho0: float,
@@ -704,6 +779,9 @@ def time_loop_compiled(
     latitude: float,
     longitude: float,
     depth: float,
+    lake: int,
+    water_balance_method: int,
+    nstreams: int,
     h0b: float,
     z0s_min: float,
     charnock: int,
@@ -821,6 +899,18 @@ def time_loop_compiled(
     numshear: float,
     h: np.ndarray,
     ho: np.ndarray,
+    Vc: np.ndarray,
+    Vco: np.ndarray,
+    Af: np.ndarray,
+    Afo: np.ndarray,
+    Qs: np.ndarray,
+    Qt: np.ndarray,
+    Ls: np.ndarray,
+    Lt: np.ndarray,
+    Qlayer: np.ndarray,
+    Qres: np.ndarray,
+    FQ: np.ndarray,
+    wq: np.ndarray,
     u: np.ndarray,
     uo: np.ndarray,
     v: np.ndarray,
@@ -884,6 +974,7 @@ def time_loop_compiled(
     ww: np.ndarray,
     sq_var: np.ndarray,
     sl_var: np.ndarray,
+    xRf: np.ndarray,
     z: np.ndarray,
     zi: np.ndarray,
     z0b: np.ndarray,
@@ -898,6 +989,8 @@ def time_loop_compiled(
     Hice: np.ndarray,
     Hsnow: np.ndarray,
     Hfrazil: np.ndarray,
+    dHis: np.ndarray,
+    dHib: np.ndarray,
     T1: np.ndarray,
     T2: np.ndarray,
     Tice_surface: np.ndarray,
@@ -905,6 +998,7 @@ def time_loop_compiled(
     ice_cover: np.ndarray,
     Tf: np.ndarray,
     albedo_ice: np.ndarray,
+    attenuation_ice: np.ndarray,
     transmissivity: np.ndarray,
     ocean_ice_flux: np.ndarray,
     ocean_ice_heat_flux: np.ndarray,
@@ -914,6 +1008,12 @@ def time_loop_compiled(
     melt_rate: np.ndarray,
     T_melt: np.ndarray,
     S_melt: np.ndarray,
+    net_water_balance: np.ndarray,
+    int_water_balance: np.ndarray,
+    int_fwf: np.ndarray,
+    int_flows: np.ndarray,
+    stream_int_inflow: np.ndarray,
+    stream_int_outflow: np.ndarray,
     au: np.ndarray,
     bu: np.ndarray,
     cu: np.ndarray,
@@ -987,6 +1087,22 @@ def time_loop_compiled(
     forcing_vs: np.ndarray,
     forcing_dusdz: np.ndarray,
     forcing_dvsdz: np.ndarray,
+    forcing_stream_method: np.ndarray,
+    forcing_stream_has_T: np.ndarray,
+    forcing_stream_has_S: np.ndarray,
+    forcing_stream_zl: np.ndarray,
+    forcing_stream_zu: np.ndarray,
+    forcing_stream_flow: np.ndarray,
+    forcing_stream_temp: np.ndarray,
+    forcing_stream_salt: np.ndarray,
+    forcing_h: np.ndarray,
+    forcing_ho: np.ndarray,
+    forcing_Vc: np.ndarray,
+    forcing_Vco: np.ndarray,
+    forcing_Af: np.ndarray,
+    forcing_Afo: np.ndarray,
+    forcing_z: np.ndarray,
+    forcing_zi: np.ndarray,
     output_step: np.ndarray,
     output_time: np.ndarray,
     output_zeta: np.ndarray,
@@ -1014,6 +1130,7 @@ def time_loop_compiled(
     output_qh: np.ndarray,
     output_qe: np.ndarray,
     output_ql: np.ndarray,
+    output_qlobs: np.ndarray,
     output_heat: np.ndarray,
     output_tx: np.ndarray,
     output_ty: np.ndarray,
@@ -1030,6 +1147,17 @@ def time_loop_compiled(
     output_Ekin: np.ndarray,
     output_Epot: np.ndarray,
     output_Eturb: np.ndarray,
+    output_int_flow: np.ndarray,
+    output_int_water_balance: np.ndarray,
+    output_int_inflow: np.ndarray,
+    output_int_outflow: np.ndarray,
+    output_Q_Stensta: np.ndarray,
+    output_Q_Unguaged: np.ndarray,
+    output_T_Unguaged: np.ndarray,
+    output_Q_Kristine: np.ndarray,
+    output_T_Kristine: np.ndarray,
+    output_dHis: np.ndarray,
+    output_dHib: np.ndarray,
     output_rho_p: np.ndarray,
     output_rho: np.ndarray,
     output_u: np.ndarray,
@@ -1050,6 +1178,13 @@ def time_loop_compiled(
     output_num: np.ndarray,
     output_nuh: np.ndarray,
     output_h: np.ndarray,
+    output_Af: np.ndarray,
+    output_Qlayer: np.ndarray,
+    output_Qs: np.ndarray,
+    output_Qt: np.ndarray,
+    output_wq: np.ndarray,
+    output_FQ: np.ndarray,
+    output_Qres: np.ndarray,
     output_xP: np.ndarray,
     output_fric: np.ndarray,
     output_drag: np.ndarray,
@@ -1081,6 +1216,7 @@ def time_loop_compiled(
     output_gamh: np.ndarray,
     output_gams: np.ndarray,
     output_Rig: np.ndarray,
+    output_xRf: np.ndarray,
     output_gamb: np.ndarray,
     output_gam: np.ndarray,
     output_r: np.ndarray,
@@ -1122,6 +1258,12 @@ def time_loop_compiled(
     hydro_nuh: np.ndarray,
     hydro_rad: np.ndarray,
     hydro_taub: np.ndarray,
+    hydro_Vc: np.ndarray,
+    hydro_Vco: np.ndarray,
+    hydro_Afo: np.ndarray,
+    hydro_wq: np.ndarray,
+    hydro_Qres: np.ndarray,
+    hydro_stream_Q: np.ndarray,
 ) -> int:
     """Run profile-forced cases through the compiled timestep loop.
 
@@ -1166,6 +1308,66 @@ def time_loop_compiled(
     int_swr = init_int_swr
     int_heat = init_int_heat
     int_total = init_int_total
+    reduce_count = 0
+    sum_albedo = 0.0
+    sum_i0 = 0.0
+    sum_es = 0.0
+    sum_ea = 0.0
+    sum_qs = 0.0
+    sum_qa = 0.0
+    sum_rhoa = 0.0
+    sum_evap = 0.0
+    sum_qh = 0.0
+    sum_qe = 0.0
+    sum_ql = 0.0
+    sum_heat = 0.0
+    sum_tx = 0.0
+    sum_ty = 0.0
+    sum_sst = 0.0
+    sum_mld_surf = 0.0
+    sum_mld_bott = 0.0
+    sum_u_taub = 0.0
+    sum_taub = 0.0
+    sum_Ekin = 0.0
+    sum_Epot = 0.0
+    sum_Eturb = 0.0
+    sum_u_taus = 0.0
+    sum_Hfrazil = 0.0
+    sum_Hice = 0.0
+    sum_dHis = 0.0
+    sum_dHib = 0.0
+    sum_T1 = 0.0
+    sum_T2 = 0.0
+    sum_Tf = 0.0
+    sum_Tice_surface = 0.0
+    sum_bottom_ice_energy = 0.0
+    sum_ocean_ice_flux = 0.0
+    sum_ocean_ice_heat_flux = 0.0
+    sum_ocean_ice_salt_flux = 0.0
+    sum_surface_ice_energy = 0.0
+    sum_rad = np.zeros(nlev + 1, dtype=np.float64)
+    reduced_rad = np.zeros(nlev + 1, dtype=np.float64)
+    reduced_u_taus = np.zeros(1, dtype=np.float64)
+    reduced_u_taub = np.zeros(1, dtype=np.float64)
+    reduced_taub = np.zeros(1, dtype=np.float64)
+    reduced_Hfrazil = np.zeros(1, dtype=np.float64)
+    reduced_Hice = np.zeros(1, dtype=np.float64)
+    reduced_T1 = np.zeros(1, dtype=np.float64)
+    reduced_T2 = np.zeros(1, dtype=np.float64)
+    reduced_Tf = np.zeros(1, dtype=np.float64)
+    reduced_Tice_surface = np.zeros(1, dtype=np.float64)
+    reduced_bottom_ice_energy = np.zeros(1, dtype=np.float64)
+    reduced_ocean_ice_flux = np.zeros(1, dtype=np.float64)
+    reduced_ocean_ice_heat_flux = np.zeros(1, dtype=np.float64)
+    reduced_ocean_ice_salt_flux = np.zeros(1, dtype=np.float64)
+    reduced_surface_ice_energy = np.zeros(1, dtype=np.float64)
+    water_balance_scalars = np.zeros(4, dtype=np.float64)
+    water_balance_scalars[0] = net_water_balance[0]
+    water_balance_scalars[1] = int_water_balance[0]
+    water_balance_scalars[2] = int_fwf[0]
+    water_balance_scalars[3] = int_flows[0]
+    stream_weights = np.zeros((nstreams, nlev + 1), dtype=np.float64)
+    stream_Q = np.zeros((nstreams, nlev + 1), dtype=np.float64)
 
     out_index = 0
     if output_enabled != 0:
@@ -1272,6 +1474,19 @@ def time_loop_compiled(
                 forcing_longwave[0],
                 forcing_swr[0],
             )
+        initial_q_kristine = 0.0
+        initial_t_kristine = 0.0
+        initial_q_unguaged = 0.0
+        initial_t_unguaged = 0.0
+        initial_q_stensta = 0.0
+        if nstreams > 0:
+            initial_q_kristine = forcing_stream_flow[0, 0]
+            initial_t_kristine = forcing_stream_temp[0, 0]
+        if nstreams > 1:
+            initial_q_unguaged = forcing_stream_flow[0, 1]
+            initial_t_unguaged = forcing_stream_temp[0, 1]
+        if nstreams > 2:
+            initial_q_stensta = forcing_stream_flow[0, 2]
         if write_ic != 0:
             _write_output_slot(
                 out_slot_base + out_index,
@@ -1303,6 +1518,7 @@ def time_loop_compiled(
                 initial_qh,
                 initial_qe,
                 initial_ql,
+                forcing_longwave[0],
                 initial_heat,
                 initial_tx_surface,
                 initial_ty_surface,
@@ -1317,6 +1533,17 @@ def time_loop_compiled(
                 0.0,
                 0.0,
                 0.0,
+                int_flows[0],
+                int_water_balance[0],
+                stream_int_inflow[0],
+                stream_int_outflow[0],
+                initial_q_stensta,
+                initial_q_unguaged,
+                initial_t_unguaged,
+                initial_q_kristine,
+                initial_t_kristine,
+                dHis[0],
+                dHib[0],
                 u_taus,
                 u_taub,
                 taub,
@@ -1340,6 +1567,13 @@ def time_loop_compiled(
                 num,
                 nuh,
                 h,
+                Af,
+                Qlayer,
+                Qs,
+                Qt,
+                wq,
+                FQ,
+                Qres,
                 xP,
                 fric,
                 drag,
@@ -1354,6 +1588,7 @@ def time_loop_compiled(
                 NNS,
                 buoy,
                 SS,
+                xRf,
                 P,
                 B,
                 Pb,
@@ -1377,6 +1612,7 @@ def time_loop_compiled(
                 nucl,
                 z,
                 zi,
+                0,
                 output_step,
                 output_time,
                 output_zeta,
@@ -1404,6 +1640,7 @@ def time_loop_compiled(
                 output_qh,
                 output_qe,
                 output_ql,
+                output_qlobs,
                 output_heat,
                 output_tx,
                 output_ty,
@@ -1420,6 +1657,17 @@ def time_loop_compiled(
                 output_Ekin,
                 output_Epot,
                 output_Eturb,
+                output_int_flow,
+                output_int_water_balance,
+                output_int_inflow,
+                output_int_outflow,
+                output_Q_Stensta,
+                output_Q_Unguaged,
+                output_T_Unguaged,
+                output_Q_Kristine,
+                output_T_Kristine,
+                output_dHis,
+                output_dHib,
                 output_rho_p,
                 output_rho,
                 output_u,
@@ -1440,6 +1688,13 @@ def time_loop_compiled(
                 output_num,
                 output_nuh,
                 output_h,
+                output_Af,
+                output_Qlayer,
+                output_Qs,
+                output_Qt,
+                output_wq,
+                output_FQ,
+                output_Qres,
                 output_xP,
                 output_fric,
                 output_drag,
@@ -1471,6 +1726,7 @@ def time_loop_compiled(
                 output_gamh,
                 output_gams,
                 output_Rig,
+                output_xRf,
                 output_gamb,
                 output_gam,
                 output_r,
@@ -1521,7 +1777,15 @@ def time_loop_compiled(
             hydro_h[0, k] = h[k]
             hydro_nuh[0, k] = nuh[k]
             hydro_rad[0, k] = rad[k]
+            hydro_Vc[0, k] = Vc[k]
+            hydro_Vco[0, k] = Vco[k]
+            hydro_Afo[0, k] = Afo[k]
+            hydro_wq[0, k] = wq[k]
+            hydro_Qres[0, k] = Qres[k]
         hydro_taub[0] = taub[0]
+        for stream in range(forcing_stream_method.shape[0]):
+            for k in range(nlev + 1):
+                hydro_stream_Q[0, stream, k] = stream_Q[stream, k]
 
     cosomega = math.cos(cori * dt)
     sinomega = math.sin(cori * dt)
@@ -1626,6 +1890,15 @@ def time_loop_compiled(
                 albedo,
             )
             ice_qsw = current_i0
+            # Only Lebedev (3) and MyLake (4) expose an ice surface to the
+            # atmosphere, so they override the air-sea albedo with the ice
+            # albedo. Winton (5) is handled by its own branch below.
+            # basal_melt (2) melts beneath an ice shelf with the ocean surface
+            # still exposed, so it keeps the air-sea albedo (Fortran parity).
+            if (ice_model == 3 or ice_model == 4) and ice_cover[0] == 2.0:
+                albedo = albedo_ice[0]
+                current_i0 = shortwave * (1.0 - albedo)
+                ice_qsw = current_i0
             if ice_model == 5 and ice_cover[0] != 0.0:
                 (
                     evap_probe,
@@ -1759,6 +2032,15 @@ def time_loop_compiled(
                 albedo,
             )
             ice_qsw = current_i0
+            # Only Lebedev (3) and MyLake (4) expose an ice surface to the
+            # atmosphere, so they override the air-sea albedo with the ice
+            # albedo. Winton (5) is handled by its own branch below.
+            # basal_melt (2) melts beneath an ice shelf with the ocean surface
+            # still exposed, so it keeps the air-sea albedo (Fortran parity).
+            if (ice_model == 3 or ice_model == 4) and ice_cover[0] == 2.0:
+                albedo = albedo_ice[0]
+                current_i0 = shortwave * (1.0 - albedo)
+                ice_qsw = current_i0
             if ice_model == 5 and ice_cover[0] != 0.0:
                 (
                     evap_probe,
@@ -1839,13 +2121,146 @@ def time_loop_compiled(
                 albedo = albedo_ice[0]
                 current_i0 = shortwave * (1.0 - albedo)
                 ice_qsw = current_i0
+            elif (ice_model == 3 or ice_model == 4) and ice_cover[0] == 2.0:
+                albedo = albedo_ice[0]
+                current_i0 = shortwave * (1.0 - albedo)
+                ice_qsw = current_i0
 
         tx[0] = tx_value
         ty[0] = ty_value
         ssf = S[nlev] * swf
         if ice_model != 0:
+            ice_qh_flux = qh
+            ice_qe_flux = qe
+            ice_ql_flux = ql
+            ice_callback_fluxes = False
+            ice_evap_probe = evap
+            ice_tx_probe = tx_surface
+            ice_ty_probe = ty_surface
+            ice_heat_probe = heat
+            ice_es_probe = es
+            ice_ea_probe = ea
+            ice_qs_probe = qs
+            ice_qa_probe = qa
+            ice_rhoa_probe = rhoa
+            if ice_model == 4 and ice_cover[0] != 0.0 and forcing_airt[step] >= Tf[0]:
+                ice_wind_u = forcing_u10[step]
+                ice_wind_v = forcing_v10[step]
+                if airsea_fluxes_method == 1:
+                    (
+                        ice_evap_probe,
+                        ice_tx_probe,
+                        ice_ty_probe,
+                        ice_heat_probe,
+                        ice_shortwave_probe,
+                        ice_albedo_probe,
+                        ice_es_probe,
+                        ice_ea_probe,
+                        ice_qs_probe,
+                        ice_qa_probe,
+                        ice_rhoa_probe,
+                        ice_qh_flux,
+                        ice_qe_flux,
+                        ice_ql_flux,
+                    ) = _airsea_kondo_compiled(
+                        forcing_yearday[step],
+                        forcing_secondsofday[step],
+                        latitude,
+                        longitude,
+                        airsea_hum_method,
+                        airsea_shortwave_method,
+                        airsea_shortwave_type,
+                        airsea_longwave_method,
+                        airsea_longwave_type,
+                        airsea_albedo_method,
+                        airsea_shortwave_scale_factor,
+                        airsea_heat_scale_factor,
+                        airsea_const_albedo,
+                        0.0,
+                        forcing_airp[step],
+                        forcing_airt[step],
+                        forcing_hum[step],
+                        forcing_cloud[step],
+                        ice_wind_u,
+                        ice_wind_v,
+                        forcing_precip[step],
+                        forcing_longwave[step],
+                        forcing_swr[step],
+                    )
+                    _ = (
+                        ice_shortwave_probe,
+                        ice_albedo_probe,
+                    )
+                    ice_callback_fluxes = True
+                elif airsea_fluxes_method == 2:
+                    (
+                        ice_evap_probe,
+                        ice_tx_probe,
+                        ice_ty_probe,
+                        ice_heat_probe,
+                        ice_shortwave_probe,
+                        ice_albedo_probe,
+                        ice_es_probe,
+                        ice_ea_probe,
+                        ice_qs_probe,
+                        ice_qa_probe,
+                        ice_rhoa_probe,
+                        ice_qh_flux,
+                        ice_qe_flux,
+                        ice_ql_flux,
+                    ) = _airsea_fairall_compiled(
+                        forcing_yearday[step],
+                        forcing_secondsofday[step],
+                        latitude,
+                        longitude,
+                        airsea_hum_method,
+                        airsea_shortwave_method,
+                        airsea_shortwave_type,
+                        airsea_longwave_method,
+                        airsea_longwave_type,
+                        airsea_albedo_method,
+                        airsea_shortwave_scale_factor,
+                        airsea_heat_scale_factor,
+                        airsea_const_albedo,
+                        0.0,
+                        forcing_airp[step],
+                        forcing_airt[step],
+                        forcing_hum[step],
+                        forcing_cloud[step],
+                        ice_wind_u,
+                        ice_wind_v,
+                        forcing_precip[step],
+                        forcing_longwave[step],
+                        forcing_swr[step],
+                    )
+                    _ = (
+                        ice_shortwave_probe,
+                        ice_albedo_probe,
+                    )
+                    ice_callback_fluxes = True
+            if ice_callback_fluxes:
+                evap = ice_evap_probe
+                tx_surface = ice_tx_probe
+                ty_surface = ice_ty_probe
+                tx_value = tx_surface / rho0
+                ty_value = ty_surface / rho0
+                tx[0] = tx_value
+                ty[0] = ty_value
+                heat = ice_heat_probe
+                shf = -heat
+                swf = forcing_precip[step] + evap
+                ssf = S[nlev] * swf
+                es = ice_es_probe
+                ea = ice_ea_probe
+                qs = ice_qs_probe
+                qa = ice_qa_probe
+                rhoa = ice_rhoa_probe
+                qh = ice_qh_flux
+                qe = ice_qe_flux
+                ql = ice_ql_flux
+                sst_value = 0.0
             diff_t_up = -shf / (rho0 * cp)
-            diff_t_up = step_ice(
+            diff_t_up, ice_T_w = step_ice(
                 ice_model,
                 T[nlev],
                 S[nlev],
@@ -1854,9 +2269,9 @@ def time_loop_compiled(
                 dt,
                 diff_t_up,
                 ice_qsw,
-                ql,
-                qh,
-                qe,
+                ice_ql_flux,
+                ice_qh_flux,
+                ice_qe_flux,
                 forcing_precip[step],
                 u_taus[0],
                 winton_surface_flux_a,
@@ -1864,6 +2279,8 @@ def time_loop_compiled(
                 Hice,
                 Hsnow,
                 Hfrazil,
+                dHis,
+                dHib,
                 T1,
                 T2,
                 Tice_surface,
@@ -1871,6 +2288,7 @@ def time_loop_compiled(
                 ice_cover,
                 Tf,
                 albedo_ice,
+                attenuation_ice,
                 transmissivity,
                 ocean_ice_flux,
                 ocean_ice_heat_flux,
@@ -1881,6 +2299,8 @@ def time_loop_compiled(
                 T_melt,
                 S_melt,
             )
+            if ice_model == 4:
+                T[nlev] = ice_T_w
             shf = -diff_t_up * rho0 * cp
             ssf -= ocean_ice_salt_flux[0]
             if ice_cover[0] == 2.0:
@@ -1903,18 +2323,202 @@ def time_loop_compiled(
         int_swr += current_i0 * dt
         int_heat += heat * dt
         int_total = int_swr + int_heat
+        if output_reduce_mode != 0:
+            output_slot = out_slot_base + out_index
+            if reduce_count == 0:
+                output_mld_surf[output_slot] = 0.0
+                output_mld_bott[output_slot] = 0.0
+                output_u_taub[output_slot] = 0.0
+                output_taub[output_slot] = 0.0
+                output_Ekin[output_slot] = 0.0
+                output_Epot[output_slot] = 0.0
+                output_Eturb[output_slot] = 0.0
+                for k in range(nlev + 1):
+                    output_rho_p[output_slot, k] = 0.0
+                    output_rho[output_slot, k] = 0.0
+                    output_u[output_slot, k] = 0.0
+                    output_v[output_slot, k] = 0.0
+                    output_T[output_slot, k] = 0.0
+                    output_S[output_slot, k] = 0.0
+                    output_Tp[output_slot, k] = 0.0
+                    output_Ti[output_slot, k] = 0.0
+                    output_Sp[output_slot, k] = 0.0
+                    output_Tobs[output_slot, k] = 0.0
+                    output_Sobs[output_slot, k] = 0.0
+                    output_u_obs[output_slot, k] = 0.0
+                    output_v_obs[output_slot, k] = 0.0
+                    output_idpdx[output_slot, k] = 0.0
+                    output_idpdy[output_slot, k] = 0.0
+                    output_tke[output_slot, k] = 0.0
+                    output_eps[output_slot, k] = 0.0
+                    output_num[output_slot, k] = 0.0
+                    output_nuh[output_slot, k] = 0.0
+                    output_h[output_slot, k] = 0.0
+                    output_Af[output_slot, k] = 0.0
+                    output_Qlayer[output_slot, k] = 0.0
+                    output_Qs[output_slot, k] = 0.0
+                    output_Qt[output_slot, k] = 0.0
+                    output_wq[output_slot, k] = 0.0
+                    output_FQ[output_slot, k] = 0.0
+                    output_Qres[output_slot, k] = 0.0
+                    output_xP[output_slot, k] = 0.0
+                    output_fric[output_slot, k] = 0.0
+                    output_drag[output_slot, k] = 0.0
+                    output_avh[output_slot, k] = 0.0
+                    output_bioshade[output_slot, k] = 0.0
+                    output_ga[output_slot, k] = 0.0
+                    output_uu[output_slot, k] = 0.0
+                    output_vv[output_slot, k] = 0.0
+                    output_ww[output_slot, k] = 0.0
+                    output_NN[output_slot, k] = 0.0
+                    output_NNT[output_slot, k] = 0.0
+                    output_NNS[output_slot, k] = 0.0
+                    output_buoy[output_slot, k] = 0.0
+                    output_SS[output_slot, k] = 0.0
+                    output_P[output_slot, k] = 0.0
+                    output_B[output_slot, k] = 0.0
+                    output_Pb[output_slot, k] = 0.0
+                    output_kb[output_slot, k] = 0.0
+                    output_epsb[output_slot, k] = 0.0
+                    output_L[output_slot, k] = 0.0
+                    output_PSTK[output_slot, k] = 0.0
+                    output_cmue1[output_slot, k] = 0.0
+                    output_cmue2[output_slot, k] = 0.0
+                    output_as[output_slot, k] = 0.0
+                    output_an[output_slot, k] = 0.0
+                    output_at[output_slot, k] = 0.0
+                    output_gamu[output_slot, k] = 0.0
+                    output_gamv[output_slot, k] = 0.0
+                    output_gamh[output_slot, k] = 0.0
+                    output_gams[output_slot, k] = 0.0
+                    output_Rig[output_slot, k] = 0.0
+                    output_xRf[output_slot, k] = 0.0
+                    output_gamb[output_slot, k] = 0.0
+                    output_gam[output_slot, k] = 0.0
+                    output_r[output_slot, k] = 0.0
+                    output_taux[output_slot, k] = 0.0
+                    output_tauy[output_slot, k] = 0.0
+                    output_rad[output_slot, k] = 0.0
+                    output_us[output_slot, k] = 0.0
+                    output_vs[output_slot, k] = 0.0
+                    output_dusdz[output_slot, k] = 0.0
+                    output_dvsdz[output_slot, k] = 0.0
+                    output_nus[output_slot, k] = 0.0
+                    output_nucl[output_slot, k] = 0.0
+                    output_z[output_slot, k] = 0.0
+                    output_zi[output_slot, k] = 0.0
+            reduce_count += 1
+            sum_albedo += albedo
+            sum_i0 += current_i0
+            sum_es += es
+            sum_ea += ea
+            sum_qs += qs
+            sum_qa += qa
+            sum_rhoa += rhoa
+            sum_evap += evap
+            sum_qh += qh
+            sum_qe += qe
+            sum_ql += ql
+            sum_heat += heat
+            sum_tx += tx_value
+            sum_ty += ty_value
+            sum_sst += sst_value
+            sum_u_taus += u_taus[0]
+            sum_Hfrazil += Hfrazil[0]
+            sum_Hice += Hice[0]
+            sum_dHis += dHis[0]
+            sum_dHib += dHib[0]
+            sum_T1 += T1[0]
+            sum_T2 += T2[0]
+            sum_Tf += Tf[0]
+            sum_Tice_surface += Tice_surface[0]
+            sum_bottom_ice_energy += bottom_ice_energy[0]
+            sum_ocean_ice_flux += ocean_ice_flux[0]
+            sum_ocean_ice_heat_flux += ocean_ice_heat_flux[0]
+            sum_ocean_ice_salt_flux += ocean_ice_salt_flux[0]
+            sum_surface_ice_energy += surface_ice_energy[0]
+            for k in range(nlev + 1):
+                sum_rad[k] += rad[k]
 
-        step_updategrid_single(
-            nlev,
-            depth,
-            forcing_zeta[step],
-            grid_method,
-            ga,
-            h,
-            ho,
-            z,
-            zi,
-        )
+        if lake != 0:
+            step_inflow, step_outflow = update_streams_kernel(
+                nlev,
+                dt,
+                forcing_stream_method,
+                forcing_stream_zl,
+                forcing_stream_zu,
+                forcing_stream_has_T,
+                forcing_stream_has_S,
+                forcing_stream_flow[step],
+                forcing_stream_temp[step],
+                forcing_stream_salt[step],
+                S,
+                T,
+                z,
+                zi,
+                h,
+                stream_weights,
+                stream_Q,
+                Qs,
+                Qt,
+                Ls,
+                Lt,
+                Qlayer,
+            )
+            stream_int_inflow[0] += step_inflow
+            stream_int_outflow[0] += step_outflow
+            step_water_balance_single(
+                nlev,
+                dt,
+                lake,
+                water_balance_method,
+                forcing_precip[step],
+                evap,
+                stream_int_inflow[0],
+                stream_int_outflow[0],
+                Af,
+                Vc,
+                Qlayer,
+                Qres,
+                water_balance_scalars,
+            )
+            net_water_balance[0] = water_balance_scalars[0]
+            int_water_balance[0] = water_balance_scalars[1]
+            int_fwf[0] = water_balance_scalars[2]
+            int_flows[0] = water_balance_scalars[3]
+            _copy_lake_grid_step(
+                nlev,
+                step,
+                forcing_h,
+                forcing_ho,
+                forcing_Vc,
+                forcing_Vco,
+                forcing_Af,
+                forcing_Afo,
+                forcing_z,
+                forcing_zi,
+                h,
+                ho,
+                Vc,
+                Vco,
+                Af,
+                Afo,
+                z,
+                zi,
+            )
+            _step_lake_wequation_single(nlev, dt, Qlayer, Qres, Vc, Vco, Afo, FQ, wq)
+        else:
+            step_updategrid_single(
+                nlev,
+                depth,
+                forcing_zeta[step],
+                grid_method,
+                ga,
+                h,
+                ho,
+                z,
+                zi,
+            )
 
         if w_adv_active != 0:
             _step_wequation_single(
@@ -2112,80 +2716,174 @@ def time_loop_compiled(
         )
         if sprof_input_active != 0:
             _copy_profile(nlev, forcing_Sobs[step - 1], Sobs)
-            step_salinity_single(
-                nlev,
-                dt,
-                cnpar,
-                avmolS,
-                w_adv_for_equations,
-                w_adv_discr,
-                s_adv,
-                S,
-                h,
-                w,
-                u,
-                v,
-                nus,
-                gams,
-                Sobs,
-                s_relax_tau,
-                -ssf,
-                forcing_dsdx[step],
-                forcing_dsdy[step],
-                work_avh,
-                q_sour,
-                l_sour,
-                au,
-                bu,
-                cu,
-                du,
-                ru,
-                qu,
-                adv_cu,
-            )
+            if lake != 0:
+                step_salinity_lake_single(
+                    nlev,
+                    dt,
+                    cnpar,
+                    avmolS,
+                    w_adv_for_equations,
+                    w_adv_discr,
+                    s_adv,
+                    S,
+                    h,
+                    Vco,
+                    Vc,
+                    Af,
+                    Afo,
+                    w,
+                    wq,
+                    u,
+                    v,
+                    nus,
+                    gams,
+                    Sobs,
+                    s_relax_tau,
+                    -ssf,
+                    Qres,
+                    Qs,
+                    Ls,
+                    forcing_dsdx[step],
+                    forcing_dsdy[step],
+                    work_avh,
+                    q_sour,
+                    l_sour,
+                    au,
+                    bu,
+                    cu,
+                    du,
+                    ru,
+                    qu,
+                    adv_cu,
+                )
+            else:
+                step_salinity_single(
+                    nlev,
+                    dt,
+                    cnpar,
+                    avmolS,
+                    w_adv_for_equations,
+                    w_adv_discr,
+                    s_adv,
+                    S,
+                    h,
+                    w,
+                    u,
+                    v,
+                    nus,
+                    gams,
+                    Sobs,
+                    s_relax_tau,
+                    -ssf,
+                    forcing_dsdx[step],
+                    forcing_dsdy[step],
+                    work_avh,
+                    q_sour,
+                    l_sour,
+                    au,
+                    bu,
+                    cu,
+                    du,
+                    ru,
+                    qu,
+                    adv_cu,
+                )
         if tprof_input_active != 0:
             _copy_profile(nlev, forcing_Tobs[step - 1], Tobs)
-            step_temperature_single(
-                nlev,
-                dt,
-                cnpar,
-                avmolT,
-                rho0,
-                cp,
-                forcing_light_A[step],
-                forcing_light_g1[step],
-                forcing_light_g2[step],
-                w_adv_for_equations,
-                w_adv_discr,
-                t_adv,
-                T,
-                S,
-                h,
-                w,
-                u,
-                v,
-                nuh,
-                gamh,
-                bioshade,
-                rad,
-                Tobs,
-                t_relax_tau,
-                current_i0,
-                -shf / (rho0 * cp),
-                0,
-                forcing_dtdx[step],
-                forcing_dtdy[step],
-                work_avh,
-                q_sour,
-                l_sour,
-                au,
-                bu,
-                cu,
-                du,
-                ru,
-                qu,
-                adv_cu,
-            )
+            if lake != 0:
+                step_temperature_lake_single(
+                    nlev,
+                    dt,
+                    cnpar,
+                    avmolT,
+                    rho0,
+                    cp,
+                    forcing_light_A[step],
+                    forcing_light_g1[step],
+                    forcing_light_g2[step],
+                    w_adv_for_equations,
+                    w_adv_discr,
+                    t_adv,
+                    T,
+                    S,
+                    h,
+                    Vco,
+                    Vc,
+                    Af,
+                    Afo,
+                    w,
+                    wq,
+                    u,
+                    v,
+                    nuh,
+                    gamh,
+                    bioshade,
+                    rad,
+                    Tobs,
+                    t_relax_tau,
+                    current_i0,
+                    -shf / (rho0 * cp),
+                    forcing_precip[step],
+                    evap,
+                    Qres,
+                    Qt,
+                    Lt,
+                    0,
+                    forcing_dtdx[step],
+                    forcing_dtdy[step],
+                    work_avh,
+                    q_sour,
+                    l_sour,
+                    au,
+                    bu,
+                    cu,
+                    du,
+                    ru,
+                    qu,
+                    adv_cu,
+                )
+            else:
+                step_temperature_single(
+                    nlev,
+                    dt,
+                    cnpar,
+                    avmolT,
+                    rho0,
+                    cp,
+                    forcing_light_A[step],
+                    forcing_light_g1[step],
+                    forcing_light_g2[step],
+                    w_adv_for_equations,
+                    w_adv_discr,
+                    t_adv,
+                    T,
+                    S,
+                    h,
+                    w,
+                    u,
+                    v,
+                    nuh,
+                    gamh,
+                    bioshade,
+                    rad,
+                    Tobs,
+                    t_relax_tau,
+                    current_i0,
+                    -shf / (rho0 * cp),
+                    0,
+                    forcing_dtdx[step],
+                    forcing_dtdy[step],
+                    work_avh,
+                    q_sour,
+                    l_sour,
+                    au,
+                    bu,
+                    cu,
+                    du,
+                    ru,
+                    qu,
+                    adv_cu,
+                )
         for k in range(nlev + 1):
             avh[k] = work_avh[k]
 
@@ -2230,7 +2928,9 @@ def time_loop_compiled(
         )
         _stratification_from_alpha_beta_single(
             nlev,
+            density_method,
             gravity,
+            rho0,
             h,
             T,
             S,
@@ -2478,13 +3178,172 @@ def time_loop_compiled(
                 hydro_rho[step, k] = rho[k]
                 hydro_h[step, k] = h[k]
                 hydro_rad[step, k] = rad[k]
+                hydro_Vc[step, k] = Vc[k]
+                hydro_Vco[step, k] = Vco[k]
+                hydro_Afo[step, k] = Afo[k]
+                hydro_wq[step, k] = wq[k]
+                hydro_Qres[step, k] = Qres[k]
             hydro_taub[step] = taub[0]
+            for stream in range(forcing_stream_method.shape[0]):
+                for k in range(nlev + 1):
+                    hydro_stream_Q[step, stream, k] = stream_Q[stream, k]
+
+        if output_reduce_mode != 0 and reduce_count > 0:
+            output_slot = out_slot_base + out_index
+            mld_surf_reduce, mld_bott_reduce = _compute_mld_single(
+                nlev,
+                mld_method,
+                mld_diff_k,
+                mld_ri_crit,
+                turb_method,
+                h,
+                NN,
+                SS,
+                tke,
+            )
+            sum_mld_surf += mld_surf_reduce
+            sum_mld_bott += mld_bott_reduce
+            sum_u_taub += u_taub[0]
+            sum_taub += taub[0]
+            reduce_ekin = 0.0
+            reduce_epot = 0.0
+            reduce_eturb = 0.0
+            reduce_zloc = 0.0
+            for i in range(1, nlev + 1):
+                reduce_zloc -= 0.5 * h[i]
+                reduce_ekin += 0.5 * h[i] * (u[i] * u[i] + v[i] * v[i])
+                reduce_eturb += h[i] * (tke[i] + tke[i - 1])
+                reduce_epot += h[i] * buoy[i] * reduce_zloc
+                reduce_zloc -= 0.5 * h[i]
+            sum_Ekin += reduce_ekin * rho0
+            sum_Epot += reduce_epot * rho0
+            sum_Eturb += reduce_eturb * rho0
+            for k in range(nlev + 1):
+                output_rho_p[output_slot, k] += rho_p[k]
+                output_rho[output_slot, k] += rho[k]
+                output_u[output_slot, k] += u[k]
+                output_v[output_slot, k] += v[k]
+                output_T[output_slot, k] += T[k]
+                output_S[output_slot, k] += S[k]
+                output_Tp[output_slot, k] += Tp[k]
+                output_Ti[output_slot, k] += Ti[k]
+                output_Sp[output_slot, k] += Sp[k]
+                output_Tobs[output_slot, k] += forcing_Tprof[step, k]
+                output_Sobs[output_slot, k] += forcing_Sprof[step, k]
+                output_u_obs[output_slot, k] += uprof[k]
+                output_v_obs[output_slot, k] += vprof[k]
+                output_idpdx[output_slot, k] += idpdx[k]
+                output_idpdy[output_slot, k] += idpdy[k]
+                output_tke[output_slot, k] += tke[k]
+                output_eps[output_slot, k] += eps[k]
+                output_num[output_slot, k] += num[k]
+                output_nuh[output_slot, k] += nuh[k]
+                output_h[output_slot, k] += h[k]
+                output_Af[output_slot, k] += Af[k]
+                output_Qlayer[output_slot, k] += Qlayer[k]
+                output_Qs[output_slot, k] += Qs[k]
+                output_Qt[output_slot, k] += Qt[k]
+                output_wq[output_slot, k] += wq[k]
+                output_FQ[output_slot, k] += FQ[k]
+                output_Qres[output_slot, k] += Qres[k]
+                output_xP[output_slot, k] += xP[k]
+                output_fric[output_slot, k] += fric[k]
+                output_drag[output_slot, k] += drag[k]
+                output_avh[output_slot, k] += avh[k]
+                output_bioshade[output_slot, k] += bioshade[k]
+                output_ga[output_slot, k] += ga[k]
+                output_uu[output_slot, k] += uu[k]
+                output_vv[output_slot, k] += vv[k]
+                output_ww[output_slot, k] += ww[k]
+                output_NN[output_slot, k] += NN[k]
+                output_NNT[output_slot, k] += NNT[k]
+                output_NNS[output_slot, k] += NNS[k]
+                output_buoy[output_slot, k] += buoy[k]
+                output_SS[output_slot, k] += SS[k]
+                output_P[output_slot, k] += P[k]
+                output_B[output_slot, k] += B[k]
+                output_Pb[output_slot, k] += Pb[k]
+                output_kb[output_slot, k] += kb[k]
+                output_epsb[output_slot, k] += epsb[k]
+                output_L[output_slot, k] += L[k]
+                output_PSTK[output_slot, k] += PSTK[k]
+                output_cmue1[output_slot, k] += cmue1[k]
+                output_cmue2[output_slot, k] += cmue2[k]
+                output_as[output_slot, k] += as_[k]
+                output_an[output_slot, k] += an[k]
+                output_at[output_slot, k] += at[k]
+                output_gamh[output_slot, k] += gamh[k]
+                output_gams[output_slot, k] += gams[k]
+                output_Rig[output_slot, k] += NN[k] / (SS[k] + 1.0e-10)
+                output_xRf[output_slot, k] += xRf[k]
+                if k == 0:
+                    reduce_speed = math.sqrt(u[1] * u[1] + v[1] * v[1])
+                    output_taux[output_slot, k] += -drag[1] * u[1] * reduce_speed
+                    output_tauy[output_slot, k] += -drag[1] * v[1] * reduce_speed
+                elif k == nlev:
+                    output_taux[output_slot, k] += -tx_value
+                    output_tauy[output_slot, k] += -ty_value
+                else:
+                    reduce_spacing = 0.5 * (h[k + 1] + h[k])
+                    output_taux[output_slot, k] += (
+                        -num[k] * (u[k + 1] - u[k]) / reduce_spacing
+                        - nucl[k] * dusdz[k]
+                    )
+                    output_tauy[output_slot, k] += (
+                        -num[k] * (v[k + 1] - v[k]) / reduce_spacing
+                        - nucl[k] * dvsdz[k]
+                    )
+                output_rad[output_slot, k] += rad[k]
+                output_us[output_slot, k] += forcing_us[step, k]
+                output_vs[output_slot, k] += forcing_vs[step, k]
+                output_dusdz[output_slot, k] += dusdz[k]
+                output_dvsdz[output_slot, k] += dvsdz[k]
+                output_nus[output_slot, k] += nus[k]
+                output_nucl[output_slot, k] += nucl[k]
+                output_z[output_slot, k] += z[k]
+                output_zi[output_slot, k] += zi[k]
 
         if output_enabled != 0 and (
             step % output_every == 0 or (force_final_output != 0 and step == nt)
         ):
             if out_slot_base + out_index >= output_step.shape[0]:
                 return -1
+            output_albedo_value = albedo
+            output_i0_value = current_i0
+            output_es_value = es
+            output_ea_value = ea
+            output_qs_value = qs
+            output_qa_value = qa
+            output_rhoa_value = rhoa
+            output_evap_value = evap
+            output_qh_value = qh
+            output_qe_value = qe
+            output_ql_value = ql
+            output_heat_value = heat
+            output_tx_value = tx_value
+            output_ty_value = ty_value
+            output_sst_value = sst_value
+            output_dHis_value = dHis[0]
+            output_dHib_value = dHib[0]
+            output_rad_values = rad
+            output_u_taus_values = u_taus
+            output_u_taub_values = u_taub
+            output_taub_values = taub
+            output_Hfrazil_values = Hfrazil
+            output_Hice_values = Hice
+            output_T1_values = T1
+            output_T2_values = T2
+            output_Tf_values = Tf
+            output_Tice_surface_values = Tice_surface
+            output_bottom_ice_energy_values = bottom_ice_energy
+            output_ocean_ice_flux_values = ocean_ice_flux
+            output_ocean_ice_heat_flux_values = ocean_ice_heat_flux
+            output_ocean_ice_salt_flux_values = ocean_ice_salt_flux
+            output_surface_ice_energy_values = surface_ice_energy
+            output_Ekin_value = 0.0
+            output_Epot_value = 0.0
+            output_Eturb_value = 0.0
+            profiles_already_written = 0
             mld_surf_value, mld_bott_value = _compute_mld_single(
                 nlev,
                 mld_method,
@@ -2496,6 +3355,147 @@ def time_loop_compiled(
                 SS,
                 tke,
             )
+            if output_reduce_mode != 0 and reduce_count > 0:
+                reduce_factor = 1.0
+                if output_reduce_mode == 1:
+                    reduce_factor = 1.0 / reduce_count
+                output_albedo_value = sum_albedo * reduce_factor
+                output_i0_value = sum_i0 * reduce_factor
+                output_es_value = sum_es * reduce_factor
+                output_ea_value = sum_ea * reduce_factor
+                output_qs_value = sum_qs * reduce_factor
+                output_qa_value = sum_qa * reduce_factor
+                output_rhoa_value = sum_rhoa * reduce_factor
+                output_evap_value = sum_evap * reduce_factor
+                output_qh_value = sum_qh * reduce_factor
+                output_qe_value = sum_qe * reduce_factor
+                output_ql_value = sum_ql * reduce_factor
+                output_heat_value = sum_heat * reduce_factor
+                output_tx_value = sum_tx * reduce_factor
+                output_ty_value = sum_ty * reduce_factor
+                output_sst_value = sum_sst * reduce_factor
+                output_dHis_value = sum_dHis * reduce_factor
+                output_dHib_value = sum_dHib * reduce_factor
+                mld_surf_value = sum_mld_surf * reduce_factor
+                mld_bott_value = sum_mld_bott * reduce_factor
+                reduced_u_taub[0] = sum_u_taub * reduce_factor
+                reduced_taub[0] = sum_taub * reduce_factor
+                output_Ekin_value = sum_Ekin * reduce_factor
+                output_Epot_value = sum_Epot * reduce_factor
+                output_Eturb_value = sum_Eturb * reduce_factor
+                reduced_u_taus[0] = sum_u_taus * reduce_factor
+                reduced_Hfrazil[0] = sum_Hfrazil * reduce_factor
+                reduced_Hice[0] = sum_Hice * reduce_factor
+                reduced_T1[0] = sum_T1 * reduce_factor
+                reduced_T2[0] = sum_T2 * reduce_factor
+                reduced_Tf[0] = sum_Tf * reduce_factor
+                reduced_Tice_surface[0] = sum_Tice_surface * reduce_factor
+                reduced_bottom_ice_energy[0] = sum_bottom_ice_energy * reduce_factor
+                reduced_ocean_ice_flux[0] = sum_ocean_ice_flux * reduce_factor
+                reduced_ocean_ice_heat_flux[0] = sum_ocean_ice_heat_flux * reduce_factor
+                reduced_ocean_ice_salt_flux[0] = sum_ocean_ice_salt_flux * reduce_factor
+                reduced_surface_ice_energy[0] = sum_surface_ice_energy * reduce_factor
+                for k in range(nlev + 1):
+                    reduced_rad[k] = sum_rad[k] * reduce_factor
+                output_rad_values = reduced_rad
+                output_u_taus_values = reduced_u_taus
+                output_u_taub_values = reduced_u_taub
+                output_taub_values = reduced_taub
+                output_Hfrazil_values = reduced_Hfrazil
+                output_Hice_values = reduced_Hice
+                output_T1_values = reduced_T1
+                output_T2_values = reduced_T2
+                output_Tf_values = reduced_Tf
+                output_Tice_surface_values = reduced_Tice_surface
+                output_bottom_ice_energy_values = reduced_bottom_ice_energy
+                output_ocean_ice_flux_values = reduced_ocean_ice_flux
+                output_ocean_ice_heat_flux_values = reduced_ocean_ice_heat_flux
+                output_ocean_ice_salt_flux_values = reduced_ocean_ice_salt_flux
+                output_surface_ice_energy_values = reduced_surface_ice_energy
+                profiles_already_written = 1
+                output_slot = out_slot_base + out_index
+                for k in range(nlev + 1):
+                    output_rho_p[output_slot, k] *= reduce_factor
+                    output_rho[output_slot, k] *= reduce_factor
+                    output_u[output_slot, k] *= reduce_factor
+                    output_v[output_slot, k] *= reduce_factor
+                    output_T[output_slot, k] *= reduce_factor
+                    output_S[output_slot, k] *= reduce_factor
+                    output_Tp[output_slot, k] *= reduce_factor
+                    output_Ti[output_slot, k] *= reduce_factor
+                    output_Sp[output_slot, k] *= reduce_factor
+                    output_Tobs[output_slot, k] *= reduce_factor
+                    output_Sobs[output_slot, k] *= reduce_factor
+                    output_u_obs[output_slot, k] *= reduce_factor
+                    output_v_obs[output_slot, k] *= reduce_factor
+                    output_idpdx[output_slot, k] *= reduce_factor
+                    output_idpdy[output_slot, k] *= reduce_factor
+                    output_tke[output_slot, k] *= reduce_factor
+                    output_eps[output_slot, k] *= reduce_factor
+                    output_num[output_slot, k] *= reduce_factor
+                    output_nuh[output_slot, k] *= reduce_factor
+                    output_h[output_slot, k] *= reduce_factor
+                    output_Af[output_slot, k] *= reduce_factor
+                    output_Qlayer[output_slot, k] *= reduce_factor
+                    output_Qs[output_slot, k] *= reduce_factor
+                    output_Qt[output_slot, k] *= reduce_factor
+                    output_wq[output_slot, k] *= reduce_factor
+                    output_FQ[output_slot, k] *= reduce_factor
+                    output_Qres[output_slot, k] *= reduce_factor
+                    output_xP[output_slot, k] *= reduce_factor
+                    output_fric[output_slot, k] *= reduce_factor
+                    output_drag[output_slot, k] *= reduce_factor
+                    output_avh[output_slot, k] *= reduce_factor
+                    output_bioshade[output_slot, k] *= reduce_factor
+                    output_ga[output_slot, k] *= reduce_factor
+                    output_uu[output_slot, k] *= reduce_factor
+                    output_vv[output_slot, k] *= reduce_factor
+                    output_ww[output_slot, k] *= reduce_factor
+                    output_NN[output_slot, k] *= reduce_factor
+                    output_NNT[output_slot, k] *= reduce_factor
+                    output_NNS[output_slot, k] *= reduce_factor
+                    output_buoy[output_slot, k] *= reduce_factor
+                    output_SS[output_slot, k] *= reduce_factor
+                    output_P[output_slot, k] *= reduce_factor
+                    output_B[output_slot, k] *= reduce_factor
+                    output_Pb[output_slot, k] *= reduce_factor
+                    output_kb[output_slot, k] *= reduce_factor
+                    output_epsb[output_slot, k] *= reduce_factor
+                    output_L[output_slot, k] *= reduce_factor
+                    output_PSTK[output_slot, k] *= reduce_factor
+                    output_cmue1[output_slot, k] *= reduce_factor
+                    output_cmue2[output_slot, k] *= reduce_factor
+                    output_as[output_slot, k] *= reduce_factor
+                    output_an[output_slot, k] *= reduce_factor
+                    output_at[output_slot, k] *= reduce_factor
+                    output_gamh[output_slot, k] *= reduce_factor
+                    output_gams[output_slot, k] *= reduce_factor
+                    output_Rig[output_slot, k] *= reduce_factor
+                    output_xRf[output_slot, k] *= reduce_factor
+                    output_taux[output_slot, k] *= reduce_factor
+                    output_tauy[output_slot, k] *= reduce_factor
+                    output_rad[output_slot, k] *= reduce_factor
+                    output_us[output_slot, k] *= reduce_factor
+                    output_vs[output_slot, k] *= reduce_factor
+                    output_dusdz[output_slot, k] *= reduce_factor
+                    output_dvsdz[output_slot, k] *= reduce_factor
+                    output_nus[output_slot, k] *= reduce_factor
+                    output_nucl[output_slot, k] *= reduce_factor
+                    output_z[output_slot, k] *= reduce_factor
+                    output_zi[output_slot, k] *= reduce_factor
+            q_kristine = 0.0
+            t_kristine = 0.0
+            q_unguaged = 0.0
+            t_unguaged = 0.0
+            q_stensta = 0.0
+            if nstreams > 0:
+                q_kristine = forcing_stream_flow[step, 0]
+                t_kristine = forcing_stream_temp[step, 0]
+            if nstreams > 1:
+                q_unguaged = forcing_stream_flow[step, 1]
+                t_unguaged = forcing_stream_temp[step, 1]
+            if nstreams > 2:
+                q_stensta = forcing_stream_flow[step, 2]
             _write_output_slot(
                 out_slot_base + out_index,
                 step_offset + step,
@@ -2508,28 +3508,29 @@ def time_loop_compiled(
                 forcing_airt[step],
                 forcing_airp[step],
                 forcing_hum[step],
-                es,
-                ea,
-                qs,
-                qa,
-                rhoa,
+                output_es_value,
+                output_ea_value,
+                output_qs_value,
+                output_qa_value,
+                output_rhoa_value,
                 forcing_cloud[step],
-                albedo,
+                output_albedo_value,
                 forcing_precip[step],
-                evap,
+                output_evap_value,
                 int_precip,
                 int_evap,
                 int_swr,
                 int_heat,
                 int_total,
-                current_i0,
-                qh,
-                qe,
-                ql,
-                heat,
-                tx_value,
-                ty_value,
-                sst_value,
+                output_i0_value,
+                output_qh_value,
+                output_qe_value,
+                output_ql_value,
+                forcing_longwave[step],
+                output_heat_value,
+                output_tx_value,
+                output_ty_value,
+                output_sst_value,
                 forcing_sst_obs[step],
                 sss_value,
                 mld_surf_value,
@@ -2537,12 +3538,23 @@ def time_loop_compiled(
                 forcing_us0[step],
                 forcing_vs0[step],
                 forcing_ds[step],
-                0.0,
-                0.0,
-                0.0,
-                u_taus,
-                u_taub,
-                taub,
+                output_Ekin_value,
+                output_Epot_value,
+                output_Eturb_value,
+                int_flows[0],
+                int_water_balance[0],
+                stream_int_inflow[0],
+                stream_int_outflow[0],
+                q_stensta,
+                q_unguaged,
+                t_unguaged,
+                q_kristine,
+                t_kristine,
+                output_dHis_value,
+                output_dHib_value,
+                output_u_taus_values,
+                output_u_taub_values,
+                output_taub_values,
                 rho_p,
                 rho,
                 u,
@@ -2563,6 +3575,13 @@ def time_loop_compiled(
                 num,
                 nuh,
                 h,
+                Af,
+                Qlayer,
+                Qs,
+                Qt,
+                wq,
+                FQ,
+                Qres,
                 xP,
                 fric,
                 drag,
@@ -2577,6 +3596,7 @@ def time_loop_compiled(
                 NNS,
                 buoy,
                 SS,
+                xRf,
                 P,
                 B,
                 Pb,
@@ -2591,7 +3611,7 @@ def time_loop_compiled(
                 at,
                 gamh,
                 gams,
-                rad,
+                output_rad_values,
                 forcing_us[step],
                 forcing_vs[step],
                 dusdz,
@@ -2600,6 +3620,7 @@ def time_loop_compiled(
                 nucl,
                 z,
                 zi,
+                profiles_already_written,
                 output_step,
                 output_time,
                 output_zeta,
@@ -2627,6 +3648,7 @@ def time_loop_compiled(
                 output_qh,
                 output_qe,
                 output_ql,
+                output_qlobs,
                 output_heat,
                 output_tx,
                 output_ty,
@@ -2643,6 +3665,17 @@ def time_loop_compiled(
                 output_Ekin,
                 output_Epot,
                 output_Eturb,
+                output_int_flow,
+                output_int_water_balance,
+                output_int_inflow,
+                output_int_outflow,
+                output_Q_Stensta,
+                output_Q_Unguaged,
+                output_T_Unguaged,
+                output_Q_Kristine,
+                output_T_Kristine,
+                output_dHis,
+                output_dHib,
                 output_rho_p,
                 output_rho,
                 output_u,
@@ -2663,6 +3696,13 @@ def time_loop_compiled(
                 output_num,
                 output_nuh,
                 output_h,
+                output_Af,
+                output_Qlayer,
+                output_Qs,
+                output_Qt,
+                output_wq,
+                output_FQ,
+                output_Qres,
                 output_xP,
                 output_fric,
                 output_drag,
@@ -2694,6 +3734,7 @@ def time_loop_compiled(
                 output_gamh,
                 output_gams,
                 output_Rig,
+                output_xRf,
                 output_gamb,
                 output_gam,
                 output_r,
@@ -2711,17 +3752,17 @@ def time_loop_compiled(
             )
             _write_ice_output_slot(
                 out_slot_base + out_index,
-                Hfrazil,
-                Hice,
-                T1,
-                T2,
-                Tf,
-                Tice_surface,
-                bottom_ice_energy,
-                ocean_ice_flux,
-                ocean_ice_heat_flux,
-                ocean_ice_salt_flux,
-                surface_ice_energy,
+                output_Hfrazil_values,
+                output_Hice_values,
+                output_T1_values,
+                output_T2_values,
+                output_Tf_values,
+                output_Tice_surface_values,
+                output_bottom_ice_energy_values,
+                output_ocean_ice_flux_values,
+                output_ocean_ice_heat_flux_values,
+                output_ocean_ice_salt_flux_values,
+                output_surface_ice_energy_values,
                 output_Hfrazil,
                 output_Hice,
                 output_T1,
@@ -2734,6 +3775,46 @@ def time_loop_compiled(
                 output_ocean_ice_salt_flux,
                 output_surface_ice_energy,
             )
+            if output_reduce_mode != 0:
+                reduce_count = 0
+                sum_albedo = 0.0
+                sum_i0 = 0.0
+                sum_es = 0.0
+                sum_ea = 0.0
+                sum_qs = 0.0
+                sum_qa = 0.0
+                sum_rhoa = 0.0
+                sum_evap = 0.0
+                sum_qh = 0.0
+                sum_qe = 0.0
+                sum_ql = 0.0
+                sum_heat = 0.0
+                sum_tx = 0.0
+                sum_ty = 0.0
+                sum_sst = 0.0
+                sum_mld_surf = 0.0
+                sum_mld_bott = 0.0
+                sum_u_taub = 0.0
+                sum_taub = 0.0
+                sum_Ekin = 0.0
+                sum_Epot = 0.0
+                sum_Eturb = 0.0
+                sum_u_taus = 0.0
+                sum_Hfrazil = 0.0
+                sum_Hice = 0.0
+                sum_dHis = 0.0
+                sum_dHib = 0.0
+                sum_T1 = 0.0
+                sum_T2 = 0.0
+                sum_Tf = 0.0
+                sum_Tice_surface = 0.0
+                sum_bottom_ice_energy = 0.0
+                sum_ocean_ice_flux = 0.0
+                sum_ocean_ice_heat_flux = 0.0
+                sum_ocean_ice_salt_flux = 0.0
+                sum_surface_ice_energy = 0.0
+                for k in range(nlev + 1):
+                    sum_rad[k] = 0.0
             out_index += 1
 
     return out_index
@@ -2791,6 +3872,7 @@ def run_compiled_time_loop(
     init_int_swr: float = 0.0,
     init_int_heat: float = 0.0,
     init_int_total: float = 0.0,
+    output_reduce_mode: int = 0,
     hydro_store: int = 0,
     hydro_T: np.ndarray | None = None,
     hydro_S: np.ndarray | None = None,
@@ -2799,6 +3881,12 @@ def run_compiled_time_loop(
     hydro_nuh: np.ndarray | None = None,
     hydro_rad: np.ndarray | None = None,
     hydro_taub: np.ndarray | None = None,
+    hydro_Vc: np.ndarray | None = None,
+    hydro_Vco: np.ndarray | None = None,
+    hydro_Afo: np.ndarray | None = None,
+    hydro_wq: np.ndarray | None = None,
+    hydro_Qres: np.ndarray | None = None,
+    hydro_stream_Q: np.ndarray | None = None,
 ) -> int:
     """Validate runtime containers and cross into the compiled unified loop.
 
@@ -2861,6 +3949,22 @@ def run_compiled_time_loop(
     _f_vs = np.ascontiguousarray(forcing.vs[_s:_e, :])
     _f_dusdz = np.ascontiguousarray(forcing.dusdz[_s:_e, :])
     _f_dvsdz = np.ascontiguousarray(forcing.dvsdz[_s:_e, :])
+    _f_stream_method = np.ascontiguousarray(forcing.stream_method)
+    _f_stream_has_T = np.ascontiguousarray(forcing.stream_has_T)
+    _f_stream_has_S = np.ascontiguousarray(forcing.stream_has_S)
+    _f_stream_zl = np.ascontiguousarray(forcing.stream_zl)
+    _f_stream_zu = np.ascontiguousarray(forcing.stream_zu)
+    _f_stream_flow = np.ascontiguousarray(forcing.stream_flow[_s:_e, :])
+    _f_stream_temp = np.ascontiguousarray(forcing.stream_temp[_s:_e, :])
+    _f_stream_salt = np.ascontiguousarray(forcing.stream_salt[_s:_e, :])
+    _f_h = np.ascontiguousarray(forcing.h[_s:_e, :])
+    _f_ho = np.ascontiguousarray(forcing.ho[_s:_e, :])
+    _f_Vc = np.ascontiguousarray(forcing.Vc[_s:_e, :])
+    _f_Vco = np.ascontiguousarray(forcing.Vco[_s:_e, :])
+    _f_Af = np.ascontiguousarray(forcing.Af[_s:_e, :])
+    _f_Afo = np.ascontiguousarray(forcing.Afo[_s:_e, :])
+    _f_z = np.ascontiguousarray(forcing.z[_s:_e, :])
+    _f_zi = np.ascontiguousarray(forcing.zi[_s:_e, :])
     _hydro_store = hydro_store if hydro_store != 0 else 0
     _hydro_T = hydro_T if hydro_T is not None else _dummy
     _hydro_S = hydro_S if hydro_S is not None else _dummy
@@ -2868,6 +3972,13 @@ def run_compiled_time_loop(
     _hydro_h = hydro_h if hydro_h is not None else _dummy
     _hydro_nuh = hydro_nuh if hydro_nuh is not None else _dummy
     _hydro_rad = hydro_rad if hydro_rad is not None else _dummy
+    _hydro_Vc = hydro_Vc if hydro_Vc is not None else _dummy
+    _hydro_Vco = hydro_Vco if hydro_Vco is not None else _dummy
+    _hydro_Afo = hydro_Afo if hydro_Afo is not None else _dummy
+    _hydro_wq = hydro_wq if hydro_wq is not None else _dummy
+    _hydro_Qres = hydro_Qres if hydro_Qres is not None else _dummy
+    _dummy_stream = np.zeros((1, params.nstreams, params.nlev + 1), dtype=np.float64)
+    _hydro_stream_Q = hydro_stream_Q if hydro_stream_Q is not None else _dummy_stream
     _dummy_scalar = np.zeros(1, dtype=np.float64)
     _hydro_taub = hydro_taub if hydro_taub is not None else _dummy_scalar
     del nlev
@@ -2880,6 +3991,7 @@ def run_compiled_time_loop(
             params.cnpar,
             output.output_every,
             1 if output.enabled else 0,
+            int(output_reduce_mode),
             1 if output.force_final else 0,
             params.gravity,
             params.rho0,
@@ -2897,6 +4009,9 @@ def run_compiled_time_loop(
             params.latitude,
             params.longitude,
             params.depth,
+            params.lake,
+            params.water_balance_method,
+            params.nstreams,
             params.h0b,
             params.z0s_min,
             params.charnock,
@@ -3014,6 +4129,18 @@ def run_compiled_time_loop(
             params.numshear,
             state.h,
             state.ho,
+            state.Vc,
+            state.Vco,
+            state.Af,
+            state.Afo,
+            state.Qs,
+            state.Qt,
+            state.Ls,
+            state.Lt,
+            state.Qlayer,
+            state.Qres,
+            state.FQ,
+            state.wq,
             state.u,
             state.uo,
             state.v,
@@ -3077,6 +4204,7 @@ def run_compiled_time_loop(
             state.ww,
             state.sq_var,
             state.sl_var,
+            state.xRf,
             state.z,
             state.zi,
             state.z0b,
@@ -3091,6 +4219,8 @@ def run_compiled_time_loop(
             state.Hice,
             state.Hsnow,
             state.Hfrazil,
+            state.dHis,
+            state.dHib,
             state.T1,
             state.T2,
             state.Tice_surface,
@@ -3098,6 +4228,7 @@ def run_compiled_time_loop(
             state.ice_cover,
             state.Tf,
             state.albedo_ice,
+            state.attenuation_ice,
             state.transmissivity,
             state.ocean_ice_flux,
             state.ocean_ice_heat_flux,
@@ -3107,6 +4238,12 @@ def run_compiled_time_loop(
             state.melt_rate,
             state.T_melt,
             state.S_melt,
+            state.net_water_balance,
+            state.int_water_balance,
+            state.int_fwf,
+            state.int_flows,
+            state.stream_int_inflow,
+            state.stream_int_outflow,
             work.au,
             work.bu,
             work.cu,
@@ -3180,6 +4317,22 @@ def run_compiled_time_loop(
             _f_vs,
             _f_dusdz,
             _f_dvsdz,
+            _f_stream_method,
+            _f_stream_has_T,
+            _f_stream_has_S,
+            _f_stream_zl,
+            _f_stream_zu,
+            _f_stream_flow,
+            _f_stream_temp,
+            _f_stream_salt,
+            _f_h,
+            _f_ho,
+            _f_Vc,
+            _f_Vco,
+            _f_Af,
+            _f_Afo,
+            _f_z,
+            _f_zi,
             output.output_step,
             output.time,
             output.zeta,
@@ -3207,6 +4360,7 @@ def run_compiled_time_loop(
             output.qh,
             output.qe,
             output.ql,
+            output.qlobs,
             output.heat,
             output.tx,
             output.ty,
@@ -3223,6 +4377,17 @@ def run_compiled_time_loop(
             output.Ekin,
             output.Epot,
             output.Eturb,
+            output.int_flow,
+            output.int_water_balance,
+            output.int_inflow,
+            output.int_outflow,
+            output.Q_Stensta,
+            output.Q_Unguaged,
+            output.T_Unguaged,
+            output.Q_Kristine,
+            output.T_Kristine,
+            output.dHis,
+            output.dHib,
             output.rho_p,
             output.rho,
             output.u,
@@ -3243,6 +4408,13 @@ def run_compiled_time_loop(
             output.num,
             output.nuh,
             output.h,
+            output.Af,
+            output.Qlayer,
+            output.Qs,
+            output.Qt,
+            output.wq,
+            output.FQ,
+            output.Qres,
             output.xP,
             output.fric,
             output.drag,
@@ -3274,6 +4446,7 @@ def run_compiled_time_loop(
             output.gamh,
             output.gams,
             output.Rig,
+            output.xRf,
             output.gamb,
             output.gam,
             output.r,
@@ -3315,6 +4488,12 @@ def run_compiled_time_loop(
             _hydro_nuh,
             _hydro_rad,
             _hydro_taub,
+            _hydro_Vc,
+            _hydro_Vco,
+            _hydro_Afo,
+            _hydro_wq,
+            _hydro_Qres,
+            _hydro_stream_Q,
         )
     )
     if written > 0 and params.ice_model == 1:
@@ -3352,6 +4531,59 @@ def _copy_profile(nlev: int, source: np.ndarray, target: np.ndarray) -> None:
 
 
 @numba.njit(cache=True, fastmath=False)
+def _copy_lake_grid_step(
+    nlev: int,
+    step: int,
+    forcing_h: np.ndarray,
+    forcing_ho: np.ndarray,
+    forcing_Vc: np.ndarray,
+    forcing_Vco: np.ndarray,
+    forcing_Af: np.ndarray,
+    forcing_Afo: np.ndarray,
+    forcing_z: np.ndarray,
+    forcing_zi: np.ndarray,
+    h: np.ndarray,
+    ho: np.ndarray,
+    Vc: np.ndarray,
+    Vco: np.ndarray,
+    Af: np.ndarray,
+    Afo: np.ndarray,
+    z: np.ndarray,
+    zi: np.ndarray,
+) -> None:
+    for k in range(nlev + 1):
+        h[k] = forcing_h[step, k]
+        ho[k] = forcing_ho[step, k]
+        Vc[k] = forcing_Vc[step, k]
+        Vco[k] = forcing_Vco[step, k]
+        Af[k] = forcing_Af[step, k]
+        Afo[k] = forcing_Afo[step, k]
+        z[k] = forcing_z[step, k]
+        zi[k] = forcing_zi[step, k]
+
+
+@numba.njit(cache=True, fastmath=False)
+def _step_lake_wequation_single(
+    nlev: int,
+    dt: float,
+    Qlayer: np.ndarray,
+    Qres: np.ndarray,
+    Vc: np.ndarray,
+    Vco: np.ndarray,
+    Afo: np.ndarray,
+    FQ: np.ndarray,
+    wq: np.ndarray,
+) -> None:
+    FQ[0] = 0.0
+    wq[0] = 0.0
+    for i in range(1, nlev):
+        FQ[i] = FQ[i - 1] + Qlayer[i] + Qres[i] - (Vc[i] - Vco[i]) / dt
+        wq[i] = FQ[i] / Afo[i]
+    FQ[nlev] = 0.0
+    wq[nlev] = 0.0
+
+
+@numba.njit(cache=True, fastmath=False)
 def _step_wequation_single(
     nlev: int,
     w_adv_method: int,
@@ -3385,6 +4617,180 @@ def _step_wequation_single(
 
 
 @numba.njit(cache=True, fastmath=False)
+def _legacy_lake_density_method(density_method: int) -> bool:
+    return (
+        density_method == METHOD_UNESCO_FULL
+        or density_method == METHOD_UNESCO_POTENTIAL
+        or density_method == METHOD_JACKETT_FULL
+        or density_method == METHOD_JACKETT_POTENTIAL
+    )
+
+
+@numba.njit(cache=True, fastmath=False)
+def _legacy_lake_uses_pressure(density_method: int) -> bool:
+    return density_method == METHOD_UNESCO_FULL or density_method == METHOD_JACKETT_FULL
+
+
+@numba.njit(cache=True, fastmath=False)
+def _unesco_density_compiled(
+    S_value: float,
+    T_value: float,
+    pressure_bar: float,
+    use_pressure: bool,
+) -> float:
+    T2 = T_value * T_value
+    T3 = T_value * T2
+    T4 = T2 * T2
+    T5 = T_value * T4
+    S2 = S_value * S_value
+    S3 = S_value * S2
+    S15 = math.sqrt(S3) if S3 >= 0.0 else math.nan
+
+    density = (
+        999.842594
+        + 6.793952e-02 * T_value
+        - 9.09529e-03 * T2
+        + 1.001685e-04 * T3
+        - 1.120083e-06 * T4
+        + 6.536332e-09 * T5
+    )
+    density = density + S_value * (
+        0.824493 - 4.0899e-03 * T_value + 7.6438e-05 * T2 - 8.2467e-07 * T3
+    )
+    density = density + S_value * 5.3875e-09 * T4
+    density = density + S15 * (-5.72466e-03 + 1.0227e-04 * T_value - 1.6546e-06 * T2)
+    density = density + 4.8314e-04 * S2
+
+    if use_pressure and pressure_bar > 0.0:
+        p2 = pressure_bar * pressure_bar
+        K = (
+            19652.21
+            + 148.4206 * T_value
+            - 2.327105 * T2
+            + 1.360477e-2 * T3
+            - 5.155288e-5 * T4
+            + 3.239908 * pressure_bar
+            + 1.43713e-3 * T_value * pressure_bar
+            + 1.16092e-4 * T2 * pressure_bar
+            - 5.77905e-7 * T3 * pressure_bar
+            + 8.50935e-5 * p2
+            - 6.12293e-6 * T_value * p2
+            + 5.2787e-8 * T2 * p2
+            + 54.6746 * S_value
+            - 0.603459 * T_value * S_value
+            + 1.09987e-2 * T2 * S_value
+            - 6.1670e-5 * T3 * S_value
+            + 7.944e-2 * S15
+            + 1.6483e-2 * T_value * S15
+            - 5.3009e-4 * T2 * S15
+            + 2.2838e-3 * pressure_bar * S_value
+            - 1.0981e-5 * T_value * pressure_bar * S_value
+            - 1.6078e-6 * T2 * pressure_bar * S_value
+            + 1.91075e-4 * pressure_bar * S15
+            - 9.9348e-7 * p2 * S_value
+            + 2.0816e-8 * T_value * p2 * S_value
+            + 9.1697e-10 * T2 * p2 * S_value
+        )
+        density = density / (1.0 - pressure_bar / K)
+    return density
+
+
+@numba.njit(cache=True, fastmath=False)
+def _jackett_density_compiled(
+    S_value: float,
+    T_value: float,
+    pressure_dbar: float,
+    use_pressure: bool,
+) -> float:
+    th2 = T_value * T_value
+    sqrts = math.sqrt(S_value) if S_value >= 0.0 else math.nan
+    anum = (
+        9.9984085444849347e02
+        + T_value
+        * (
+            7.3471625860981584e00
+            + T_value * (-5.3211231792841769e-02 + T_value * 3.6492439109814549e-04)
+        )
+        + S_value
+        * (
+            2.5880571023991390e00
+            - T_value * 6.7168282786692355e-03
+            + S_value * 1.9203202055760151e-03
+        )
+    )
+    aden = (
+        1.0000000000000000e00
+        + T_value
+        * (
+            7.2815210113327091e-03
+            + T_value
+            * (
+                -4.4787265461983921e-05
+                + T_value * (3.3851002965802430e-07 + T_value * 1.3651202389758572e-10)
+            )
+        )
+        + S_value
+        * (
+            1.7632126669040377e-03
+            - T_value * (8.8066583251206474e-06 + th2 * 1.8832689434804897e-10)
+            + sqrts * (5.7463776745432097e-06 + th2 * 1.4716275472242334e-09)
+        )
+    )
+    if use_pressure and pressure_dbar > 0.0:
+        pth = pressure_dbar * T_value
+        anum = anum + pressure_dbar * (
+            1.1798263740430364e-02
+            + th2 * 9.8920219266399117e-08
+            + S_value * 4.6996642771754730e-06
+            - pressure_dbar * (2.5862187075154352e-08 + th2 * 3.2921414007960662e-12)
+        )
+        aden = aden + pressure_dbar * (
+            6.7103246285651894e-06
+            - pth
+            * (th2 * 2.4461698007024582e-17 + pressure_dbar * 9.1534417604289062e-18)
+        )
+    return anum / aden
+
+
+@numba.njit(cache=True, fastmath=False)
+def _legacy_lake_density_compiled(
+    density_method: int,
+    S_value: float,
+    T_value: float,
+    pressure_bar: float,
+) -> float:
+    use_pressure = _legacy_lake_uses_pressure(density_method)
+    if (
+        density_method == METHOD_UNESCO_FULL
+        or density_method == METHOD_UNESCO_POTENTIAL
+    ):
+        return float(
+            _unesco_density_compiled(S_value, T_value, pressure_bar, use_pressure)
+        )
+    return float(
+        _jackett_density_compiled(S_value, T_value, pressure_bar * 10.0, use_pressure)
+    )
+
+
+@numba.njit(cache=True, fastmath=False)
+def _legacy_lake_buoyancy_compiled(
+    density_method: int,
+    gravity: float,
+    rho0: float,
+    S_value: float,
+    T_value: float,
+    pressure_bar: float,
+) -> float:
+    density = _legacy_lake_density_compiled(
+        density_method,
+        S_value,
+        T_value,
+        pressure_bar,
+    )
+    return float(-gravity * (density - rho0) / rho0)
+
+
+@numba.njit(cache=True, fastmath=False)
 def _density_value_compiled(
     density_method: int,
     rhob: float,
@@ -3398,7 +4804,16 @@ def _density_value_compiled(
 ) -> float:
     if density_method == 1:
         return float(gsw_rho(S_value, T_value, pressure))
-    return rhob * (1.0 - alpha0 * (T_value - T0) + beta0 * (S_value - S0))
+    if _legacy_lake_density_method(density_method):
+        return float(
+            _legacy_lake_density_compiled(
+                density_method,
+                S_value,
+                T_value,
+                pressure / 10.0,
+            )
+        )
+    return float(rhob * (1.0 - alpha0 * (T_value - T0) + beta0 * (S_value - S0)))
 
 
 @numba.njit(cache=True, fastmath=False)
@@ -4475,6 +5890,16 @@ def _update_density_single(
         beta[0] = gsw_beta(S[0], T[0], -zi[0])
         alpha[nlev] = gsw_alpha(S[nlev], T[nlev], -zi[nlev])
         beta[nlev] = gsw_beta(S[nlev], T[nlev], -zi[nlev])
+    elif _legacy_lake_density_method(density_method):
+        for k in range(1, nlev + 1):
+            pressure_bar = -z[k] / 10.0
+            rho[k] = _legacy_lake_density_compiled(
+                density_method,
+                S[k],
+                T[k],
+                pressure_bar,
+            )
+            rho_p[k] = rho[k]
     else:
         # Linear EOS (methods 2 and 3): no pressure dependency is applied.
         for k in range(1, nlev + 1):
@@ -4488,7 +5913,9 @@ def _update_density_single(
 @numba.njit(cache=True, fastmath=False)
 def _stratification_from_alpha_beta_single(
     nlev: int,
+    density_method: int,
     gravity: float,
+    rho0: float,
     h: np.ndarray,
     T: np.ndarray,
     S: np.ndarray,
@@ -4498,6 +5925,61 @@ def _stratification_from_alpha_beta_single(
     NNT: np.ndarray,
     NNS: np.ndarray,
 ) -> None:
+    if _legacy_lake_density_method(density_method):
+        z_face = 0.0
+        for i in range(nlev - 1, 0, -1):
+            dz = 0.5 * (h[i] + h[i + 1])
+            z_face = z_face + h[i + 1]
+            p_face = z_face / 10.0
+            denom = h[i + 1] + h[i]
+            Sface = (S[i + 1] * h[i] + S[i] * h[i + 1]) / denom
+            Tface = (T[i + 1] * h[i] + T[i] * h[i + 1]) / denom
+
+            buoyp = _legacy_lake_buoyancy_compiled(
+                density_method,
+                gravity,
+                rho0,
+                Sface,
+                T[i + 1],
+                p_face,
+            )
+            buoym = _legacy_lake_buoyancy_compiled(
+                density_method,
+                gravity,
+                rho0,
+                Sface,
+                T[i],
+                p_face,
+            )
+            NNT[i] = (buoyp - buoym) / dz
+
+            buoyp = _legacy_lake_buoyancy_compiled(
+                density_method,
+                gravity,
+                rho0,
+                S[i + 1],
+                Tface,
+                p_face,
+            )
+            buoym = _legacy_lake_buoyancy_compiled(
+                density_method,
+                gravity,
+                rho0,
+                S[i],
+                Tface,
+                p_face,
+            )
+            NNS[i] = (buoyp - buoym) / dz
+            NN[i] = NNT[i] + NNS[i]
+
+        NNT[0] = 0.0
+        NNT[nlev] = 0.0
+        NNS[0] = 0.0
+        NNS[nlev] = 0.0
+        NN[0] = 0.0
+        NN[nlev] = 0.0
+        return
+
     for i in range(1, nlev):
         idz = 2.0 / (h[i] + h[i + 1])
         dT = T[i + 1] - T[i]

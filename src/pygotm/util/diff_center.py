@@ -40,6 +40,7 @@ __all__ = [
     "DIRICHLET",
     "NEUMANN",
     "diff_center",
+    "diff_center_lake",
     "diff_center_batch",
 ]
 
@@ -120,6 +121,102 @@ def diff_center(
             # Requires y[1] > 0 — same assumption as Fortran diff_center.F90.
             # Division by zero if y goes exactly to zero.
             # Guard: callers must ensure y > 0 when posconc=1 and y_down < 0.
+            bu[1] = 1.0 - cu[1] - linear_source - dt * y_down / y[1] / h[1]
+            du[1] = y[1] + dt * q_sour[1]
+            du[1] += (1.0 - cnpar) * c * (y[2] - y[1])
+        else:
+            bu[1] = 1.0 - cu[1] - linear_source
+            du[1] = y[1] + dt * (q_sour[1] + y_down / h[1])
+            du[1] += (1.0 - cnpar) * c * (y[2] - y[1])
+    else:
+        cu[1] = 0.0
+        bu[1] = 1.0
+        du[1] = y_down
+
+    apply_relaxation = 0
+    for i in range(1, nlev + 1):
+        if tau_r[i] < 1.0e10:
+            apply_relaxation = 1
+
+    if apply_relaxation == 1:
+        for i in range(1, nlev + 1):
+            bu[i] += dt / tau_r[i]
+            du[i] += dt / tau_r[i] * y_obs[i]
+
+    tridiagonal(au, bu, cu, du, ru, qu, y, 1, nlev)
+
+
+@numba.njit(cache=True)
+def diff_center_lake(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    posconc: int,
+    h: np.ndarray,
+    vc: np.ndarray,
+    af: np.ndarray,
+    bc_up: int,
+    bc_down: int,
+    y_up: float,
+    y_down: float,
+    nu_y: np.ndarray,
+    l_sour: np.ndarray,
+    q_sour: np.ndarray,
+    tau_r: np.ndarray,
+    y_obs: np.ndarray,
+    y: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+) -> None:
+    """Solve lake diffusion for a cell-centred variable using volume/area geometry."""
+
+    for i in range(2, nlev):
+        c = 2.0 * dt * af[i] * nu_y[i] / (h[i] + h[i + 1]) / vc[i]
+        a = 2.0 * dt * af[i - 1] * nu_y[i - 1] / (h[i] + h[i - 1]) / vc[i]
+        linear_source = dt * l_sour[i]
+
+        cu[i] = -cnpar * c
+        au[i] = -cnpar * a
+        bu[i] = 1.0 + cnpar * (a + c) - linear_source
+        du[i] = (1.0 - (1.0 - cnpar) * (a + c)) * y[i]
+        du[i] += (1.0 - cnpar) * (a * y[i - 1] + c * y[i + 1])
+        du[i] += dt * q_sour[i]
+
+    if bc_up == NEUMANN:
+        a = (
+            2.0
+            * dt
+            * af[nlev - 1]
+            * nu_y[nlev - 1]
+            / (h[nlev] + h[nlev - 1])
+            / vc[nlev]
+        )
+        linear_source = dt * l_sour[nlev]
+
+        au[nlev] = -cnpar * a
+        if posconc == 1 and y_up < 0.0:
+            bu[nlev] = 1.0 - au[nlev] - linear_source - dt * y_up / y[nlev] / h[nlev]
+            du[nlev] = y[nlev] + dt * q_sour[nlev]
+            du[nlev] += (1.0 - cnpar) * a * (y[nlev - 1] - y[nlev])
+        else:
+            bu[nlev] = 1.0 - au[nlev] - linear_source
+            du[nlev] = y[nlev] + dt * (q_sour[nlev] + y_up / h[nlev])
+            du[nlev] += (1.0 - cnpar) * a * (y[nlev - 1] - y[nlev])
+    else:
+        au[nlev] = 0.0
+        bu[nlev] = 1.0
+        du[nlev] = y_up
+
+    if bc_down == NEUMANN:
+        c = 2.0 * dt * af[1] * nu_y[1] / (h[1] + h[2]) / vc[1]
+        linear_source = dt * l_sour[1]
+
+        cu[1] = -cnpar * c
+        if posconc == 1 and y_down < 0.0:
             bu[1] = 1.0 - cu[1] - linear_source - dt * y_down / y[1] / h[1]
             du[1] = y[1] + dt * q_sour[1]
             du[1] += (1.0 - cnpar) * c * (y[2] - y[1])

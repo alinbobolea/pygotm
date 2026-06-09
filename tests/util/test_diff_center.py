@@ -1,6 +1,12 @@
 import numpy as np
 
-from pygotm.util.diff_center import DIRICHLET, NEUMANN, diff_center, diff_center_batch
+from pygotm.util.diff_center import (
+    DIRICHLET,
+    NEUMANN,
+    diff_center,
+    diff_center_batch,
+    diff_center_lake,
+)
 from pygotm.util.tridiagonal import TridiagonalBatchWorkspace, TridiagonalWorkspace
 
 
@@ -245,6 +251,69 @@ def test_dirichlet_matches_numpy_solve() -> None:
     mat = np.diag(dia) + np.diag(lo[1:], k=-1) + np.diag(up[:-1], k=1)
     expected = np.linalg.solve(mat, rhs)
     np.testing.assert_allclose(result[1:], expected, rtol=1e-12, atol=1e-12)
+
+
+def test_lake_rectangular_geometry_matches_ocean_diffusion() -> None:
+    nlev = 4
+    dt = 30.0
+    cnpar = 0.7
+    h = np.array([0.0, 1.0, 1.2, 0.8, 1.1], dtype=np.float64)
+    vc = h.copy()
+    af = np.ones(nlev + 1, dtype=np.float64)
+    nu_y = np.array([0.0, 0.15, 0.18, 0.12, 0.0], dtype=np.float64)
+    l_sour = np.array([0.0, -0.01, 0.02, -0.03, 0.01], dtype=np.float64)
+    q_sour = np.array([0.0, 0.005, -0.001, 0.002, -0.003], dtype=np.float64)
+    tau_r = np.array([1.0e12, 1.0e12, 600.0, 1.0e12, 300.0], dtype=np.float64)
+    y_obs = np.array([0.0, 1.2, 1.0, 0.9, 0.8], dtype=np.float64)
+    y0 = np.array([0.0, 1.5, 1.1, 0.7, 0.2], dtype=np.float64)
+
+    expected = _call_diff_center(
+        nlev,
+        dt,
+        cnpar,
+        0,
+        h,
+        DIRICHLET,
+        DIRICHLET,
+        0.4,
+        1.8,
+        nu_y,
+        l_sour,
+        q_sour,
+        tau_r,
+        y_obs,
+        y0,
+    )
+
+    ws = _make_ws(nlev)
+    actual = y0.copy()
+    diff_center_lake(
+        nlev,
+        dt,
+        cnpar,
+        0,
+        h,
+        vc,
+        af,
+        DIRICHLET,
+        DIRICHLET,
+        0.4,
+        1.8,
+        nu_y,
+        l_sour,
+        q_sour,
+        tau_r,
+        y_obs,
+        actual,
+        ws.au,
+        ws.bu,
+        ws.cu,
+        ws.du,
+        ws.ru,
+        ws.qu,
+    )
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
 
 
 def test_no_nan_inf() -> None:

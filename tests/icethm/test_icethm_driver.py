@@ -27,7 +27,7 @@ def test_step_ice_dispatches_simple() -> None:
         S_sfc_init=35.0,
     )
 
-    flux = step_ice(
+    flux, water_t = step_ice(
         int(IceModelEnum.SIMPLE),
         -2.1,
         35.0,
@@ -46,6 +46,8 @@ def test_step_ice_dispatches_simple() -> None:
         state.Hice,
         state.Hsnow,
         state.Hfrazil,
+        state.dHis,
+        state.dHib,
         state.T1,
         state.T2,
         state.Tice_surface,
@@ -53,6 +55,7 @@ def test_step_ice_dispatches_simple() -> None:
         state.ice_cover,
         state.Tf,
         state.albedo_ice,
+        state.attenuation_ice,
         state.transmissivity,
         state.ocean_ice_flux,
         state.ocean_ice_heat_flux,
@@ -65,6 +68,7 @@ def test_step_ice_dispatches_simple() -> None:
     )
 
     assert flux == 0.0
+    assert water_t == -2.1
     assert state.Tf[0] == -0.0575 * 35.0
 
 

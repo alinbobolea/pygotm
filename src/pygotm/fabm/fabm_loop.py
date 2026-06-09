@@ -10,6 +10,7 @@ from pygotm.fabm.gotm_fabm import (
     center_depths_single,
     par_from_background_single,
     par_with_bioext_from_attenuation_single,
+    step_fabm_lake_advection_single,
     step_fabm_post_rates_single,
     step_fabm_transport_single,
 )
@@ -41,6 +42,15 @@ def run_fabm_chunk(
     forcing_secondsofday: np.ndarray | None = None,
     forcing_precip: np.ndarray | None = None,
     hydro_taub: np.ndarray | None = None,
+    hydro_Vc: np.ndarray | None = None,
+    hydro_Vco: np.ndarray | None = None,
+    hydro_Afo: np.ndarray | None = None,
+    hydro_wq: np.ndarray | None = None,
+    hydro_Qres: np.ndarray | None = None,
+    hydro_stream_Q: np.ndarray | None = None,
+    forcing_stream_flow: np.ndarray | None = None,
+    forcing_stream_concentrations: dict[str, np.ndarray] | None = None,
+    forcing_stream_concentration_masks: dict[str, np.ndarray] | None = None,
     step_offset: int = 0,
     is_first_chunk: bool = True,
 ) -> tuple[np.ndarray, int]:
@@ -106,6 +116,17 @@ def run_fabm_chunk(
     _y = np.zeros(nlev + 1, dtype=np.float64)
     _ws = np.zeros(nlev + 1, dtype=np.float64)
     _adv_cu = np.zeros(nlev + 1, dtype=np.float64)
+    nstreams = int(chunk_params.nstreams)
+    _stream_concentrations = np.zeros((n_interior, nstreams), dtype=np.float64)
+    _stream_has_concentration = np.zeros((n_interior, nstreams), dtype=np.int64)
+    _no_river_dilution = _state_no_river_dilution(model, n_interior)
+    stream_concentration_refs = _stream_concentration_refs(
+        state_names,
+        n_interior,
+        nstreams,
+        forcing_stream_concentrations,
+        forcing_stream_concentration_masks,
+    )
 
     out_index = out_index_base
 
@@ -212,6 +233,46 @@ def run_fabm_chunk(
             vert_move_arg = vert_move[:n_interior]
         else:
             vert_move_arg = cc
+        if (
+            chunk_params.lake != 0
+            and hydro_Vc is not None
+            and hydro_Vco is not None
+            and hydro_Afo is not None
+            and hydro_wq is not None
+            and hydro_Qres is not None
+            and hydro_stream_Q is not None
+            and forcing_stream_flow is not None
+        ):
+            _fill_stream_concentration_step(
+                step,
+                stream_concentration_refs,
+                _stream_concentrations,
+                _stream_has_concentration,
+            )
+            step_fabm_lake_advection_single(
+                nlev,
+                dt,
+                int(chunk_params.w_adv_discr),
+                n_interior,
+                forcing_stream_flow[step],
+                hydro_stream_Q[step],
+                _stream_concentrations,
+                _stream_has_concentration,
+                _no_river_dilution,
+                h_step,
+                hydro_Vco[step],
+                hydro_Vc[step],
+                hydro_Afo[step],
+                hydro_wq[step],
+                hydro_Qres[step],
+                cc,
+                _y,
+                _adv_cu,
+                _l_sour,
+                _q_sour,
+            )
+            _l_sour.fill(0.0)
+            _q_sour.fill(0.0)
         step_fabm_transport_single(
             nlev,
             dt,
@@ -301,6 +362,15 @@ def run_fabm_loop(
     forcing_secondsofday: np.ndarray | None = None,
     forcing_precip: np.ndarray | None = None,
     hydro_taub: np.ndarray | None = None,
+    hydro_Vc: np.ndarray | None = None,
+    hydro_Vco: np.ndarray | None = None,
+    hydro_Afo: np.ndarray | None = None,
+    hydro_wq: np.ndarray | None = None,
+    hydro_Qres: np.ndarray | None = None,
+    hydro_stream_Q: np.ndarray | None = None,
+    forcing_stream_flow: np.ndarray | None = None,
+    forcing_stream_concentrations: dict[str, np.ndarray] | None = None,
+    forcing_stream_concentration_masks: dict[str, np.ndarray] | None = None,
 ) -> None:
     """Run pyfabm over every stored GOTM hydro step, then fill reference outputs.
 
@@ -338,6 +408,15 @@ def run_fabm_loop(
         forcing_secondsofday=forcing_secondsofday,
         forcing_precip=forcing_precip,
         hydro_taub=hydro_taub,
+        hydro_Vc=hydro_Vc,
+        hydro_Vco=hydro_Vco,
+        hydro_Afo=hydro_Afo,
+        hydro_wq=hydro_wq,
+        hydro_Qres=hydro_Qres,
+        hydro_stream_Q=hydro_stream_Q,
+        forcing_stream_flow=forcing_stream_flow,
+        forcing_stream_concentrations=forcing_stream_concentrations,
+        forcing_stream_concentration_masks=forcing_stream_concentration_masks,
         is_first_chunk=True,
     )
 
@@ -356,6 +435,55 @@ def _fabm_day_of_year(
     if secondsofday is None:
         return float(yearday)
     return float(yearday) - 1.0 + float(secondsofday) / 86400.0
+
+
+def _state_no_river_dilution(model: object, n_interior: int) -> np.ndarray:
+    flags = np.zeros(n_interior, dtype=np.int64)
+    variables = getattr(model, "state_variables", None)
+    if variables is None:
+        variables = getattr(model, "stateVariables", None)
+    if variables is None:
+        return flags
+    for idx, variable in enumerate(list(variables)[:n_interior]):
+        flags[idx] = 1 if bool(getattr(variable, "no_river_dilution", False)) else 0
+    return flags
+
+
+def _stream_concentration_refs(
+    state_names: tuple[str, ...],
+    n_interior: int,
+    nstreams: int,
+    concentrations: dict[str, np.ndarray] | None,
+    masks: dict[str, np.ndarray] | None,
+) -> list[tuple[int, np.ndarray, np.ndarray]]:
+    if nstreams == 0 or not concentrations or not masks:
+        return []
+    refs: list[tuple[int, np.ndarray, np.ndarray]] = []
+    for idx, name in enumerate(state_names[:n_interior]):
+        norm_name = name.replace("/", "_")
+        values = concentrations.get(norm_name)
+        mask = masks.get(norm_name)
+        if values is None or mask is None:
+            continue
+        if values.ndim != 2 or values.shape[1] != nstreams:
+            continue
+        if mask.ndim != 1 or mask.shape[0] != nstreams:
+            continue
+        refs.append((idx, values, mask))
+    return refs
+
+
+def _fill_stream_concentration_step(
+    step: int,
+    refs: list[tuple[int, np.ndarray, np.ndarray]],
+    concentrations: np.ndarray,
+    has_concentration: np.ndarray,
+) -> None:
+    concentrations.fill(0.0)
+    has_concentration.fill(0)
+    for idx, values, mask in refs:
+        concentrations[idx, :] = values[step, :]
+        has_concentration[idx, :] = mask
 
 
 def _center_depths(h: np.ndarray, nlev: int) -> np.ndarray:

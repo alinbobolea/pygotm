@@ -154,6 +154,8 @@ class MeanflowState:
         self.zi: np.ndarray | None = None  # layer interface depths [m]
         self.h: np.ndarray | None = None  # layer thicknesses [m]
         self.ho: np.ndarray | None = None  # old layer thicknesses [m]
+        self.Vc: np.ndarray | None = None  # layer volumes [m3]
+        self.Vco: np.ndarray | None = None  # old layer volumes [m3]
 
         # sea surface elevation [m]
         self.zeta: float = 0.0
@@ -277,6 +279,18 @@ class MeanflowState:
         # depth must be set by the caller before post_init_meanflow
         self.depth: float = 0.0  # current water column depth [m]
         self.depth0: float = 0.0  # initial water column depth [m]
+
+        # --- lake hypsography and water-balance state ---
+        self.lake: bool = False
+        self.hypsograph_file: str = ""
+        self.hypsograph: object | None = None
+        self.Af: np.ndarray | None = None
+        self.Afo: np.ndarray | None = None
+        self.water_balance_method: int = 0
+        self.net_water_balance: float = 0.0
+        self.int_water_balance: float = 0.0
+        self.int_flows: float = 0.0
+        self.int_fwf: float = 0.0
 
         # cumulative run-time ramp timers [s]
         self.runtimeu: float = 0.0
@@ -437,6 +451,8 @@ def post_init_meanflow(
     state.zi = np.zeros(n)
     state.h = np.zeros(n)
     state.ho = np.zeros(n)
+    state.Vc = np.zeros(n)
+    state.Vco = np.zeros(n)
 
     # velocity arrays
     state.u = np.zeros(n)
@@ -484,6 +500,8 @@ def post_init_meanflow(
 
     # biological shading initialized to 1 (no shading = full transmission)
     state.bioshade = np.ones(n)
+    state.Af = np.ones(n)
+    state.Afo = np.ones(n)
 
 
 def clean_meanflow(state: MeanflowState) -> None:
@@ -502,6 +520,8 @@ def clean_meanflow(state: MeanflowState) -> None:
     state.zi = None
     state.h = None
     state.ho = None
+    state.Vc = None
+    state.Vco = None
     state.u = None
     state.uo = None
     state.v = None
@@ -529,5 +549,8 @@ def clean_meanflow(state: MeanflowState) -> None:
     state.rad = None
     state.avh = None
     state.bioshade = None
+    state.Af = None
+    state.Afo = None
+    state.hypsograph = None
     state._kernel_workspaces.clear()
     state._kernel_nlev = None

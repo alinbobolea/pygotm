@@ -9,6 +9,7 @@ from type_helpers import ReadyDensityState, require_density_state
 
 from pygotm.util.density import (
     CP0,
+    METHOD_JACKETT_POTENTIAL,
     METHOD_LINEAR_TEOS10,
     METHOD_LINEAR_USER,
     METHOD_TEOS10,
@@ -19,6 +20,7 @@ from pygotm.util.density import (
     get_beta,
     get_rho,
     init_density,
+    jackett_density,
 )
 
 # ---------------------------------------------------------------------------
@@ -111,6 +113,27 @@ def test_init_density_method3_uses_rho0() -> None:
     assert np.all(state.alpha == 2.0e-4)
     assert np.all(state.beta == 8.0e-4)
     assert np.all(state.rho == 0.0)
+
+
+def test_jackett_density_matches_fortran_check_value() -> None:
+    assert jackett_density(20.0, 20.0, 1000.0, True) == pytest.approx(
+        1017.728868019642,
+        rel=1e-14,
+    )
+
+
+def test_do_density_jackett_potential_ignores_pressure() -> None:
+    state = _state(METHOD_JACKETT_POTENTIAL)
+    state = _init_state(state, 2)
+    S, T, p, pi = _uniform_column(2, 20.0, 6.0)
+    p[:] = np.asarray([0.0, 50.0, 500.0])
+    pi[:] = np.asarray([0.0, 50.0, 500.0])
+
+    do_density(state, 2, S, T, p, pi)
+
+    expected = jackett_density(20.0, 6.0, 0.0, False)
+    np.testing.assert_allclose(state.rho[1:], expected)
+    np.testing.assert_allclose(state.rho_p[1:], expected)
 
 
 def test_init_density_arrays_initialised_consistently() -> None:
