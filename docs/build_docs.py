@@ -37,6 +37,7 @@ GOTM_CASES: list[str] = [
     "flex",
     "gotland",
     "lago_maggiore",
+    "lake_erken",
     "langmuir",
     "liverpool_bay",
     "medsea_east",
@@ -61,6 +62,12 @@ CASE_NOTES: dict[str, str] = {
     "flex": "FLEX experiment.",
     "gotland": "Baltic Sea Gotland Deep.",
     "lago_maggiore": "Alpine lake.",
+    "lake_erken": (
+        "Hypsographic lake with FABM ``selmaprotbas`` biogeochemistry. "
+        "Hypsography/water-balance at exact parity; residual BGC ``FAIL`` is "
+        "limited by FABM ``variable_bottom_index``. See "
+        ":doc:`lake_erken_parity`."
+    ),
     "langmuir": "Langmuir turbulence with Stokes drift.",
     "liverpool_bay": "Tidal mixing in Liverpool Bay.",
     "medsea_east": "Eastern Mediterranean.",

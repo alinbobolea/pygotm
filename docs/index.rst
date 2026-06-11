@@ -69,6 +69,7 @@ modelling with no Fortran compiler required.
 
    validation/overview
    validation/test_cases
+   validation/lake_erken_parity
 
 Indices and tables
 ------------------

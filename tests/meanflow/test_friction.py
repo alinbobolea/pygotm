@@ -93,6 +93,8 @@ def _run_step_friction_batch(
         ws.tx[b] = tx
         ws.ty[b] = ty
 
+    af = np.ones((batch_size, nlev + 1), dtype=np.float64)
+    vc = np.ones((batch_size, nlev + 1), dtype=np.float64)
     step_friction_batch(
         batch_size,
         nlev,
@@ -108,6 +110,7 @@ def _run_step_friction_batch(
         state.MaxItz0b,
         plume_type,
         int(first),
+        0,
         ws.h,
         ws.u,
         ws.v,
@@ -121,6 +124,8 @@ def _run_step_friction_batch(
         ws.taub,
         ws.tx,
         ws.ty,
+        af,
+        vc,
     )
     return ws
 

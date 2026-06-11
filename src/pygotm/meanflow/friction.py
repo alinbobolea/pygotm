@@ -121,6 +121,7 @@ def _step_friction_kernel(
     MaxItz0b: int,
     plume_type: int,
     first: int,
+    lake: int,
     h: np.ndarray,
     u: np.ndarray,
     v: np.ndarray,
@@ -134,8 +135,19 @@ def _step_friction_kernel(
     taub: np.ndarray,
     tx: np.ndarray,
     ty: np.ndarray,
+    af: np.ndarray,
+    vc: np.ndarray,
 ) -> None:
-    """Single-column friction kernel. Scalar outputs use length-1 arrays."""
+    """Single-column friction kernel. Scalar outputs use length-1 arrays.
+
+    When ``lake == 1`` the bottom friction is distributed over every layer the
+    sloping lakebed intersects, mirroring GOTM-lake ``friction.F90``: for each
+    layer ``j`` the drag is ``rr**2 * (Af(j) - Af(j-1)) / Vc(j) * h(j)``, plus a
+    flat-bottom term ``rr**2 * Af(0) / Vc(1) * h(1)`` on the deepest cell.  With
+    ``MaxItz0b`` iterations the per-layer ``z0b``/``u_taub`` loop converges to a
+    fixed point independent of its starting value, so no per-layer ``u_taub``
+    state needs to persist between time steps.
+    """
     for k in range(nlev + 1):
         drag[k] = 0.0
 
@@ -154,23 +166,48 @@ def _step_friction_kernel(
             u_taub[0] = u_taubo[0]
         else:
             u_taubo[0] = u_taub[0]
-        for _ in range(MaxItz0b):
-            z0b_val = 0.0
-            if avmolu <= 0.0:
-                z0b_val = 0.03 * h0b + za[0]
-            else:
-                denom = avmolu if avmolu > u_taub[0] else u_taub[0]
-                z0b_val = 0.1 * avmolu / denom + 0.03 * h0b + za[0]
-            z0b[0] = z0b_val
-            rr_b = kappa / math.log((z0b_val + h[1] / 2.0) / z0b_val)
-            speed_b = math.sqrt(u[1] * u[1] + v[1] * v[1])
-            u_taub[0] = rr_b * speed_b
+        if lake == 1:
+            #  lake: friction acts at every depth on the sloping bed
+            z0b_bottom = z0b[0]
+            for j in range(nlev, 0, -1):
+                utj = u_taub[0]
+                z0b_val = 0.0
+                rr_j = 0.0
+                for _ in range(MaxItz0b):
+                    if avmolu <= 0.0:
+                        z0b_val = 0.03 * h0b + za[0]
+                    else:
+                        denom = avmolu if avmolu > utj else utj
+                        z0b_val = 0.1 * avmolu / denom + 0.03 * h0b + za[0]
+                    rr_j = kappa / math.log((z0b_val + h[j] / 2.0) / z0b_val)
+                    utj = rr_j * math.sqrt(u[j] * u[j] + v[j] * v[j])
+                drag[j] += rr_j * rr_j * (af[j] - af[j - 1]) / vc[j] * h[j]
+                if j == 1:
+                    rr_b = rr_j
+                    z0b_bottom = z0b_val
+                    u_taub[0] = utj
+            #  friction by the final (flat) bottom of the deepest cell
+            drag[1] += rr_b * rr_b * af[0] / vc[1] * h[1]
+            z0b[0] = z0b_bottom
+        else:
+            for _ in range(MaxItz0b):
+                z0b_val = 0.0
+                if avmolu <= 0.0:
+                    z0b_val = 0.03 * h0b + za[0]
+                else:
+                    denom = avmolu if avmolu > u_taub[0] else u_taub[0]
+                    z0b_val = 0.1 * avmolu / denom + 0.03 * h0b + za[0]
+                z0b[0] = z0b_val
+                rr_b = kappa / math.log((z0b_val + h[1] / 2.0) / z0b_val)
+                speed_b = math.sqrt(u[1] * u[1] + v[1] * v[1])
+                u_taub[0] = rr_b * speed_b
 
     if plume_type == 1:
         rr_s = kappa / math.log((z0s_val + h[nlev] / 2.0) / z0s_val)
 
     taub[0] = u_taub[0] * u_taub[0] * rho0
-    drag[1] += rr_b * rr_b
+    if lake != 1:
+        drag[1] += rr_b * rr_b
 
     if plume_type == 1:
         drag[nlev] += rr_s * rr_s
@@ -201,6 +238,7 @@ def step_friction_batch(
     MaxItz0b: int,
     plume_type: int,
     first: int,
+    lake: int,
     h: np.ndarray,
     u: np.ndarray,
     v: np.ndarray,
@@ -214,6 +252,8 @@ def step_friction_batch(
     taub: np.ndarray,
     tx: np.ndarray,
     ty: np.ndarray,
+    af: np.ndarray,
+    vc: np.ndarray,
 ) -> None:
     """Batch variant: process batch_size columns in parallel."""
     for b in numba.prange(batch_size):
@@ -231,6 +271,7 @@ def step_friction_batch(
             MaxItz0b,
             plume_type,
             first,
+            lake,
             h[b],
             u[b],
             v[b],
@@ -244,6 +285,8 @@ def step_friction_batch(
             taub[b : b + 1],
             tx[b : b + 1],
             ty[b : b + 1],
+            af[b],
+            vc[b],
         )
 
 

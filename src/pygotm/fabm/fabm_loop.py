@@ -53,6 +53,8 @@ def run_fabm_chunk(
     forcing_stream_concentration_masks: dict[str, np.ndarray] | None = None,
     step_offset: int = 0,
     is_first_chunk: bool = True,
+    output_reduce_mode: int = 0,
+    repair_state: bool = False,
 ) -> tuple[np.ndarray, int]:
     """Run pyfabm for one physics chunk and return updated (cc, out_index).
 
@@ -66,6 +68,20 @@ def run_fabm_chunk(
     is_first_chunk : bool
         True on the first chunk — triggers engine.start() and records the IC
         diagnostic slot.
+    output_reduce_mode : int
+        Temporal output reduction matching GOTM ``time_method``: ``0`` =
+        instantaneous snapshot (``point``), ``1`` = window mean (``mean``),
+        ``2`` = window sum (``integrated``). For ``mean``/``integrated`` the
+        FABM state and diagnostics are accumulated over every sub-step of each
+        output window and the window mean/sum is written, mirroring the
+        physics time loop's in-loop reduction. The initial-condition slot is
+        always written instantaneously (GOTM writes ``reduced[0] = raw[0]``).
+    repair_state : bool
+        When True, clip every FABM state variable back inside its registered
+        ``[minimum, maximum]`` after transport and after the source-term update,
+        mirroring GOTM-FABM ``do_repair_state`` (enabled by the GOTM
+        ``fabm: repair_state`` flag, e.g. lake_erken). Required to keep the
+        explicit integration from driving tracers negative into NaN territory.
 
     Returns
     -------
@@ -178,6 +194,16 @@ def run_fabm_chunk(
     else:
         assert cc_in is not None, "cc_in must be provided on non-first chunks"
         cc = cc_in.copy()
+
+    # Temporal output reduction (GOTM ``time_method``). When active, accumulate
+    # the FABM state and diagnostics over every sub-step of an output window and
+    # emit the window mean/sum, matching the physics time loop. The point-mode
+    # (``output_reduce_mode == 0``) path is left untouched so cases that request
+    # instantaneous output remain bit-for-bit unchanged.
+    reduce_output = output_reduce_mode != 0
+    acc_cc = np.zeros((n_vars, nlev), dtype=np.float64) if reduce_output else cc
+    acc_diags: dict[str, np.ndarray | float] = {}
+    acc_count = 0
 
     for step in range(1, nt + 1):
         h_step = hydro_h[step]
@@ -305,6 +331,14 @@ def run_fabm_chunk(
 
         # Source/sink rates computed on post-transport state (matches Fortran)
         _set_model_state(model, cc)
+        # GOTM-FABM calls do_repair_state after advection/diffusion when
+        # repair_state is enabled, clipping every state variable back inside its
+        # registered [minimum, maximum] before the source terms are evaluated.
+        # Without it the explicit update can drive a fast-cycling tracer (e.g.
+        # selmaprotbas phosphate) negative, and the biogeochemical rate laws then
+        # produce NaNs that contaminate the whole column.
+        if repair_state:
+            _repair_state(model, cc)
         fabm_time = float(step_offset + step)
         engine.get_rates(surface=False, bottom=False, time=fabm_time)
         _update_light_from_diagnostics(
@@ -315,7 +349,15 @@ def run_fabm_chunk(
         ).copy()
         surf_rates = engine.get_rates(surface=True, bottom=False, time=fabm_time).copy()
         bot_rates = engine.get_rates(surface=False, bottom=True, time=fabm_time)
-        output_diagnostics = engine.diagnostics() if is_output else None
+        # Diagnostics reflect the post-transport state (matches GOTM
+        # save_diagnostics in the first ODE-solver stage). In reduction mode we
+        # accumulate them every sub-step; in point mode we only snapshot at the
+        # output step, exactly as before.
+        if reduce_output:
+            _accumulate_diagnostics(acc_diags, engine.diagnostics())
+            output_diagnostics = None
+        else:
+            output_diagnostics = engine.diagnostics() if is_output else None
 
         step_fabm_post_rates_single(
             nlev,
@@ -329,8 +371,34 @@ def run_fabm_chunk(
             cc,
         )
         _set_model_state(model, cc)
+        # Second do_repair_state, after the source-term integration.
+        if repair_state:
+            _repair_state(model, cc)
 
-        if is_output:
+        if reduce_output:
+            # Accumulate the post-reaction state (the value GOTM writes at the
+            # end of each timestep) over the output window.
+            acc_cc += cc
+            acc_count += 1
+            if is_output and acc_count > 0:
+                inv = 1.0 / acc_count if output_reduce_mode == 1 else 1.0
+                mean_cc = acc_cc * inv
+                mean_diags = _reduce_accumulated_diagnostics(acc_diags, inv)
+                _record_fabm_output(
+                    engine,
+                    mean_cc,
+                    state_z_refs,
+                    state_scalar_refs,
+                    output,
+                    out_index,
+                    nlev,
+                    diagnostics=mean_diags,
+                )
+                out_index += 1
+                acc_cc.fill(0.0)
+                acc_diags.clear()
+                acc_count = 0
+        elif is_output:
             _record_fabm_output(
                 engine,
                 cc,
@@ -371,6 +439,8 @@ def run_fabm_loop(
     forcing_stream_flow: np.ndarray | None = None,
     forcing_stream_concentrations: dict[str, np.ndarray] | None = None,
     forcing_stream_concentration_masks: dict[str, np.ndarray] | None = None,
+    output_reduce_mode: int = 0,
+    repair_state: bool = False,
 ) -> None:
     """Run pyfabm over every stored GOTM hydro step, then fill reference outputs.
 
@@ -418,6 +488,8 @@ def run_fabm_loop(
         forcing_stream_concentrations=forcing_stream_concentrations,
         forcing_stream_concentration_masks=forcing_stream_concentration_masks,
         is_first_chunk=True,
+        output_reduce_mode=output_reduce_mode,
+        repair_state=repair_state,
     )
 
 
@@ -636,6 +708,24 @@ def _bottom_state_variable_count(model: object) -> int:
     return len(variables) if variables is not None else 0
 
 
+def _repair_state(model: object, cc: np.ndarray) -> None:
+    """Clip FABM state to its registered bounds (GOTM ``do_repair_state``).
+
+    Assumes the model's internal state already holds ``cc``. Uses pyfabm's
+    ``check_state(repair=True)``, which clamps every state variable to its
+    ``[minimum, maximum]`` (the same routine GOTM-FABM drives via
+    ``fabm_check_state``), then reads the repaired state back into ``cc``. Falls
+    back to clipping negatives to zero if the pyfabm build predates
+    ``check_state``.
+    """
+    check = getattr(model, "check_state", None)
+    if callable(check):
+        check(repair=True)
+        _read_model_state_into(model, cc)
+    else:
+        np.maximum(cc, 0.0, out=cc)
+
+
 def _read_model_state_into(model: object, cc: np.ndarray) -> None:
     if cc.shape[0] == 0:
         return
@@ -818,6 +908,41 @@ def _record_fabm_output(
         scalar_arr = _scalar_output(output, norm_name)
         if scalar_arr is not None:
             scalar_arr[slot] = _scalar_from_value(norm_name, diag_val, nlev)
+
+
+def _accumulate_diagnostics(
+    acc: dict[str, np.ndarray | float],
+    step_diags: dict[str, np.ndarray | float],
+) -> None:
+    """Add one sub-step's FABM diagnostics into the running window accumulator.
+
+    On the first sub-step of a window we copy the value (so the accumulator can
+    never alias an engine-owned buffer that the next ``get_rates`` overwrites);
+    on later sub-steps we add in place. This computes the window sum; the caller
+    divides by the sub-step count to obtain the temporal mean.
+    """
+    for name, value in step_diags.items():
+        existing = acc.get(name)
+        if existing is None:
+            acc[name] = value.copy() if isinstance(value, np.ndarray) else float(value)
+        elif isinstance(existing, np.ndarray) and isinstance(value, np.ndarray):
+            existing += value
+        else:
+            acc[name] = float(existing) + float(value)
+
+
+def _reduce_accumulated_diagnostics(
+    acc: dict[str, np.ndarray | float],
+    inv: float,
+) -> dict[str, np.ndarray | float]:
+    """Scale accumulated diagnostics by ``inv`` (1/count for mean, 1 for sum)."""
+    reduced: dict[str, np.ndarray | float] = {}
+    for name, value in acc.items():
+        if isinstance(value, np.ndarray):
+            reduced[name] = value * inv
+        else:
+            reduced[name] = float(value) * inv
+    return reduced
 
 
 def _copy_diagnostics(

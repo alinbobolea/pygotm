@@ -56,14 +56,17 @@ import numba
 import numpy as np
 
 from pygotm.meanflow.meanflow import MeanflowState
-from pygotm.util.adv_center import adv_center
-from pygotm.util.diff_center import diff_center
+from pygotm.util.adv_center import adv_center, adv_center_lake
+from pygotm.util.diff_center import diff_center, diff_center_lake
 from pygotm.util.util import Neumann as _NEUMANN
+from pygotm.util.util import flux as _FLUX
 from pygotm.util.util import oneSided as _ONE_SIDED
 
 __all__ = [
     "uequation",
     "step_uequation",
+    "step_uequation_lake",
+    "step_uequation_lake_single",
     "step_uequation_single",
 ]
 
@@ -258,6 +261,233 @@ def step_uequation(
 
 
 step_uequation_single = _step_uequation
+
+
+@numba.njit(cache=True)
+def _step_uequation_lake(
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    avmolu: float,
+    gravity: float,
+    ext_method: int,
+    w_adv_active: int,
+    w_adv_discr: int,
+    tx_val: float,
+    dzetadx_val: float,
+    u: np.ndarray,
+    uo: np.ndarray,
+    v: np.ndarray,
+    h: np.ndarray,
+    vco: np.ndarray,
+    vc: np.ndarray,
+    af: np.ndarray,
+    afo: np.ndarray,
+    w: np.ndarray,
+    wq: np.ndarray,
+    drag: np.ndarray,
+    num: np.ndarray,
+    nucl: np.ndarray,
+    dusdz: np.ndarray,
+    idpdx: np.ndarray,
+    uprof: np.ndarray,
+    tau_r: np.ndarray,
+    avh: np.ndarray,
+    q_sour: np.ndarray,
+    l_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+    adv_cu: np.ndarray,
+) -> None:
+    """Lake U-momentum equation with hypsographic (area/volume) geometry.
+
+    Mirrors GOTM-lake ``uequation.F90``: vertical advection by the
+    water-balance flux ``wq`` and by ``w`` use the area-weighted advection
+    operator, the bottom friction enters as a source term at **every** layer
+    (``Lsour(i) = -drag(i)/h(i)*|U|``), and the diffusion step is area-weighted.
+    """
+    for k in range(nlev + 1):
+        uo[k] = u[k]
+
+    for k in range(nlev + 1):
+        avh[k] = num[k] + avmolu
+
+    dzx = 0.0
+    if ext_method == 0:
+        dzx = dzetadx_val
+
+    #  vertical advection by the water-balance flux wq (no momentum source)
+    for k in range(nlev + 1):
+        q_sour[k] = 0.0
+        l_sour[k] = 0.0
+    adv_center_lake(
+        nlev,
+        dt,
+        h,
+        vco,
+        vc,
+        afo,
+        wq,
+        _FLUX,
+        _FLUX,
+        0.0,
+        0.0,
+        l_sour,
+        q_sour,
+        w_adv_discr,
+        1,
+        u,
+        adv_cu,
+    )
+
+    if w_adv_active == 1:
+        for k in range(nlev + 1):
+            q_sour[k] = 0.0
+            l_sour[k] = 0.0
+        adv_center_lake(
+            nlev,
+            dt,
+            h,
+            vc,
+            vc,
+            af,
+            w,
+            _ONE_SIDED,
+            _ONE_SIDED,
+            0.0,
+            0.0,
+            l_sour,
+            q_sour,
+            w_adv_discr,
+            _ADV_MODE,
+            u,
+            adv_cu,
+        )
+
+    for k in range(1, nlev + 1):
+        q_sour[k] = 0.0
+        l_sour[k] = 0.0
+        q_sour[k] += -gravity * dzx + idpdx[k]
+        q_sour[k] += (nucl[k] * dusdz[k] - nucl[k - 1] * dusdz[k - 1]) / h[k]
+        speed = math.sqrt(u[k] * u[k] + v[k] * v[k])
+        l_sour[k] = -drag[k] / h[k] * speed
+
+    diff_center_lake(
+        nlev,
+        dt,
+        cnpar,
+        _POS_CONC,
+        h,
+        vc,
+        af,
+        _NEUMANN,
+        _NEUMANN,
+        tx_val,
+        0.0,
+        avh,
+        l_sour,
+        q_sour,
+        tau_r,
+        uprof,
+        u,
+        au,
+        bu,
+        cu,
+        du,
+        ru,
+        qu,
+    )
+
+
+@numba.njit(parallel=True, cache=True)
+def step_uequation_lake(
+    batch_size: int,
+    nlev: int,
+    dt: float,
+    cnpar: float,
+    avmolu: float,
+    gravity: float,
+    ext_method: int,
+    w_adv_active: int,
+    w_adv_discr: int,
+    tx: np.ndarray,
+    dzetadx: np.ndarray,
+    u: np.ndarray,
+    uo: np.ndarray,
+    v: np.ndarray,
+    h: np.ndarray,
+    vco: np.ndarray,
+    vc: np.ndarray,
+    af: np.ndarray,
+    afo: np.ndarray,
+    w: np.ndarray,
+    wq: np.ndarray,
+    drag: np.ndarray,
+    num: np.ndarray,
+    nucl: np.ndarray,
+    dusdz: np.ndarray,
+    idpdx: np.ndarray,
+    uprof: np.ndarray,
+    tau_r: np.ndarray,
+    avh: np.ndarray,
+    q_sour: np.ndarray,
+    l_sour: np.ndarray,
+    au: np.ndarray,
+    bu: np.ndarray,
+    cu: np.ndarray,
+    du: np.ndarray,
+    ru: np.ndarray,
+    qu: np.ndarray,
+    adv_cu: np.ndarray,
+) -> None:
+    """Batch variant: process batch_size lake columns in parallel."""
+    for b in numba.prange(batch_size):
+        _step_uequation_lake(
+            nlev,
+            dt,
+            cnpar,
+            avmolu,
+            gravity,
+            ext_method,
+            w_adv_active,
+            w_adv_discr,
+            tx[b],
+            dzetadx[b],
+            u[b],
+            uo[b],
+            v[b],
+            h[b],
+            vco[b],
+            vc[b],
+            af[b],
+            afo[b],
+            w[b],
+            wq[b],
+            drag[b],
+            num[b],
+            nucl[b],
+            dusdz[b],
+            idpdx[b],
+            uprof[b],
+            tau_r[b],
+            avh[b],
+            q_sour[b],
+            l_sour[b],
+            au[b],
+            bu[b],
+            cu[b],
+            du[b],
+            ru[b],
+            qu[b],
+            adv_cu[b],
+        )
+
+
+step_uequation_lake_single = _step_uequation_lake
 
 
 def uequation(

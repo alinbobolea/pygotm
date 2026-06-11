@@ -29,19 +29,32 @@ a complete replacement for every GOTM configuration.
   external tools. It is not a network server.
 - Validation: the default Frechet validation set (`couette`, `channel`,
   `entrainment`) passes.
-- Full reference suite: all 22 official cases execute, with the current local
-  snapshot at partial parity: 15 PASS and 7 FAIL. The failures are documented in
+- Full reference suite: all 23 cases (the 22 official GOTM cases plus the
+  GOTM-lake `lake_erken` case) execute, with the current local snapshot at
+  partial parity: 15 PASS and 8 FAIL. The failures are documented in
   `docs/validation/test_cases.rst` and generated validation reports.
-- Full-suite variable totals in the latest snapshot: 2316 PASS, 67 MARGINAL,
-  31 DISCREPANT, and 0 BROKEN.
+- Full-suite variable totals in the latest snapshot: 2376 PASS, 72 MARGINAL,
+  57 DISCREPANT, and 64 BROKEN. Every BROKEN variable is in `lake_erken`
+  `selmaprotbas` biogeochemistry (see below); all other cases have zero BROKEN.
 - Representative current validation wall times on the local 8-core Ryzen
   validation host: `couette` 3.0 s, `channel` 3.0 s, and `entrainment` 2.5 s.
 
 The current parity achievement is strong for a Python translation of a mature
-Fortran ocean model: every official case runs, most cases pass outright, and
-the remaining differences are documented as deterministic Frechet deviations
-rather than missing output schema. See `docs/validation/overview.rst` for the
+Fortran ocean model: every case runs, most cases pass outright, and the
+remaining differences are documented as deterministic Frechet deviations rather
+than missing output schema. See `docs/validation/overview.rst` for the
 validation method and `docs/validation/test_cases.rst` for the case table.
+
+`lake_erken` is the hypsographic-lake / FABM `selmaprotbas` biogeochemistry
+case. Its hypsography, inflow/outflow and water-balance fields are at **exact
+parity** and the physics trajectory tracks the reference closely (surface
+temperature correlation 1.000). The residual `FAIL` is confined to the BGC and
+is dominated by a single FABM-library build limitation (`variable_bottom_index`,
+needed for GOTM-lake's `bottom_everywhere` benthic coupling). The full analysis —
+what is at parity, the fixes applied, the exact blocker, and why a local
+`pyfabm` rebuild is not pursued — is published in the docs under
+*Validation → Lake Erken*
+([docs/validation/lake_erken_parity.md](docs/validation/lake_erken_parity.md)).
 
 ## What It Does
 

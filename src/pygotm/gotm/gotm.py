@@ -2060,6 +2060,10 @@ def integrate_gotm_compiled(
                         ),
                         step_offset=step_cursor,
                         is_first_chunk=(step_cursor == 0),
+                        output_reduce_mode=bundle.output_reduce_mode,
+                        repair_state=(
+                            run.fabm_config is not None and run.fabm_config.repair_state
+                        ),
                     )
                 finally:
                     if timings is not None:
