@@ -91,17 +91,217 @@ class FrechetConfig:
         return d_norm, "d_norm"
 
     def normalization_settings(self, name: str) -> tuple[bool, float, float]:
-        """Return robust normalization controls for a variable."""
+        """Return robust normalization controls for a variable.
 
-        if classify_section(name) == "pyfabm":
-            return self.pyfabm_robust, self.pyfabm_q_low, self.pyfabm_q_high
-        return self.robust, self.q_low, self.q_high
+        Full-range normalization is reserved for the floor-dominated mean-flow
+        and turbulence fields in ``_FULL_RANGE_NORM_VARS``; every other variable
+        (native air-sea / ice / lake-hydro fields as well as FABM variables)
+        uses the robust quantile range. This is intentionally independent of the
+        report-section ownership split so that completing the native ownership
+        list does not change any variable's d_norm.
+        """
+
+        if name in _FULL_RANGE_NORM_VARS:
+            return self.robust, self.q_low, self.q_high
+        return self.pyfabm_robust, self.pyfabm_q_low, self.pyfabm_q_high
 
 
 DEFAULT_FRECHET_CONFIG = FrechetConfig()
 
 
+# Authoritative set of variables produced natively by pyGOTM (not by the FABM
+# coupling). It mirrors every field registered in
+# ``pygotm/gotm/register_all_variables.py`` plus the lake hypsography /
+# water-balance and air-sea fields emitted by the runtime output writer. Any
+# numeric output variable NOT in this set is treated as a FABM-owned variable
+# (``classify_section`` returns ``"pyfabm"``). Keep this list complete: a native
+# field missing here is mis-reported under the PyFABM section and is normalised
+# with the wrong (robust) range. FABM state/diagnostic names (e.g.
+# ``selmaprotbas_*``, ``cyanobacteria_*``, ``*_calculator_result``) must never
+# appear here.
 PYGOTM_VARIABLES: frozenset[str] = frozenset(
+    {
+        # --- meanflow: mean state, grid, density, stratification ---
+        "temp",
+        "salt",
+        "u",
+        "v",
+        "w",
+        "h",
+        "ho",
+        "zeta",
+        "depth",
+        "cori",
+        "rho",
+        "rho_p",
+        "alpha",
+        "beta",
+        "buoy",
+        "NN",
+        "NNT",
+        "NNS",
+        "SS",
+        "SSU",
+        "SSV",
+        "ga",
+        "fric",
+        "drag",
+        "avh",
+        "bioshade",
+        "rad",
+        "xP",
+        "idpdx",
+        "idpdy",
+        # --- bottom/surface friction ---
+        "u_taus",
+        "u_taub",
+        "u_taubo",
+        "taub",
+        "taux",
+        "tauy",
+        # --- turbulence (k-eps / second-order closure fields) ---
+        "num",
+        "nuh",
+        "nus",
+        "nucl",
+        "tke",
+        "tkeo",
+        "eps",
+        "L",
+        "kb",
+        "epsb",
+        "P",
+        "G",
+        "Pb",
+        "PSTK",
+        "cmue1",
+        "cmue2",
+        "cmue3",
+        "gam",
+        "gamu",
+        "gamv",
+        "gamb",
+        "gamh",
+        "gams",
+        "an",
+        "as",
+        "at",
+        "r",
+        "Rig",
+        "xRf",
+        "uu",
+        "vv",
+        "ww",
+        # --- Stokes drift ---
+        "us",
+        "vs",
+        "dusdz",
+        "dvsdz",
+        "us0",
+        "vs0",
+        "ds",
+        # --- ice model ---
+        "Hice",
+        "Hfrazil",
+        "Hsnow",
+        "T1",
+        "T2",
+        "Tf",
+        "Tice_surface",
+        "albedo_ice",
+        "transmissivity",
+        "ocean_ice_flux",
+        "ocean_ice_heat_flux",
+        "ocean_ice_salt_flux",
+        "surface_ice_energy",
+        "bottom_ice_energy",
+        "melt_rate",
+        "T_melt",
+        "S_melt",
+        "dHib",
+        "dHis",
+        # --- air-sea forcing inputs and computed surface fluxes ---
+        "u10",
+        "v10",
+        "airt",
+        "airp",
+        "hum",
+        "cloud",
+        "precip",
+        "evap",
+        "es",
+        "ea",
+        "qs",
+        "qa",
+        "rhoa",
+        "shortwave",
+        "heat",
+        "qh",
+        "qe",
+        "ql",
+        "qlobs",
+        "tx",
+        "ty",
+        "sst",
+        "sss",
+        "albedo",
+        "I_0",
+        # --- observation profiles / prescribed inputs echoed to output ---
+        "temp_obs",
+        "salt_obs",
+        "u_obs",
+        "v_obs",
+        "eps_obs",
+        "sst_obs",
+        "zeta_obs",
+        "dpdx",
+        "dpdy",
+        # --- energetics and integrated surface diagnostics ---
+        "Ekin",
+        "Epot",
+        "Eturb",
+        "mld_surf",
+        "mld_bott",
+        "int_swr",
+        "int_heat",
+        "int_total",
+        "int_precip",
+        "int_evap",
+        "int_fwf",
+        # --- lake hypsography / water balance (native lake feature) ---
+        "Af",
+        "Qlayer",
+        "Qs",
+        "wq",
+        "FQ",
+        "Qres",
+        "Qt",
+        "int_flow",
+        "int_inflow",
+        "int_outflow",
+        "int_water_balance",
+        # Lake inflow streams are written with user-defined names from the run
+        # config (here, the lake_erken tributaries). A fully general classifier
+        # would source these names from the active stream list; they are listed
+        # explicitly so the reference suite reports them as native.
+        "Q_Kristine",
+        "Q_Stensta",
+        "Q_Unguaged",
+        "T_Kristine",
+        "T_Unguaged",
+    }
+)
+
+
+# Variables that use full-range (non-robust) normalization. These are the
+# floor-dominated mean-flow / turbulence fields for which clipping the active
+# tail with robust percentiles turns small floor differences into unstable
+# normalized distances (see ``FrechetConfig.robust``). Reporting ownership
+# (``classify_section``) is deliberately decoupled from this normalization
+# choice: native air-sea / ice / lake-hydro fields are reported under the
+# PyGOTM section but keep the robust range that suits their statistics, so the
+# ownership correction does not alter any variable's d_norm or status.
+_FULL_RANGE_NORM_VARS: frozenset[str] = frozenset(
     {
         "temp",
         "salt",

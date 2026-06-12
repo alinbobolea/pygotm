@@ -34,8 +34,10 @@ a complete replacement for every GOTM configuration.
   partial parity: 15 PASS and 8 FAIL. The failures are documented in
   `docs/validation/test_cases.rst` and generated validation reports.
 - Full-suite variable totals in the latest snapshot: 2376 PASS, 72 MARGINAL,
-  57 DISCREPANT, and 64 BROKEN. Every BROKEN variable is in `lake_erken`
-  `selmaprotbas` biogeochemistry (see below); all other cases have zero BROKEN.
+  57 DISCREPANT, and 64 BROKEN. All 64 BROKEN are in `lake_erken`; all other
+  cases have zero BROKEN. Of those 64, **26 are native physics fields** (an
+  under-mixed turbulence/momentum cascade) and **38 are `selmaprotbas`
+  biogeochemistry** (see below).
 - Representative current validation wall times on the local 8-core Ryzen
   validation host: `couette` 3.0 s, `channel` 3.0 s, and `entrainment` 2.5 s.
 
@@ -47,12 +49,15 @@ validation method and `docs/validation/test_cases.rst` for the case table.
 
 `lake_erken` is the hypsographic-lake / FABM `selmaprotbas` biogeochemistry
 case. Its hypsography, inflow/outflow and water-balance fields are at **exact
-parity** and the physics trajectory tracks the reference closely (surface
-temperature correlation 1.000). The residual `FAIL` is confined to the BGC and
-is dominated by a single FABM-library build limitation (`variable_bottom_index`,
-needed for GOTM-lake's `bottom_everywhere` benthic coupling). The full analysis —
-what is at parity, the fixes applied, the exact blocker, and why a local
-`pyfabm` rebuild is not pursued — is published in the docs under
+parity**. The residual `FAIL` has two independent causes: (1) the native
+physical column is **under-mixed** — a real second-order turbulence-closure
+divergence from the gotm-lake reference lineage that leaves 26 native variables
+BROKEN — and (2) the `selmaprotbas` BGC is limited by a FABM build flag
+(`variable_bottom_index`, needed for GOTM-lake's `bottom_everywhere` benthic
+coupling). The surface tracks closely, but the deep column does not; it is not
+correct to say the physics passes. The full analysis — what is at parity, the
+first-divergence evidence, the source-level classification, the FABM fixes
+applied, and the exact blockers — is published in the docs under
 *Validation → Lake Erken*
 ([docs/validation/lake_erken_parity.md](docs/validation/lake_erken_parity.md)).
 

@@ -64,8 +64,10 @@ CASE_NOTES: dict[str, str] = {
     "lago_maggiore": "Alpine lake.",
     "lake_erken": (
         "Hypsographic lake with FABM ``selmaprotbas`` biogeochemistry. "
-        "Hypsography/water-balance at exact parity; residual BGC ``FAIL`` is "
-        "limited by FABM ``variable_bottom_index``. See "
+        "Hypsography/water-balance at exact parity. Residual ``FAIL`` has two "
+        "independent causes: a native under-mixed second-order turbulence "
+        "closure (26 native variables BROKEN) and the FABM "
+        "``variable_bottom_index`` build limitation. See "
         ":doc:`lake_erken_parity`."
     ),
     "langmuir": "Langmuir turbulence with Stokes drift.",
