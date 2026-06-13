@@ -1,4 +1,33 @@
-"""Configuration helpers for the Python-level FABM bridge."""
+"""Configuration helpers for the Python-level FABM bridge.
+
+**FABM model YAML transformation (why the original** ``fabm.yaml`` **is rewritten).**
+The GOTM-lake ``selmaprotbas`` phytoplankton model accepts two parameters that
+exist **only** in the GOTM-lake fork's bundled FABM build:
+
+* ``alpha`` — nutrient-uptake half-saturation, and
+* ``beta`` — temperature growth-correction factor.
+
+The conda ``pyfabm`` distribution (the stock upstream FABM library pyGOTM links
+against) does not declare these parameters, so loading a reference
+``fabm.yaml`` that contains them raises an "invalid configuration" error and the
+case cannot start.
+
+To run such cases at all, :func:`resolve_fabm_config_path` /
+:func:`_normalized_fabm_config_path` materialize a pyfabm-compatible copy of the
+model YAML with ``alpha``/``beta`` stripped from every
+``selmaprotbas/phytoplankton`` instance and point the run at that copy. The
+transformation is recorded in the NetCDF ``fabm_yaml_sha256`` attribute (it
+hashes the materialized file), and the validation runner stages the same
+materialized YAML into the case bundle, so the bundle stays self-consistent and
+reproducible.
+
+This stripping is a genuine **limitation**, not a cosmetic normalization: pyGOTM
+then runs ``selmaprotbas`` with the upstream **defaults** for ``alpha``/``beta``
+rather than the GOTM-lake tuned values, so the biogeochemistry cannot reach full
+parity with the GOTM-lake reference until pyfabm exposes these parameters. See
+``docs/validation/lake_erken_parity.md`` for the full lake_erken limitation
+picture (this, plus the ``variable_bottom_index`` benthic-coupling limitation).
+"""
 
 from __future__ import annotations
 
@@ -17,6 +46,8 @@ __all__ = [
     "resolve_fabm_config_path",
 ]
 
+# GOTM-lake-only selmaprotbas phytoplankton parameters that conda pyfabm cannot
+# parse; stripped during materialization (see module docstring).
 _LEGACY_SELMA_PHYTOPLANKTON_PARAMETERS = frozenset(("alpha", "beta"))
 
 
@@ -70,7 +101,15 @@ def resolve_fabm_config_path(
 
 
 def _normalized_fabm_config_path(path: Path) -> Path:
-    """Return a pyfabm-compatible FABM YAML path derived from *path*."""
+    """Return a pyfabm-compatible FABM YAML path derived from *path*.
+
+    Strips the GOTM-lake-only ``selmaprotbas`` phytoplankton ``alpha``/``beta``
+    parameters (see module docstring) that conda ``pyfabm`` cannot parse. If the
+    source contains none, the original path is returned unchanged (idempotent);
+    otherwise a stripped copy is written under ``$TMPDIR/pygotm-fabm`` and that
+    path is returned. The transformation is deterministic, so re-running a staged
+    bundle reproduces the recorded ``fabm_yaml_sha256``.
+    """
 
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):

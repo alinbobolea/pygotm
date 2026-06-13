@@ -123,22 +123,42 @@ is affected; the other 22 cases are byte-identical):
    matching gotm-lake `do_repair_state`. This eliminates a catastrophic
    `selmaprotbas_po` phosphate NaN (verified: 0 NaN in the current output).
 
-## FABM benthic blocker — `bottom_everywhere` needs a build flag
+## pyfabm limitations preventing complete BGC validation
 
-The worst FABM variables are sediment-coupled (`selmaprotbas_o2`, `DO_mg`,
-benthic-regenerated nutrients). gotm-lake's `bottom_everywhere` distributes the
-benthic flux over the whole sloping bed (`rhs(k) *= (Af(k)-Af(k-1))/Vc(k)` per
-layer, via `set_bottom_index(k)`), which requires a FABM library compiled with
+Two limitations of the stock conda `pyfabm` library (vs the custom FABM that
+gotm-lake bundles) mean the `selmaprotbas` biogeochemistry **cannot** reach full
+parity with the reference, independent of the native under-mixing above.
+
+**1. `variable_bottom_index` (benthic coupling).** The worst FABM variables are
+sediment-coupled (`selmaprotbas_o2`, `DO_mg`, benthic-regenerated nutrients).
+gotm-lake's `bottom_everywhere` distributes the benthic flux over the whole
+sloping bed (`rhs(k) *= (Af(k)-Af(k-1))/Vc(k)` per layer, via
+`set_bottom_index(k)`), which requires a FABM library compiled with
 **`_FABM_BOTTOM_INDEX_ = -1`** (variable bottom index). The conda
 **`pyfabm 3.0.0` is built with the default `0`**; `link_bottom_index(...)` raises
 `"… compiled without support for variable bottom indices"`. The reference runs
 `bottom_everywhere` only because gotm-lake builds its own FABM with that flag.
 
+**2. `selmaprotbas` `alpha`/`beta` phytoplankton parameters (interior BGC).** The
+reference `fabm.yaml` sets two GOTM-lake-only parameters on each
+`selmaprotbas/phytoplankton` instance — `alpha` (nutrient-uptake
+half-saturation) and `beta` (temperature growth-correction). Conda `pyfabm` does
+not declare them, so loading the reference YAML verbatim raises an "invalid
+configuration" error. pyGOTM therefore **strips** `alpha`/`beta` (see
+`src/pygotm/fabm/config.py` → `_normalized_fabm_config_path`) and runs with the
+upstream defaults, so the interior phytoplankton growth differs from the
+GOTM-lake-tuned reference. This is why the bundle's `fabm.yaml` is a
+*materialized* (stripped) copy rather than a byte copy of the reference — the
+validation runner stages exactly that materialized YAML, and its hash is
+recorded as `fabm_yaml_sha256`, so re-running the bundle is reproducible.
+
 **Decision: do not rebuild pyfabm locally** (conda-forge divergence + maintenance
-burden on every FABM bump; non-default build is unverified; per-layer evaluation
-costs `nlev × getRates` per step; and it would not by itself deliver full PASS
-given the native under-mixing above). The actionable path is upstream: a
-conda-forge `pyfabm` variant with `variable_bottom_index` enabled.
+burden on every FABM bump; the variable-bottom build is non-default for the
+python host and unverified; per-layer evaluation costs `nlev × getRates` per
+step; and even with both limitations resolved, full PASS is unlikely given the
+native under-mixing above). The actionable path is upstream: a conda-forge
+`pyfabm` variant that enables `variable_bottom_index` and exposes the
+`selmaprotbas` `alpha`/`beta` parameters.
 
 ## Validation reporting — variable-ownership correction
 

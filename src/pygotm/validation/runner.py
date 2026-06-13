@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import shutil
 import time
 import traceback
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from pygotm.validation.compare import compare_nc
 from pygotm.validation.debug import write_turbulence_debug_dump
@@ -39,7 +41,8 @@ def run_case(
     nc_path = case_dir / f"{case.run_name}.nc"
 
     t0 = time.monotonic()
-    dataset = GotmDriver(case.yaml_path).run()
+    driver = GotmDriver(case.yaml_path)
+    dataset = driver.run()
     try:
         if dataset.attrs.get("runtime") != "compiled":
             msg = (
@@ -53,10 +56,65 @@ def run_case(
             GotmDriver.write_dataset(dataset, nc_path)
         finally:
             reference.close()
+        # Stage the exact configs the run consumed so validation/runs/<case> is a
+        # self-consistent, re-runnable reference bundle for downstream ingestion.
+        _stage_bundle_configs(driver.config, case_dir)
     finally:
         dataset.close()
     elapsed = time.monotonic() - t0
     return nc_path, elapsed
+
+
+def _fabm_config_filename(document: dict[str, Any]) -> str:
+    """Return the FABM config filename a GOTM document references (default)."""
+
+    raw_fabm = document.get("fabm")
+    raw_fabm = raw_fabm if isinstance(raw_fabm, dict) else {}
+    return str(
+        raw_fabm.get("config")
+        or raw_fabm.get("config_file")
+        or raw_fabm.get("yaml")
+        or raw_fabm.get("file")
+        or "fabm.yaml"
+    )
+
+
+def _stage_bundle_configs(config: Any, case_dir: Path) -> None:
+    """Stage the exact configs a run consumed into its bundle directory.
+
+    Writes the GOTM YAML that was run and the **materialized** FABM YAML that
+    pyfabm actually loaded — the legacy GOTM-lake ``selmaprotbas`` phytoplankton
+    ``alpha``/``beta`` parameters are stripped by
+    :func:`pygotm.fabm.config.resolve_fabm_config_path` because conda
+    ``pyfabm`` cannot parse them. Staging this materialized config keeps the
+    bundle's ``fabm.yaml`` byte-identical to the NetCDF ``fabm_yaml_sha256``
+    attribute, so re-running ``validation/runs/<case>`` reproduces the recorded
+    config hashes (the bundle is self-consistent for downstream ingestion).
+    """
+    from pygotm.fabm.config import fabm_enabled, resolve_fabm_config_path
+
+    source_path = getattr(config, "source_path", None)
+    if source_path is None:
+        return
+    source_path = Path(source_path)
+    document = config.resolved_document()
+    if not isinstance(document, dict):
+        return
+
+    staged_gotm = case_dir / source_path.name
+    if source_path.resolve() != staged_gotm.resolve():
+        shutil.copyfile(source_path, staged_gotm)
+
+    if not fabm_enabled(document):
+        return
+    config_path = resolve_fabm_config_path(source_path, document)
+    relative = Path(_fabm_config_filename(document))
+    if relative.is_absolute():
+        return
+    dest = case_dir / relative
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if config_path.resolve() != dest.resolve():
+        shutil.copyfile(config_path, dest)
 
 
 def validate_case(
