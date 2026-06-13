@@ -296,6 +296,13 @@ _SCND_COEFF = {
 }
 _MY_LENGTH = {"parabolic": 1, "triangular": 2, "linear": 3}
 _IW_MODEL = {"off": 0, "mellor": 1, "large": 2}
+# Mixed-layer-depth diagnostic method (diagnostics.F90 ``mld_method``). gotm-model
+# defaults to 2 (Richardson criterion, surface MLD only); the older gotm-lake fork
+# defaults to 1 (TKE criterion, which also computes the *bottom* MLD). Exposed here
+# so lake cases validated against a gotm-lake reference can request the same
+# diagnostic method without changing the gotm-model default. Diagnostic only; does
+# not affect the physics.
+_MLD_METHOD = {"tke": 1, "richardson": 2, "max_nn": 3}
 _KB_METHOD = {"algebraic": kb_algebraic, "prognostic": kb_dynamic}
 _EPSB_METHOD = {"algebraic": epsb_algebraic, "prognostic": epsb_dynamic}
 _GOTM_ICE_ZETA_RHO0 = 1027.0
@@ -861,6 +868,40 @@ def _configure_turbulence_from_document(
     init_turbulence(state, overrides=overrides)
 
 
+def _configure_diagnostics_from_document(
+    state: DiagnosticsState,
+    document: dict[str, Any],
+) -> None:
+    """Apply the optional ``mld`` block to the diagnostics state.
+
+    Configures the mixed-layer-depth diagnostic (``diagnostics.F90``
+    ``mld_method``/``diff_k``/``Ri_crit``). The block is optional; when absent the
+    gotm-model default (``mld_method=2``) is preserved. ``method`` accepts an
+    integer code (1=TKE criterion, 2=critical Richardson, 3=maximum ``NN``) or the
+    tokens in :data:`_MLD_METHOD`. This is a diagnostic-only knob: it changes the
+    reported ``mld_surf``/``mld_bott`` but never the physics.
+    """
+
+    mld = _mapping(document.get("mld"))
+    if not mld:
+        return
+    method = mld.get("method")
+    if isinstance(method, bool):
+        pass
+    elif isinstance(method, int):
+        state.mld_method = method
+    elif method is not None:
+        token = _canonical_token(method, "")
+        if token in _MLD_METHOD:
+            state.mld_method = _MLD_METHOD[token]
+        elif token.isdigit():
+            state.mld_method = int(token)
+    if "diff_k" in mld:
+        state.diff_k = float(mld["diff_k"])
+    if "Ri_crit" in mld:
+        state.Ri_crit = float(mld["Ri_crit"])
+
+
 def _configure_output_schedule(document: dict[str, Any], dt: float) -> OutputSchedule:
     raw_output = _mapping(document.get("output"))
     specs = [value for value in raw_output.values() if isinstance(value, dict)]
@@ -1263,6 +1304,7 @@ def initialize_gotm_from_settings(
     )
 
     diagnostics = DiagnosticsState()
+    _configure_diagnostics_from_document(diagnostics, resolved_document)
     init_diagnostics(diagnostics, nlev)
 
     output_schedule = _configure_output_schedule(resolved_document, settings.time.dt)

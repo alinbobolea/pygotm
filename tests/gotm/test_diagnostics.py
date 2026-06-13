@@ -11,6 +11,41 @@ from pygotm.gotm.diagnostics import (
     do_diagnostics,
     init_diagnostics,
 )
+from pygotm.gotm.gotm import _configure_diagnostics_from_document
+
+
+def test_configure_diagnostics_default_preserved_without_mld_block() -> None:
+    state = DiagnosticsState()
+    _configure_diagnostics_from_document(state, {"title": "no mld here"})
+    # gotm-model default is mld_method=2 (Richardson); must be untouched.
+    assert state.mld_method == 2
+
+
+def test_configure_diagnostics_integer_method_code() -> None:
+    state = DiagnosticsState()
+    _configure_diagnostics_from_document(state, {"mld": {"method": 1}})
+    # gotm-lake TKE criterion (also computes the bottom MLD).
+    assert state.mld_method == 1
+
+
+@pytest.mark.parametrize(
+    ("token", "expected"),
+    [("tke", 1), ("richardson", 2), ("max_nn", 3), ("3", 3)],
+)
+def test_configure_diagnostics_token_method(token: str, expected: int) -> None:
+    state = DiagnosticsState()
+    _configure_diagnostics_from_document(state, {"mld": {"method": token}})
+    assert state.mld_method == expected
+
+
+def test_configure_diagnostics_diff_k_and_ri_crit_overrides() -> None:
+    state = DiagnosticsState()
+    _configure_diagnostics_from_document(
+        state, {"mld": {"method": 1, "diff_k": 2.0e-5, "Ri_crit": 0.3}}
+    )
+    assert state.mld_method == 1
+    assert state.diff_k == 2.0e-5
+    assert state.Ri_crit == 0.3
 
 
 def test_init_and_clean_diagnostics_allocate_arrays() -> None:

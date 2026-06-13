@@ -65,8 +65,10 @@ CASE_NOTES: dict[str, str] = {
     "lake_erken": (
         "Hypsographic lake with FABM ``selmaprotbas`` biogeochemistry. "
         "Hypsography/water-balance at exact parity. Residual ``FAIL`` has two "
-        "independent causes: a native under-mixed second-order turbulence "
-        "closure (26 native variables BROKEN) and the FABM "
+        "independent causes: a mild seasonal under-mixing of the summer "
+        "thermocline (26 native variables BROKEN; the closure source is "
+        "byte-identical between the gotm-lake and gotm-model lineages, so it is "
+        "not a closure-coefficient divergence) and the FABM "
         "``variable_bottom_index`` build limitation. See "
         ":doc:`lake_erken_parity`."
     ),
