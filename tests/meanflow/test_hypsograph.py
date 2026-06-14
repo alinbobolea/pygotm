@@ -12,6 +12,9 @@ from pygotm.meanflow.hypsograph import (
     zi2vc,
 )
 
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+_TAPERED_HYPSOGRAPH = _FIXTURES / "hypsograph_tapered.dat"
+
 
 def _rectangular_state(depth: float, area: float) -> HypsographState:
     zi_input = np.asarray([-depth, 0.0], dtype=np.float64)
@@ -27,14 +30,16 @@ def _rectangular_state(depth: float, area: float) -> HypsographState:
     )
 
 
-def test_read_lake_erken_hypsograph_surface_first() -> None:
-    state = read_hypsograph("validation/runs/lake_erken/hypsograph.dat", 21.0)
+def test_read_tapered_hypsograph_surface_first() -> None:
+    # Fixture uses read_order=2: surface row listed first in file; loaded into
+    # zi_input[nlev_input]=0.0 (surface) and zi_input[0]=-21.0 (bottom).
+    state = read_hypsograph(_TAPERED_HYPSOGRAPH, 21.0)
 
     assert state.nlev_input == 11
     assert state.zi_input[0] == pytest.approx(-21.0)
     assert state.zi_input[state.nlev_input] == pytest.approx(0.0)
     assert state.af_input[0] == pytest.approx(0.0)
-    assert state.af_input[state.nlev_input] == pytest.approx(23670000.0)
+    assert state.af_input[state.nlev_input] == pytest.approx(24000000.0)
     assert np.all(np.diff(state.zi_input) > 0.0)
 
 
@@ -70,10 +75,10 @@ def test_vc2zi_round_trips_rectangular_basin() -> None:
     np.testing.assert_allclose(out_zi, zi, rtol=1.0e-14, atol=1.0e-14)
 
 
-def test_vc2zi_round_trips_lake_erken_geometry() -> None:
+def test_vc2zi_round_trips_tapered_basin_geometry() -> None:
     nlev = 42
     depth = 21.0
-    state = read_hypsograph("validation/runs/lake_erken/hypsograph.dat", depth)
+    state = read_hypsograph(_TAPERED_HYPSOGRAPH, depth)
     zi = np.linspace(-depth, 0.0, nlev + 1, dtype=np.float64)
     af = np.zeros(nlev + 1, dtype=np.float64)
     vc = np.zeros(nlev + 1, dtype=np.float64)

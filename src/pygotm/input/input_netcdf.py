@@ -62,7 +62,9 @@ def check_restart_time(
     """Verify that the restart file time metadata matches the requested start."""
 
     if _restart_dataset is None:
-        raise RuntimeError("restart file is not open")
+        raise RuntimeError(
+            f"restart file is not open (while checking time variable {var_name!r})"
+        )
     if var_name not in _restart_dataset.variables:
         msg = f"could not find time variable {var_name!r} in restart file"
         raise KeyError(msg)
@@ -94,7 +96,7 @@ def read_restart_data(
     """Read restart data into an optional destination or return a copy."""
 
     if _restart_dataset is None:
-        raise RuntimeError("restart file is not open")
+        raise RuntimeError(f"restart file is not open (while reading {var_name!r})")
     if var_name not in _restart_dataset.variables:
         if allow_missing_variable:
             return None

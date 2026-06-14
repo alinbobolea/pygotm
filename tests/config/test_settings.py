@@ -6,6 +6,8 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from pygotm.config.settings import (
     GotmSettings,
     InputSetting,
@@ -13,6 +15,9 @@ from pygotm.config.settings import (
     load_settings,
     save_settings,
 )
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+_LAKE_ERKEN_MINIMAL = _FIXTURES / "cases" / "lake_erken_minimal.yaml"
 
 yaml: Any = import_module("yaml")
 
@@ -77,7 +82,9 @@ def test_load_settings_lifts_nested_tidal_periods_from_real_case() -> None:
 
 
 def test_load_settings_accepts_raw_lake_erken_numeric_codes() -> None:
-    settings = load_settings("validation/reference/lake_erken/gotm.yaml")
+    # Uses a synthetic fixture with the same raw GOTM numeric codes as the real
+    # lake_erken case, without touching the gitignored validation/reference/ tree.
+    settings = load_settings(_LAKE_ERKEN_MINIMAL)
 
     assert settings.location.hypsograph == "hypsograph.dat"
     assert settings.grid.method == "analytical"
@@ -118,3 +125,23 @@ def test_save_settings_roundtrip(tmp_path: Path) -> None:
     save_settings(settings, out_path)
     reloaded = load_settings(out_path)
     assert reloaded.model_dump() == settings.model_dump()
+
+
+def test_load_settings_raises_for_missing_file(tmp_path: Path) -> None:
+    missing = tmp_path / "does_not_exist.yaml"
+    with pytest.raises(FileNotFoundError):
+        load_settings(missing)
+
+
+def test_load_settings_raises_for_non_mapping_yaml(tmp_path: Path) -> None:
+    path = tmp_path / "list.yaml"
+    path.write_text("- item1\n- item2\n", encoding="utf-8")
+    with pytest.raises(TypeError, match="must be a mapping"):
+        load_settings(path)
+
+
+def test_load_settings_treats_empty_yaml_as_empty_settings(tmp_path: Path) -> None:
+    path = tmp_path / "empty.yaml"
+    path.write_text("", encoding="utf-8")
+    settings = load_settings(path)
+    assert isinstance(settings, GotmSettings)

@@ -8,6 +8,9 @@ from typing import Any
 
 from pygotm.config import GotmConfig, GotmSettings, load_config
 
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+_LAKE_ERKEN_MINIMAL = _FIXTURES / "cases" / "lake_erken_minimal.yaml"
+
 yaml: Any = import_module("yaml")
 
 
@@ -130,7 +133,10 @@ def test_from_settings_without_source_path_leaves_relative_paths_unmodified() ->
 
 
 def test_load_config_normalizes_lake_erken_legacy_document_aliases() -> None:
-    config = load_config("validation/reference/lake_erken/gotm.yaml")
+    # Uses a synthetic fixture with the same raw GOTM numeric codes and legacy
+    # key aliases as the real lake_erken case, without touching the gitignored
+    # validation/reference/ tree.
+    config = load_config(_LAKE_ERKEN_MINIMAL)
     document = config.resolved_document()
 
     assert document["location"]["hypsograph"].endswith("hypsograph.dat")
@@ -144,3 +150,33 @@ def test_load_config_normalizes_lake_erken_legacy_document_aliases() -> None:
     # must map to Jackett *potential* density, not a fallback to TEOS-10 in-situ
     # (which would add a spurious pressure term to the freshwater density).
     assert document["equation_of_state"]["method"] == "jackett_potential"
+
+
+def test_load_config_raises_for_missing_file(tmp_path: Path) -> None:
+    import pytest
+
+    missing = tmp_path / "does_not_exist.yaml"
+    with pytest.raises(FileNotFoundError):
+        load_config(missing)
+
+
+def test_load_config_raises_for_non_mapping_yaml(tmp_path: Path) -> None:
+    import pytest
+
+    path = tmp_path / "list.yaml"
+    path.write_text("- item1\n- item2\n", encoding="utf-8")
+    with pytest.raises(TypeError, match="must be a mapping"):
+        load_config(path)
+
+
+def test_gotm_config_from_settings_has_no_source_path() -> None:
+    settings = GotmSettings.model_validate({"version": 7})
+    config = GotmConfig.from_settings(settings)
+    assert config.source_path is None
+
+
+def test_gotm_config_from_settings_accepts_document_override() -> None:
+    document = {"version": 7, "title": "explicit document"}
+    settings = GotmSettings.model_validate(document)
+    config = GotmConfig.from_settings(settings, document=document)
+    assert config.document["title"] == "explicit document"

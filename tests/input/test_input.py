@@ -218,3 +218,176 @@ def test_profile_bounds_violation_raises(tmp_path: Path) -> None:
     z = np.linspace(0.0, 1.0, 5)
     with pytest.raises(ValueError, match="exceeded maximum"):
         manager.do_input(julian_day(2000, 1, 1), 1800, 4, z)
+
+
+# ---------------------------------------------------------------------------
+# read_obs edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_read_obs_raises_on_insufficient_columns(tmp_path: Path) -> None:
+    path = tmp_path / "short.dat"
+    path.write_text("2000-01-01 00:00:00 1.0\n", encoding="utf-8")
+    with path.open("r", encoding="utf-8") as handle:
+        with pytest.raises(ValueError, match="expected 3 values"):
+            read_obs(handle, 3)
+
+
+def test_read_obs_raises_on_malformed_timestamp(tmp_path: Path) -> None:
+    path = tmp_path / "bad_ts.dat"
+    # Non-numeric characters where the year digits must be → int() raises ValueError.
+    path.write_text("NOTADATE 00:00:00 1.0\n", encoding="utf-8")
+    with path.open("r", encoding="utf-8") as handle:
+        with pytest.raises(ValueError, match="invalid timestamp"):
+            read_obs(handle, 1)
+
+
+# ---------------------------------------------------------------------------
+# read_profiles edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_read_profiles_raises_on_header_with_missing_fields(tmp_path: Path) -> None:
+    path = tmp_path / "bad_header.dat"
+    path.write_text("2000-01-01 00:00:00 3\n", encoding="utf-8")
+    with path.open("r", encoding="utf-8") as handle:
+        with pytest.raises(ValueError, match="N and up_down"):
+            read_profiles(handle, 4, 1, np.linspace(0.0, 1.0, 5))
+
+
+def test_read_profiles_raises_on_row_with_missing_columns(tmp_path: Path) -> None:
+    path = tmp_path / "bad_row.dat"
+    path.write_text(
+        "2000-01-01 00:00:00 2 1\n0.0\n",
+        encoding="utf-8",
+    )
+    with path.open("r", encoding="utf-8") as handle:
+        with pytest.raises(ValueError, match="depth plus 2 values"):
+            read_profiles(handle, 2, 2, np.linspace(0.0, 1.0, 3))
+
+
+# ---------------------------------------------------------------------------
+# InputManager.register_scalar_input edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_register_scalar_without_name_raises() -> None:
+    manager = InputManager()
+    scalar = ScalarInput(name="", method=0, constant_value=1.0)
+    with pytest.raises(ValueError, match="name"):
+        manager.register_scalar_input(scalar)
+
+
+def test_register_scalar_file_method_with_empty_path_raises() -> None:
+    manager = InputManager()
+    scalar = ScalarInput(name="cloud", method=2, path="")
+    with pytest.raises(ValueError, match="empty file path"):
+        manager.register_scalar_input(scalar)
+
+
+# ---------------------------------------------------------------------------
+# InputManager.register_profile_input edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_register_profile_without_name_raises() -> None:
+    manager = InputManager(nlev=4)
+    profile = ProfileInput(name="", method=0, constant_value=5.0)
+    with pytest.raises(ValueError, match="name"):
+        manager.register_profile_input(profile)
+
+
+def test_register_profile_without_nlev_raises() -> None:
+    manager = InputManager()  # no nlev
+    profile = ProfileInput(name="temp", method=0, constant_value=5.0)
+    with pytest.raises(RuntimeError, match="depth information"):
+        manager.register_profile_input(profile)
+
+
+def test_register_profile_file_method_with_empty_path_raises() -> None:
+    manager = InputManager(nlev=4)
+    profile = ProfileInput(name="temp", method=2, path="")
+    with pytest.raises(ValueError, match="empty file path"):
+        manager.register_profile_input(profile)
+
+
+# ---------------------------------------------------------------------------
+# Missing input file raises FileNotFoundError with the path in the message
+# ---------------------------------------------------------------------------
+
+
+def test_scalar_missing_file_raises_file_not_found(tmp_path: Path) -> None:
+    missing = tmp_path / "does_not_exist.dat"
+    manager = InputManager()
+    scalar = ScalarInput(name="cloud", method=2, path=str(missing))
+    manager.register_scalar_input(scalar)
+    with pytest.raises(FileNotFoundError):
+        manager.do_input(julian_day(2000, 1, 1), 0)
+
+
+def test_profile_missing_file_raises_file_not_found(tmp_path: Path) -> None:
+    missing = tmp_path / "does_not_exist.dat"
+    manager = InputManager(nlev=4)
+    profile = ProfileInput(name="temp", method=2, path=str(missing), index=1)
+    manager.register_profile_input(profile)
+    z = np.linspace(0.0, 1.0, 5)
+    with pytest.raises(FileNotFoundError):
+        manager.do_input(julian_day(2000, 1, 1), 0, 4, z)
+
+
+# ---------------------------------------------------------------------------
+# Scalar bounds violation
+# ---------------------------------------------------------------------------
+
+
+def test_scalar_bounds_violation_raises(tmp_path: Path) -> None:
+    path = tmp_path / "series.dat"
+    path.write_text(
+        "\n".join(
+            [
+                "2000-01-01 00:00:00 0.5",
+                "2000-01-01 01:00:00 2.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manager = InputManager()
+    scalar = ScalarInput(name="cloud", method=2, path=str(path), index=1, maximum=1.0)
+    manager.register_scalar_input(scalar)
+    with pytest.raises(ValueError, match="exceeded maximum"):
+        manager.do_input(julian_day(2000, 1, 1), 1800)
+
+
+def test_scalar_minimum_violation_raises(tmp_path: Path) -> None:
+    path = tmp_path / "series.dat"
+    path.write_text(
+        "\n".join(
+            [
+                "2000-01-01 00:00:00 0.5",
+                "2000-01-01 01:00:00 -1.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manager = InputManager()
+    scalar = ScalarInput(name="cloud", method=2, path=str(path), index=1, minimum=0.0)
+    manager.register_scalar_input(scalar)
+    with pytest.raises(ValueError, match="fell below minimum"):
+        manager.do_input(julian_day(2000, 1, 1), 1800)
+
+
+# ---------------------------------------------------------------------------
+# EOF handling
+# ---------------------------------------------------------------------------
+
+
+def test_scalar_eof_before_second_record_raises(tmp_path: Path) -> None:
+    path = tmp_path / "single.dat"
+    path.write_text("2000-01-01 00:00:00 1.0\n", encoding="utf-8")
+    manager = InputManager()
+    scalar = ScalarInput(name="cloud", method=2, path=str(path), index=1)
+    manager.register_scalar_input(scalar)
+    with pytest.raises(RuntimeError, match="end of file"):
+        manager.do_input(julian_day(2000, 1, 1), 1800)

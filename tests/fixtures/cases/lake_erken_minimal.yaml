@@ -1,0 +1,51 @@
+# Synthetic minimal config that exercises the same raw GOTM numeric-code
+# normalization as the real lake_erken/gotm.yaml, without referencing any
+# gitignored validation/reference/ file.  Used by config normalisation tests.
+version: 7
+location:
+  latitude: 59.7
+  longitude: 18.6
+  depth: 21.0
+  hypsograph: hypsograph.dat
+grid:
+  nlev: 20
+  method: 0
+temperature:
+  method: 2
+  file: t_prof.dat
+salinity:
+  method: 0
+light_extinction:
+  method: 7
+velocities:
+  u:
+    method: 0
+  v:
+    method: 0
+surface:
+  u10:
+    method: 2
+    file: Erken_MetFile_1960-2020.dat
+    column: 1
+  fluxes:
+    method: 2
+  ssuv_method: 0
+  ice:
+    model: 2
+mimic_3d:
+  ext_pressure:
+    type: 0
+  int_press:
+    type: 0
+    dtdx:
+      method: 0
+  w:
+    max:
+      method: 0
+    height:
+      method: 1
+      constant_value: 5.0
+    adv_discr: 6
+eq_state:
+  mode: 2
+  method: 2
