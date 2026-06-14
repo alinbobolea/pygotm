@@ -11,7 +11,8 @@ gate covers the schema/version/cite CLI contract.
 Usage:
     conda run -n pygotm python scripts/aquirae_contract_gate.py capture baseline.json
     conda run -n pygotm python scripts/aquirae_contract_gate.py capture after.json
-    conda run -n pygotm python scripts/aquirae_contract_gate.py diff baseline.json after.json
+    conda run -n pygotm python scripts/aquirae_contract_gate.py \
+        diff baseline.json after.json
 """
 
 from __future__ import annotations

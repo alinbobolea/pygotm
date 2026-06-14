@@ -10,7 +10,8 @@ Usage:
     conda run -n pygotm python scripts/refactor_parity_gate.py capture baseline.json
     # after a refactor task, capture again and diff
     conda run -n pygotm python scripts/refactor_parity_gate.py capture after.json
-    conda run -n pygotm python scripts/refactor_parity_gate.py diff baseline.json after.json
+    conda run -n pygotm python scripts/refactor_parity_gate.py \
+        diff baseline.json after.json
 """
 
 from __future__ import annotations
