@@ -44,14 +44,16 @@ jobs:
         run: >
           conda run -n pygotm python -c
           "from pathlib import Path;
+          from pygotm.validation.reference import REFERENCE_CASE_NAMES;
           report = Path('validation/report');
           cases = sorted(report.glob('*-gotm.html'));
+          expected = len(REFERENCE_CASE_NAMES);
           assert (report / 'report.html').is_file(),
           'missing validation/report/report.html';
           assert (report / 'report.json').is_file(),
           'missing validation/report/report.json';
-          assert len(cases) == 22,
-          f'expected 22 validation case HTML reports, found {len(cases)}'"
+          assert len(cases) == expected,
+          f'expected {expected} validation case HTML reports, found {len(cases)}'"
 
       - name: Build package
         run: conda run -n pygotm hatch build
