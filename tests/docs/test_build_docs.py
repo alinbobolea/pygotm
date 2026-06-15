@@ -19,6 +19,7 @@ from build_docs import (  # noqa: E402
     GOTM_CASES,
     prepare_figure_cache,
     stage_validation_html,
+    stage_validation_remaining_differences,
     stage_validation_rst_wrappers,
     stage_validation_test_cases_summary,
 )
@@ -212,6 +213,89 @@ def test_validation_test_cases_summary_handles_missing_report(
     content = out.read_text(encoding="utf-8")
     assert "No generated validation report is available" in content
     assert "2026-05-25T12:58:49Z" not in content
+
+
+# ---------------------------------------------------------------------------
+# stage_validation_remaining_differences
+# ---------------------------------------------------------------------------
+
+
+def _remaining_diff_report() -> dict[str, object]:
+    return {
+        "generated_at": "2026-06-15T14:31:04Z",
+        "verdict": "PARTIAL PARITY",
+        "cases": [
+            {"case_name": "couette", "status": "PASS", "variables": []},
+            {
+                "case_name": "gotland",
+                "status": "FAIL",
+                "variables": [
+                    {"name": "u", "section": "pygotm", "status": "MARGINAL"},
+                    {"name": "tke", "section": "pygotm", "status": "DISCREPANT"},
+                    {"name": "qh", "section": "pyfabm", "status": "MARGINAL"},
+                ],
+            },
+        ],
+    }
+
+
+def test_remaining_differences_lists_variables_by_section_and_status(
+    tmp_path: Path,
+) -> None:
+    report_json = tmp_path / "validation" / "report" / "report.json"
+    out = tmp_path / "docs" / "validation" / "_generated" / "remaining_differences.inc"
+    report_json.parent.mkdir(parents=True)
+    report_json.write_text(json.dumps(_remaining_diff_report()), encoding="utf-8")
+
+    generated = stage_validation_remaining_differences(
+        report_json=report_json,
+        output_path=out,
+    )
+
+    assert generated == out
+    content = out.read_text(encoding="utf-8")
+    assert "has 1 non-PASS reference case." in content
+    assert "* ``gotland`` (FAIL)" in content
+    assert "* PyGOTM — 1 MARGINAL: ``u``" in content
+    assert "* PyGOTM — 1 DISCREPANT: ``tke``" in content
+    assert "* PyFABM — 1 MARGINAL: ``qh``" in content
+    # PASS cases never appear; PASS variables are never listed.
+    assert "couette" not in content
+
+
+def test_remaining_differences_handles_all_pass_snapshot(tmp_path: Path) -> None:
+    report_json = tmp_path / "validation" / "report" / "report.json"
+    out = tmp_path / "docs" / "validation" / "_generated" / "remaining_differences.inc"
+    report_json.parent.mkdir(parents=True)
+    report_json.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-06-15T14:31:04Z",
+                "verdict": "FULL PARITY",
+                "cases": [{"case_name": "couette", "status": "PASS", "variables": []}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    stage_validation_remaining_differences(report_json=report_json, output_path=out)
+
+    content = out.read_text(encoding="utf-8")
+    assert "Every reference case passes" in content
+    assert "no remaining per-variable differences to report" in content
+
+
+def test_remaining_differences_handles_missing_report(tmp_path: Path) -> None:
+    out = tmp_path / "docs" / "validation" / "_generated" / "remaining_differences.inc"
+
+    generated = stage_validation_remaining_differences(
+        report_json=tmp_path / "validation" / "report" / "report.json",
+        output_path=out,
+    )
+
+    assert generated == out
+    content = out.read_text(encoding="utf-8")
+    assert "No generated validation report is available" in content
 
 
 def test_prepare_figure_cache_sets_writable_cache_env(

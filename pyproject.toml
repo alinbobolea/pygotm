@@ -12,6 +12,7 @@ requires-python = ">=3.12"
 authors = [
     {name = "pyGOTM contributors"},
 ]
+urls = {Homepage = "https://github.com/alinbobolea/pygotm", Documentation = "https://alinbobolea.github.io/docs/pygotm/", Repository = "https://github.com/alinbobolea/pygotm", Issues = "https://github.com/alinbobolea/pygotm/issues"}
 keywords = [
     "GOTM",
     "oceanography",

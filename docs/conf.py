@@ -14,6 +14,7 @@ sys.path.insert(0, str(DOCS_DIR))
 
 from build_docs import (  # noqa: E402
     stage_validation_html,
+    stage_validation_remaining_differences,
     stage_validation_rst_wrappers,
     stage_validation_test_cases_summary,
 )
@@ -59,6 +60,10 @@ stage_validation_rst_wrappers(cases_dir=DOCS_DIR / "validation" / "cases")
 stage_validation_test_cases_summary(
     report_json=_VALIDATION_REPORT_DIR / "report.json",
     output_path=DOCS_DIR / "validation" / "_generated" / "test_cases_summary.inc",
+)
+stage_validation_remaining_differences(
+    report_json=_VALIDATION_REPORT_DIR / "report.json",
+    output_path=DOCS_DIR / "validation" / "_generated" / "remaining_differences.inc",
 )
 
 html_static_path = ["_static"]

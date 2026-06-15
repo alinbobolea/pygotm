@@ -1,6 +1,6 @@
 # pyGOTM
 
-![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License](https://img.shields.io/github/license/alinbobolea/pygotm)
 [![Tests](https://github.com/alinbobolea/pygotm/actions/workflows/tests.yml/badge.svg)](https://github.com/alinbobolea/pygotm/actions/workflows/tests.yml)
 [![Docs](https://github.com/alinbobolea/pygotm/actions/workflows/docs.yml/badge.svg)](https://github.com/alinbobolea/pygotm/actions/workflows/docs.yml)

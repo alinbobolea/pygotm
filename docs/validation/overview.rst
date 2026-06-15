@@ -396,59 +396,7 @@ time-series visualization.
 Interpreting Remaining Differences
 ----------------------------------
 
-The current 22-case snapshot has seven non-PASS reference cases and no
-``BROKEN`` variables. The generated case HTML reports show the following
-non-PASS rows.
-
-``gotland``
-   The report contains 13 PyGOTM ``MARGINAL`` rows, 16 PyGOTM ``DISCREPANT``
-   rows, and one PyFABM ``MARGINAL`` row. The PyFABM row is ``qh``. The
-   non-PASS PyGOTM rows are ``mld_surf``, ``u``, ``v``, ``num``, ``nuh``,
-   ``nus``, ``tke``, ``eps``, ``SS``, ``P``, ``uu``, ``vv``, ``ww``, ``NN``,
-   ``NNT``, ``NNS``, ``kb``, ``G``, ``avh``, ``Rig``, ``L``, ``cmue1``,
-   ``cmue2``, ``an``, ``as``, ``at``, ``taux``, ``tauy``, and ``Eturb``.
-   In ``validation/runs/gotland/turbulence_debug.json``, ``tke`` has
-   ``max_abs_err`` no larger than ``2.5894818603364984e-6`` through time index
-   20; indices 21-30 include values up to ``8.138172948438899e-5``; the case
-   summary reports the largest ``tke`` ``max_abs_err`` as
-   ``6.560663751105973e-4``.
-
-``ows_papa``
-   The report contains two non-PASS rows: PyGOTM ``taux`` is ``MARGINAL`` and
-   PyGOTM ``tauy`` is ``DISCREPANT``.
-
-``resolute``
-   The report contains 17 PyGOTM ``MARGINAL`` rows and 6 PyGOTM
-   ``DISCREPANT`` rows, with no PyFABM non-PASS rows. The non-PASS rows are
-   ``int_total``, ``mld_surf``, ``v``, ``tke``, ``eps``, ``SS``, ``P``,
-   ``uu``, ``vv``, ``ww``, ``NN``, ``NNT``, ``NNS``, ``kb``, ``epsb``, ``G``,
-   ``Rig``, ``L``, ``an``, ``as``, ``at``, ``taux``, and ``Eturb``.
-
-``langmuir``
-   The report contains 111 ``PASS`` rows and two non-PASS rows. The non-PASS
-   rows are PyGOTM ``NNS`` at ``MARGINAL`` and PyFABM ``ds`` at
-   ``DISCREPANT``.
-
-``medsea_east``
-   The report contains 16 non-PASS rows, all PyGOTM ``MARGINAL`` rows. The
-   rows are ``num``, ``nuh``, ``nus``, ``SS``, ``P``, ``ww``, ``G``, ``avh``,
-   ``L``, ``cmue1``, ``cmue2``, ``an``, ``as``, ``at``, ``taux``, and
-   ``tauy``.
-
-``medsea_west``
-   The report contains 11 PyGOTM ``MARGINAL`` rows and one PyFABM
-   ``DISCREPANT`` row. The PyGOTM rows are ``num``, ``nuh``, ``nus``, ``tke``,
-   ``ww``, ``NN``, ``NNT``, ``G``, ``Rig``, ``L``, and ``an``. The PyFABM row
-   is ``jrc_med_ergom_OFL``.
-
-``nns_annual``
-   The report contains three PyGOTM ``MARGINAL`` rows, four PyFABM
-   ``MARGINAL`` rows, and six PyFABM ``DISCREPANT`` rows. The PyGOTM rows are
-   ``mld_surf``, ``v``, and ``tke``. The PyFABM rows are ``npzd_nut``,
-   ``npzd_phy``, ``npzd_zoo``, ``npzd_det``, ``u_taub``, ``npzd_PPR``,
-   ``npzd_NPR``, ``npzd_PAR``,
-   ``attenuation_coefficient_of_photosynthetic_radiative_flux``, and
-   ``total_nitrogen``.
+.. include:: _generated/remaining_differences.inc
 
 The generated reports identify variable status, Frechet metrics, full-precision
 reference and calculated values at the largest aligned absolute difference, and

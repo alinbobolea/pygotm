@@ -196,9 +196,30 @@ def _case_verdict(result: CaseResult) -> str:
 
 
 def summary_case(result: CaseResult) -> CaseResult:
-    """Return a lightweight case summary without per-variable result rows."""
+    """Return a lightweight case summary keeping only non-PASS variable rows.
 
-    return replace(result, variables=[])
+    PASS rows and embedded Plotly payloads are dropped so the tracked
+    ``report.json`` snapshot stays small, while the non-PASS variable names,
+    sections, and statuses are retained. This lets the documentation build
+    regenerate its remaining-differences narrative from the tracked snapshot
+    instead of the untracked per-variable ``results.json``.
+    """
+
+    non_pass = [
+        replace(
+            variable,
+            reference_at_worst=float("nan"),
+            calculated_at_worst=float("nan"),
+            d_raw=float("nan"),
+            d_norm=float("nan"),
+            score=None,
+            peak_d_norm=None,
+            plot_html=None,
+        )
+        for variable in result.variables
+        if variable.status != "PASS"
+    ]
+    return replace(result, variables=non_pass)
 
 
 def strip_case_plots(result: CaseResult) -> CaseResult:

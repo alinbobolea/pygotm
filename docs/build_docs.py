@@ -219,6 +219,129 @@ def stage_validation_test_cases_summary(
     return output_path
 
 
+_SECTION_LABELS: dict[str, str] = {"pygotm": "PyGOTM", "pyfabm": "PyFABM"}
+_NONPASS_STATUS_ORDER: tuple[str, ...] = ("MARGINAL", "DISCREPANT", "BROKEN")
+
+
+def _case_variables(case: dict[str, object]) -> list[dict[str, object]]:
+    value = case.get("variables", [])
+    if not isinstance(value, list):
+        return []
+    return [v for v in value if isinstance(v, dict)]
+
+
+def _var_field(var: dict[str, object], key: str) -> str:
+    value = var.get(key, "")
+    return value if isinstance(value, str) else ""
+
+
+def stage_validation_remaining_differences(
+    *,
+    report_json: Path,
+    output_path: Path,
+) -> Path:
+    """Generate the remaining-differences narrative from ``report.json``.
+
+    The tracked ``validation/report/report.json`` snapshot keeps the non-PASS
+    variable rows (name, section, status) for every failing case. This helper
+    turns those rows into the prose that previously had to be edited by hand,
+    so the documentation can never drift from the committed validation results.
+
+    If no report exists, the generated include explains how to create one
+    instead of preserving stale validation data.
+    """
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not report_json.is_file():
+        output_path.write_text(
+            (
+                "No generated validation report is available in this checkout.\n"
+                "\n"
+                "Run ``conda run -n pygotm python -m "
+                "pygotm.validation.run_validation`` to create "
+                "``validation/report/report.json``, then rebuild the "
+                "documentation.\n"
+            ),
+            encoding="utf-8",
+        )
+        return output_path
+
+    with report_json.open(encoding="utf-8") as f:
+        report = json.load(f)
+
+    cases = report.get("cases", [])
+    if not isinstance(cases, list):
+        msg = f"{report_json} does not contain a list-valued 'cases' field"
+        raise ValueError(msg)
+
+    case_dicts = [case for case in cases if isinstance(case, dict)]
+    non_pass = [case for case in case_dicts if _case_status(case) != "PASS"]
+
+    lines: list[str] = []
+    if not non_pass:
+        lines.append(
+            "Every reference case passes in the latest generated "
+            "``validation/report/report.json`` snapshot, so there are no "
+            "remaining per-variable differences to report."
+        )
+        lines.append("")
+        output_path.write_text("\n".join(lines), encoding="utf-8")
+        return output_path
+
+    case_word = "case" if len(non_pass) == 1 else "cases"
+    lines.extend(
+        [
+            f"The latest generated ``validation/report/report.json`` snapshot "
+            f"has {len(non_pass)} non-PASS reference {case_word}. Each case "
+            "below lists its non-PASS variables grouped by report section and "
+            "status. This narrative is regenerated from the tracked report "
+            "snapshot on every documentation build, so it cannot drift from "
+            "the committed results.",
+            "",
+            "Per-variable Frechet metrics, full-precision values, and "
+            "comparison plots are in each linked per-case report. The "
+            "``lake_erken`` root-cause analysis is in "
+            ":doc:`lake_erken_parity`.",
+            "",
+        ]
+    )
+
+    for case in sorted(non_pass, key=_case_name):
+        name = _case_name(case)
+        if not name:
+            continue
+        status = _case_status(case)
+        lines.append(f"* ``{name}`` ({status})")
+        lines.append("")
+        error = case.get("error")
+        if status == "ERROR" and isinstance(error, str) and error:
+            lines.append(f"  * Error: {error}")
+            lines.append("")
+            continue
+        variables = _case_variables(case)
+        for section in ("pygotm", "pyfabm"):
+            section_label = _SECTION_LABELS[section]
+            for var_status in _NONPASS_STATUS_ORDER:
+                names = [
+                    _var_field(var, "name")
+                    for var in variables
+                    if _var_field(var, "section") == section
+                    and _var_field(var, "status") == var_status
+                ]
+                names = [n for n in names if n]
+                if not names:
+                    continue
+                joined = ", ".join(f"``{n}``" for n in names)
+                lines.append(
+                    f"  * {section_label} — {len(names)} {var_status}: {joined}"
+                )
+        lines.append("")
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+    return output_path
+
+
 def stage_validation_html(*, src: Path, staged_root: Path) -> list[Path]:
     """Copy ``<src>/*.html`` into ``<staged_root>/validation/``.
 
