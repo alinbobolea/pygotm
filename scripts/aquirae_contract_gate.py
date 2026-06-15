@@ -33,6 +33,11 @@ CONTRACT_COMMANDS: dict[str, list[str]] = {
 }
 
 
+# Keys whose value is intentionally volatile (provenance metadata that changes
+# every commit / environment) and is NOT part of the code-behavior contract.
+_VOLATILE_KEYS = ("pygotm_git_commit",)
+
+
 def _run(cmd: list[str]) -> str:
     proc = subprocess.run(
         ["conda", "run", "-n", "pygotm", *cmd],
@@ -40,7 +45,20 @@ def _run(cmd: list[str]) -> str:
         text=True,
         check=True,
     )
-    return proc.stdout
+    return _normalize(proc.stdout)
+
+
+def _normalize(out: str) -> str:
+    """Drop intentionally-volatile provenance keys before hashing."""
+    try:
+        doc = json.loads(out)
+    except json.JSONDecodeError:
+        return out
+    if isinstance(doc, dict):
+        for key in _VOLATILE_KEYS:
+            doc.pop(key, None)
+        return json.dumps(doc, indent=2, sort_keys=True)
+    return out
 
 
 def capture(out_path: Path) -> None:

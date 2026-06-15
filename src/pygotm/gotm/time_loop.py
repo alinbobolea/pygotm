@@ -258,6 +258,7 @@ _PAYNE_DZA = (
 )
 
 
+# ===== SECTION: Mixed-layer-depth diagnostics =====
 @numba.njit(cache=True, fastmath=False)
 def _compute_mld_single(
     nlev: int,
@@ -302,6 +303,7 @@ def _compute_mld_single(
     return mld_surf, mld_bott
 
 
+# ===== SECTION: Output slot writers =====
 @numba.njit(cache=True, fastmath=False)
 def _write_output_slot(
     slot: int,
@@ -759,6 +761,7 @@ def _write_ice_output_slot(
     output_surface_ice_energy[slot] = surface_ice_energy[0]
 
 
+# ===== SECTION: Compiled time loop (core kernel) =====
 @numba.njit(cache=True, fastmath=False)
 def time_loop_compiled(
     nlev: int,
@@ -3947,6 +3950,7 @@ def _populate_observation_extra_profiles(
         np.copyto(eps_obs[slot], forcing.epsprof[int(step)])
 
 
+# ===== SECTION: Compiled time-loop driver =====
 def run_compiled_time_loop(
     params: RuntimeParams,
     state: RuntimeState,
@@ -4592,6 +4596,7 @@ def run_compiled_time_loop(
     return written
 
 
+# ===== SECTION: Grid / vertical-coordinate steppers =====
 @numba.njit(cache=True, fastmath=False)
 def _kolpran_single(
     nlev: int,
@@ -4720,6 +4725,7 @@ def _legacy_lake_uses_pressure(density_method: int) -> bool:
     return density_method == METHOD_UNESCO_FULL or density_method == METHOD_JACKETT_FULL
 
 
+# ===== SECTION: Equation of state / density =====
 @numba.njit(cache=True, fastmath=False)
 def _unesco_density_compiled(
     S_value: float,
@@ -4905,6 +4911,7 @@ def _density_value_compiled(
     return float(rhob * (1.0 - alpha0 * (T_value - T0) + beta0 * (S_value - S0)))
 
 
+# ===== SECTION: Pressure gradients =====
 @numba.njit(cache=True, fastmath=False)
 def _internal_pressure_gradients_single(
     nlev: int,
@@ -5102,6 +5109,7 @@ def _external_pressure_single(
             v[k] += shift_v
 
 
+# ===== SECTION: Seagrass =====
 @numba.njit(cache=True, fastmath=False)
 def _step_seagrass_single(
     nlev: int,
@@ -5169,6 +5177,7 @@ def _step_seagrass_single(
         xP[i] = 0.5 * (xxP[i] + xxP[i + 1])
 
 
+# ===== SECTION: Air-sea bulk-flux helpers =====
 @numba.njit(cache=True, fastmath=False)
 def _fortran_nint(value: float) -> int:
     return int(math.floor(value + 0.5))
@@ -5573,6 +5582,7 @@ def _gsw_t_from_ct_surface_compiled(sa: float, ct: float) -> float:
     return float(pt_old - ct_diff * dpt_dct)
 
 
+# ===== SECTION: Air-sea: Kondo =====
 @numba.njit(cache=True, fastmath=False)
 def _kondo_compiled(
     sst: float,
@@ -5760,6 +5770,7 @@ def _psi_fairall(iflag: int, zol: float) -> float:
     return psi_value
 
 
+# ===== SECTION: Air-sea: Fairall =====
 @numba.njit(cache=True, fastmath=False)
 def _airsea_fairall_compiled(
     yday: int,
@@ -5940,6 +5951,7 @@ def _airsea_fairall_compiled(
     )
 
 
+# ===== SECTION: Density/stratification update =====
 @numba.njit(cache=True, fastmath=False)
 def _update_density_single(
     nlev: int,
@@ -6084,6 +6096,7 @@ def _stratification_from_alpha_beta_single(
     NN[nlev] = 0.0
 
 
+# ===== SECTION: Turbulence: first-order =====
 @numba.njit(cache=True, fastmath=False)
 def step_turbulence_first_order_single(
     nlev: int,
@@ -6434,6 +6447,7 @@ def step_turbulence_first_order_single(
     )
 
 
+# ===== SECTION: Turbulence: second-order =====
 @numba.njit(cache=True, fastmath=False)
 def _run_second_order_turbulence_single(
     nlev: int,
@@ -6917,6 +6931,7 @@ def _run_second_order_turbulence_single(
     )
 
 
+# ===== SECTION: JIT warmup =====
 def warmup_couette_step_routines(
     params: RuntimeParams,
     state: RuntimeState,
